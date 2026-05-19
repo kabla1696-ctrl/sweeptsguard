@@ -174,6 +174,10 @@ function RecoverContent() {
             <li>All transactions execute in same block — <strong className="text-green-400">drainer can&apos;t react in time</strong></li>
             <li>Funds arrive in your safe wallet. Delegation revoked.</li>
           </ol>
+          <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+            <p className="text-green-400 text-xs font-semibold mb-1">💰 Platform Fee: 20%</p>
+            <p className="text-white/40 text-xs">80% → Your Safe Wallet | 20% → Platform Fee (SweepGuard development & maintenance)</p>
+          </div>
         </div>
 
         {/* Input Form */}
@@ -276,23 +280,43 @@ function RecoverContent() {
 
             {/* ETH */}
             {parseFloat(assets.ethFormatted) > 0 && (
-              <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="text-green-400 font-semibold">ETH</span>
-                  <span className="text-white/30 text-xs ml-2">Ethereum</span>
+              <div className="p-4 bg-green-500/5 border border-green-500/20 rounded-xl">
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <span className="text-green-400 font-semibold">ETH</span>
+                    <span className="text-white/30 text-xs ml-2">Ethereum</span>
+                  </div>
+                  <span className="font-mono text-green-400">{parseFloat(assets.ethFormatted).toFixed(6)}</span>
                 </div>
-                <span className="font-mono text-green-400">{parseFloat(assets.ethFormatted).toFixed(6)}</span>
+                <div className="flex justify-between text-xs text-white/40 border-t border-white/[0.05] pt-2">
+                  <span>→ Your Safe Wallet (80%)</span>
+                  <span className="text-green-400">{(parseFloat(assets.ethFormatted) * 0.8).toFixed(6)} ETH</span>
+                </div>
+                <div className="flex justify-between text-xs text-white/40 mt-1">
+                  <span>→ Platform Fee (20%)</span>
+                  <span className="text-yellow-400">{(parseFloat(assets.ethFormatted) * 0.2).toFixed(6)} ETH</span>
+                </div>
               </div>
             )}
 
             {/* Tokens */}
             {assets.tokens.map((token, i) => (
-              <div key={i} className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl flex justify-between items-center">
-                <div>
-                  <span className="font-medium">{token.symbol}</span>
-                  <span className="text-white/30 text-xs ml-2">ERC-20</span>
+              <div key={i} className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                <div className="flex justify-between items-center mb-2">
+                  <div>
+                    <span className="font-medium">{token.symbol}</span>
+                    <span className="text-white/30 text-xs ml-2">ERC-20</span>
+                  </div>
+                  <span className="font-mono">{parseFloat(token.balanceFormatted).toFixed(6)}</span>
                 </div>
-                <span className="font-mono">{parseFloat(token.balanceFormatted).toFixed(6)}</span>
+                <div className="flex justify-between text-xs text-white/40 border-t border-white/[0.05] pt-2">
+                  <span>→ Your Safe Wallet (80%)</span>
+                  <span className="text-green-400">{(parseFloat(token.balanceFormatted) * 0.8).toFixed(6)} {token.symbol}</span>
+                </div>
+                <div className="flex justify-between text-xs text-white/40 mt-1">
+                  <span>→ Platform Fee (20%)</span>
+                  <span className="text-yellow-400">{(parseFloat(token.balanceFormatted) * 0.2).toFixed(6)} {token.symbol}</span>
+                </div>
               </div>
             ))}
 
@@ -371,6 +395,11 @@ function RecoverContent() {
           <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl">
             <h3 className="text-green-400 font-bold text-lg mb-2">✅ Recovery Successful!</h3>
             <p className="text-white/60 text-sm mb-4">{recovery.message}</p>
+            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg mb-4">
+              <p className="text-green-400 text-xs font-semibold">💰 Fee Split Applied:</p>
+              <p className="text-white/40 text-xs">80% → Your Safe Wallet</p>
+              <p className="text-white/40 text-xs">20% → Platform Fee (SweepGuard)</p>
+            </div>
             {recovery.txHashes && recovery.txHashes.length > 0 && (
               <div className="space-y-2">
                 <p className="text-white/40 text-xs">Transaction Hashes:</p>
