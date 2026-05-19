@@ -5,6 +5,46 @@ import { submitRecoveryBundle } from '@/lib/fundRecovery'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
+// SweepGuardClaimer contract addresses (deploy per chain via scripts/deploy-claimer.js)
+// These contracts verify EIP-712 signatures and execute claims atomically
+const CLAIMER_CONTRACTS: Record<number, string> = {
+  // TODO: Deploy SweepGuardClaimer.sol on each chain and add address here
+  // Use CREATE2 with salt 'sweeptsguard-claimer-v1' for deterministic addresses
+  // 1: '0x...', // Ethereum
+  // 8453: '0x...', // Base
+  // 42161: '0x...', // Arbitrum
+  // 56: '0x...', // BNB Chain
+  // 137: '0x...', // Polygon
+  // 10: '0x...', // Optimism
+  // 43114: '0x...', // Avalanche
+  // 250: '0x...', // Fantom
+  // 25: '0x...', // Cronos
+  // 81457: '0x...', // Blast
+  // 7777777: '0x...', // Zora
+  // 1101: '0x...', // Polygon zkEVM
+  // 169: '0x...', // Manta Pacific
+  // 324: '0x...', // zkSync Era
+  // 59144: '0x...', // Linea
+  // 5000: '0x...', // Mantle
+  // 34443: '0x...', // Mode
+  // 534352: '0x...', // Scroll
+  // 100: '0x...', // Gnosis
+  // 7000: '0x...', // ZetaChain
+  // 1625: '0x...', // Gravity
+  // 1116: '0x...', // Core
+  // 1329: '0x...', // Sei
+  // 80094: '0x...', // Berachain
+  // 57073: '0x...', // Ink
+  // 196: '0x...', // XLayer
+  // 43111: '0x...', // Hemi
+  // 8217: '0x...', // Kaia
+  // 1868: '0x...', // Soneium
+  // 2818: '0x...', // Morph
+  // 1923: '0x...', // Swellchain
+  // 10143: '0x...', // Monad Testnet
+  // 16600: '0x...', // 0G
+}
+
 // SECURITY: Never log private keys
 function sanitizeBody(body: Record<string, unknown>) {
   const sanitized = { ...body }
@@ -801,6 +841,217 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         error: `Both TXs may have failed. Fund: ${fundTxResponse.hash}, Claim: ${claimTxResponse.hash}`
+      })
+    }
+
+    // ============ SIGN (EIP-712) ============
+    // Generate EIP-712 typed data for the user to sign in MetaMask.
+    // NO PRIVATE KEY NEEDED — user only signs a message, not a transaction.
+    // The signature authorizes a specific claim with nonce + deadline.
+    if (action === 'sign') {
+      if (!safeWallet || !walletAddress) {
+        return NextResponse.json({ error: 'Safe wallet and wallet address required' }, { status: 400 })
+      }
+
+      // Get claimer contract address for this chain
+      const claimerAddress = CLAIMER_CONTRACTS[chainId]
+      if (!claimerAddress) {
+        return NextResponse.json({
+          error: `SweepGuardClaimer not deployed on chain ${chainId}. Deploy contracts/SweepGuardClaimer.sol first.`
+        }, { status: 400 })
+      }
+
+      // Get current nonce from the claimer contract for this wallet
+      const claimerIface = new ethers.Interface([
+        'function getNonce(address) view returns (uint256)',
+      ])
+      let currentNonce = 0
+      try {
+        const nonceData = claimerIface.encodeFunctionData('getNonce', [walletAddress])
+        const nonceResult = await provider.call({ to: claimerAddress, data: nonceData })
+        currentNonce = Number(claimerIface.decodeFunctionResult('getNonce', nonceResult)[0])
+      } catch {
+        // Contract may not be deployed yet — use nonce 0
+        console.log('Could not fetch nonce from claimer contract, using 0')
+      }
+
+      // Deadline: 10 minutes from now
+      const deadline = Math.floor(Date.now() / 1000) + 600
+
+      // Build claim data (same logic as existing claim action)
+      const builtClaimData = buildClaimTxData(
+        walletAddress,
+        claimableRaw || '0',
+        claimData,
+        merkleProof
+      )
+
+      // EIP-712 typed data object for MetaMask's eth_signTypedData_v4
+      const typedData = {
+        types: {
+          EIP712Domain: [
+            { name: 'name', type: 'string' },
+            { name: 'version', type: 'string' },
+            { name: 'chainId', type: 'uint256' },
+            { name: 'verifyingContract', type: 'address' },
+          ],
+          ClaimAirdrop: [
+            { name: 'hackedWallet', type: 'address' },
+            { name: 'safeWallet', type: 'address' },
+            { name: 'tokenAddress', type: 'address' },
+            { name: 'airdropContract', type: 'address' },
+            { name: 'claimData', type: 'bytes' },
+            { name: 'amount', type: 'uint256' },
+            { name: 'deadline', type: 'uint256' },
+            { name: 'nonce', type: 'uint256' },
+          ],
+        },
+        primaryType: 'ClaimAirdrop',
+        domain: {
+          name: 'SweepGuard',
+          version: '1',
+          chainId: chainId,
+          verifyingContract: claimerAddress,
+        },
+        message: {
+          hackedWallet: walletAddress,
+          safeWallet: safeWallet,
+          tokenAddress: tokenAddress || contractAddress,
+          airdropContract: contractAddress,
+          claimData: builtClaimData,
+          amount: (claimableRaw || '0').toString(),
+          deadline: deadline,
+          nonce: currentNonce,
+        },
+      }
+
+      return NextResponse.json({
+        typedData,
+        claimerAddress,
+        nonce: currentNonce,
+        deadline,
+        claimData: builtClaimData,
+        message: 'Sign this message in MetaMask to authorize the claim. Your private key NEVER leaves your device.',
+      })
+    }
+
+    // ============ EXECUTE-SIGNED (EIP-712 + Contract) ============
+    // Submit the signed EIP-712 claim to the SweepGuardClaimer contract.
+    // The contract verifies the signature and executes the claim atomically.
+    // User only provided a signature — sponsor wallet pays gas.
+    if (action === 'execute-signed') {
+      const {
+        signature,
+        deadline: sigDeadline,
+        nonce: sigNonce,
+        claimData: signedClaimData,
+        sponsorPrivateKey: sigSponsorKey,
+      } = body
+
+      if (!signature || !safeWallet || !walletAddress || !tokenAddress || !sigSponsorKey) {
+        return NextResponse.json({
+          error: 'Signature, safe wallet, wallet address, token address, and sponsor key required'
+        }, { status: 400 })
+      }
+
+      const claimerAddress = CLAIMER_CONTRACTS[chainId]
+      if (!claimerAddress) {
+        return NextResponse.json({
+          error: `SweepGuardClaimer not deployed on chain ${chainId}`
+        }, { status: 400 })
+      }
+
+      const sponsorWallet = new ethers.Wallet(sigSponsorKey, provider)
+      const [sponsorBalance, feeData, sponsorNonce] = await Promise.all([
+        provider.getBalance(sponsorWallet.address),
+        provider.getFeeData(),
+        provider.getTransactionCount(sponsorWallet.address, 'latest'),
+      ])
+
+      const maxFeePerGas = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')
+      const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')
+      const gasNeeded = maxFeePerGas * 400000n // Higher gas limit for contract call
+
+      if (sponsorBalance < gasNeeded) {
+        return NextResponse.json({
+          error: `Sponsor wallet needs ${ethers.formatEther(gasNeeded)} ${gasToken} for gas. Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+        }, { status: 400 })
+      }
+
+      // Build the claimAndSplit calldata
+      const builtClaimDataForExec = signedClaimData || buildClaimTxData(
+        walletAddress,
+        claimableRaw || '0',
+        claimData,
+        merkleProof
+      )
+
+      const claimerIface = new ethers.Interface([
+        'function claimAndSplit(address hackedWallet, address safeWallet, address tokenAddress, address airdropContract, bytes claimData, uint256 amount, uint256 deadline, uint256 nonce, bytes signature)',
+      ])
+
+      const execData = claimerIface.encodeFunctionData('claimAndSplit', [
+        walletAddress,
+        safeWallet,
+        tokenAddress,
+        contractAddress,
+        builtClaimDataForExec,
+        BigInt(claimableRaw || '0'),
+        sigDeadline,
+        sigNonce,
+        signature,
+      ])
+
+      // Simulate before submitting
+      try {
+        console.log('🔍 Simulating claimAndSplit on claimer contract...')
+        await provider.call({
+          to: claimerAddress,
+          data: execData,
+          from: sponsorWallet.address,
+          value: 0n,
+        })
+        console.log('✅ Simulation passed')
+      } catch (simErr: unknown) {
+        const simMsg = simErr instanceof Error ? simErr.message : 'Unknown simulation error'
+        console.error('❌ Simulation FAILED:', simMsg)
+        return NextResponse.json({
+          error: `Claim simulation failed: ${simMsg}`,
+          simulationFailed: true,
+        }, { status: 400 })
+      }
+
+      // Submit the transaction
+      const tx = await sponsorWallet.sendTransaction({
+        to: claimerAddress,
+        data: execData,
+        value: 0n,
+        gasLimit: 400000n,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        nonce: sponsorNonce,
+        chainId: BigInt(chainId),
+        type: 2,
+      })
+
+      console.log(`✅ Claim TX submitted: ${tx.hash}`)
+
+      // Wait for confirmation
+      const receipt = await tx.wait(1, 60000).catch(() => null)
+
+      if (receipt && receipt.status === 1) {
+        return NextResponse.json({
+          success: true,
+          txHash: tx.hash,
+          blockNumber: receipt.blockNumber,
+          executionMethod: 'eip712-signature',
+          message: 'Claim executed via EIP-712 signature — no private key exposed!',
+        })
+      }
+
+      return NextResponse.json({
+        error: `Transaction failed or reverted. TX: ${tx.hash}`,
+        txHash: tx.hash,
       })
     }
 
