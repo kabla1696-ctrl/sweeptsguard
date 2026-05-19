@@ -97,11 +97,12 @@ export default function Home() {
         {/* How it works */}
         <div className="mt-32 max-w-4xl w-full">
           <h2 className="text-2xl font-bold text-center mb-12 text-white/80">How It Works</h2>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-4 gap-6">
             {[
               { icon: '🔍', title: '1. Scan', desc: 'Enter your compromised wallet address. We check all chains for assets and EIP-7702 delegations.' },
               { icon: '🔗', title: '2. Track', desc: 'Track where your stolen funds went. See if they reached an exchange or drainer wallet.' },
-              { icon: '⚡', title: '3. Auto-Sweep', desc: 'When funds arrive, we automatically sweep them to your safe wallet within seconds.' }
+              { icon: '🎯', title: '3. Airdrop', desc: 'Claim airdrops from your compromised wallet. Tokens are sent directly to your safe wallet.' },
+              { icon: '⚡', title: '4. Auto-Sweep', desc: 'When funds arrive, we automatically sweep them to your safe wallet within seconds.' }
             ].map((step) => (
               <div key={step.title} className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:border-green-500/20 transition-all">
                 <div className="text-3xl mb-4">{step.icon}</div>
@@ -112,10 +113,67 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Features */}
+        <div className="mt-32 max-w-4xl w-full">
+          <h2 className="text-2xl font-bold text-center mb-12 text-white/80">Features</h2>
+          <div className="grid md:grid-cols-2 gap-6">
+            {[
+              { icon: '🔍', title: 'Multi-Chain Scanner', desc: 'Scan all 6 chains at once for assets and delegations.' },
+              { icon: '🚨', title: 'Drainer Detection', desc: 'Identify known drainer contracts and EIP-7702 delegations.' },
+              { icon: '🔗', title: 'Fund Tracker', desc: 'Track stolen funds across chains. See if they hit an exchange.' },
+              { icon: '🎯', title: 'Airdrop Claimer', desc: 'Claim airdrops safely. Tokens go directly to your safe wallet.' },
+              { icon: '🚰', title: 'Gas Sponsor', desc: 'Atomic Flashbots bundles — gas + claim in one tx, invisible to drainer.' },
+              { icon: '⚡', title: 'Auto-Sweep', desc: 'Real-time monitoring. Sweep incoming funds within seconds.' },
+              { icon: '📱', title: 'Telegram Alerts', desc: 'Get instant notifications for balance changes and sweeps.' },
+              { icon: '🧩', title: 'Chrome Extension', desc: 'Drainer detection, wallet protection, one-click claim from any page.' }
+            ].map((feature) => (
+              <div key={feature.title} className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:border-green-500/20 transition-all">
+                <div className="text-3xl mb-4">{feature.icon}</div>
+                <h3 className="text-lg font-semibold mb-2">{feature.title}</h3>
+                <p className="text-white/30 text-sm leading-relaxed">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Chrome Extension CTA */}
+        <div className="mt-32 max-w-2xl w-full">
+          <div className="p-8 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="text-center">
+              <span className="text-4xl">🧩</span>
+              <h2 className="text-2xl font-bold mt-4 mb-2">Chrome Extension</h2>
+              <p className="text-white/40 mb-6">Protect yourself while browsing. Detect drainer sites, block malicious transactions, and claim airdrops with one click.</p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <a
+                  href="https://github.com/kabla1696-ctrl/sweeptsguard/tree/main/extension"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl font-semibold text-sm hover:bg-white/[0.08] transition-all"
+                >
+                  📦 Download Extension
+                </a>
+                <a
+                  href="/dashboard"
+                  className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm hover:from-green-500 hover:to-emerald-500 transition-all"
+                >
+                  🛡️ Open Dashboard
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Footer */}
         <footer className="mt-32 pb-8 text-center text-white/20 text-xs">
           <p>SweepGuard — Open Source Wallet Protection</p>
           <p className="mt-1">Protecting EVM wallets from drainer attacks</p>
+          <p className="mt-2">
+            <a href="https://github.com/kabla1696-ctrl/sweeptsguard" target="_blank" rel="noopener noreferrer" className="text-green-400/30 hover:text-green-400/50">GitHub</a>
+            <span className="mx-2">•</span>
+            <a href="/scan" className="text-green-400/30 hover:text-green-400/50">Scan</a>
+            <span className="mx-2">•</span>
+            <a href="/dashboard" className="text-green-400/30 hover:text-green-400/50">Dashboard</a>
+          </p>
         </footer>
       </div>
     </main>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SweepGuard</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 380px;
+      min-height: 500px;
+      background: #0a0a0f;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header h1 {
+      font-size: 18px;
+      background: linear-gradient(135deg, #4ade80, #10b981);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tabs {
+      display: flex;
+      padding: 8px 16px;
+      gap: 4px;
+    }
+    .tab {
+      flex: 1;
+      padding: 8px 4px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px;
+      color: rgba(255,255,255,0.4);
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      background: rgba(74,222,128,0.1);
+      border-color: rgba(74,222,128,0.2);
+      color: #4ade80;
+    }
+    .tab:hover { color: #fff; }
+
+    .content { padding: 16px; }
+
+    .input-group {
+      margin-bottom: 12px;
+    }
+    .input-group label {
+      display: block;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 6px;
+    }
+    .input-group input, .input-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 12px;
+      font-family: 'Courier New', monospace;
+      outline: none;
+    }
+    .input-group input:focus {
+      border-color: rgba(74,222,128,0.4);
+    }
+    .input-group input::placeholder {
+      color: rgba(255,255,255,0.15);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #047857, #059669);
+    }
+    .btn-danger {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #ef4444;
+    }
+
+    .status-bar {
+      padding: 12px;
+      background: rgba(74,222,128,0.05);
+      border: 1px solid rgba(74,222,128,0.1);
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .status-bar.danger {
+      background: rgba(239,68,68,0.05);
+      border-color: rgba(239,68,68,0.1);
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4ade80;
+      animation: pulse 2s infinite;
+    }
+    .status-dot.danger { background: #ef4444; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .status-text {
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .status-detail {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+    }
+
+    .alert {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      font-size: 11px;
+    }
+    .alert-success {
+      background: rgba(74,222,128,0.1);
+      border: 1px solid rgba(74,222,128,0.2);
+      color: #4ade80;
+    }
+    .alert-warning {
+      background: rgba(250,204,21,0.1);
+      border: 1px solid rgba(250,204,21,0.2);
+      color: #facc15;
+    }
+    .alert-danger {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #ef4444;
+    }
+
+    .chain-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .chain-badge {
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 6px;
+      font-size: 10px;
+      color: rgba(255,255,255,0.5);
+    }
+
+    .faucet-link {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      color: #fff;
+    }
+    .faucet-link:hover {
+      background: rgba(74,222,128,0.05);
+      border-color: rgba(74,222,128,0.1);
+    }
+    .faucet-icon { font-size: 20px; }
+    .faucet-name { font-size: 12px; font-weight: 500; }
+    .faucet-detail { font-size: 10px; color: rgba(255,255,255,0.3); }
+
+    .footer {
+      padding: 12px 16px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      text-align: center;
+      font-size: 10px;
+      color: rgba(255,255,255,0.15);
+    }
+
+    .hidden { display: none; }
+
+    .warning-box {
+      padding: 12px;
+      background: rgba(250,204,21,0.05);
+      border: 1px solid rgba(250,204,21,0.15);
+      border-radius: 10px;
+      margin-bottom: 12px;
+    }
+    .warning-box h3 {
+      color: #facc15;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .warning-box p {
+      font-size: 11px;
+      color: rgba(255,255,255,0.4);
+      line-height: 1.5;
+    }
+
+    .key-input {
+      position: relative;
+    }
+    .key-toggle {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      font-size: 10px;
+    }
+    .key-toggle:hover { color: rgba(255,255,255,0.6); }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <span style="font-size: 24px;">🛡️</span>
+    <h1>SweepGuard</h1>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="scan">🔍 Scan</div>
+    <div class="tab" data-tab="protect">🛡️ Protect</div>
+    <div class="tab" data-tab="airdrop">🎯 Airdrop</div>
+    <div class="tab" data-tab="faucets">🚰 Faucets</div>
+  </div>
+
+  <div class="content">
+    <!-- Scan Tab -->
+    <div id="scan-tab" class="tab-content">
+      <div class="input-group">
+        <label>Wallet Address</label>
+        <input type="text" id="scan-address" placeholder="0x... compromised wallet">
+      </div>
+
+      <button class="btn btn-primary" id="scan-btn">🔍 Scan All Chains</button>
+
+      <div id="scan-result" class="hidden" style="margin-top: 16px;">
+        <div id="scan-status" class="status-bar">
+          <div class="status-indicator">
+            <span class="status-dot danger"></span>
+            <span class="status-text">Scanning...</span>
+          </div>
+        </div>
+        <div id="scan-alerts"></div>
+      </div>
+    </div>
+
+    <!-- Protect Tab -->
+    <div id="protect-tab" class="tab-content hidden">
+      <div class="warning-box">
+        <h3>⚠️ How Gas Sponsorship Works</h3>
+        <p>
+          Sending gas directly to your compromised wallet = drainer steals it instantly.
+          <br><br>
+          <strong>Solution:</strong> SweepGuard uses Flashbots private mempool to fund gas + claim atomically. The drainer never sees the gas arriving.
+        </p>
+      </div>
+
+      <div class="input-group">
+        <label>Safe Wallet Address (receive funds here)</label>
+        <input type="text" id="safe-address" placeholder="0x... your safe wallet">
+      </div>
+
+      <div class="input-group">
+        <label>Compromised Wallet Private Key</label>
+        <div class="key-input">
+          <input type="password" id="private-key" placeholder="Private key...">
+          <button class="key-toggle" id="toggle-key">Show</button>
+        </div>
+      </div>
+
+      <div class="input-group">
+        <label>Telegram Bot Token (optional)</label>
+        <input type="text" id="tg-token" placeholder="123456:ABC-DEF...">
+      </div>
+
+      <div class="input-group">
+        <label>Telegram Chat ID (optional)</label>
+        <input type="text" id="tg-chat" placeholder="-1001234567890">
+      </div>
+
+      <button class="btn btn-primary" id="protect-btn">🛡️ Start Protection</button>
+
+      <div id="protect-status" class="hidden" style="margin-top: 16px;">
+        <div class="status-bar">
+          <div class="status-indicator">
+            <span class="status-dot"></span>
+            <span class="status-text">Protection Active</span>
+          </div>
+          <div class="status-detail">Monitoring all chains...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Airdrop Tab -->
+    <div id="airdrop-tab" class="tab-content hidden">
+      <div class="warning-box">
+        <h3>🎯 Safe Airdrop Claiming</h3>
+        <p>
+          Claim airdrops from your compromised wallet without exposing gas funds.
+          Tokens are sent directly to your safe wallet.
+        </p>
+      </div>
+
+      <div class="input-group">
+        <label>Airdrop Contract Address</label>
+        <input type="text" id="airdrop-contract" placeholder="0x...">
+      </div>
+
+      <div class="input-group">
+        <label>Chain</label>
+        <select id="airdrop-chain">
+          <option value="1">Ethereum</option>
+          <option value="8453">Base</option>
+          <option value="56">BNB Chain</option>
+          <option value="42161">Arbitrum</option>
+          <option value="137">Polygon</option>
+          <option value="10">Optimism</option>
+        </select>
+      </div>
+
+      <div class="input-group">
+        <label>Recipient (Safe Wallet)</label>
+        <input type="text" id="airdrop-recipient" placeholder="0x... safe wallet">
+      </div>
+
+      <button class="btn btn-primary" id="claim-btn">🎯 Claim with Gas Sponsor</button>
+
+      <div id="claim-result" class="hidden" style="margin-top: 12px;">
+        <div id="claim-alert" class="alert"></div>
+      </div>
+    </div>
+
+    <!-- Faucets Tab -->
+    <div id="faucets-tab" class="tab-content hidden">
+      <p style="font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 16px;">
+        Bridge ETH to L2s for gas. SweepGuard handles gas sponsorship for claims automatically.
+      </p>
+
+      <div class="faucet-link" href="https://bridge.base.org" target="_blank">
+        <span class="faucet-icon">🔵</span>
+        <div>
+          <div class="faucet-name">Base Bridge</div>
+          <div class="faucet-detail">Bridge ETH from Ethereum → Base</div>
+        </div>
+      </div>
+
+      <div class="faucet-link" href="https://bridge.arbitrum.io" target="_blank">
+        <span class="faucet-icon">🔷</span>
+        <div>
+          <div class="faucet-name">Arbitrum Bridge</div>
+          <div class="faucet-detail">Bridge ETH from Ethereum → Arbitrum</div>
+        </div>
+      </div>
+
+      <div class="faucet-link" href="https://portal.polygon.technology" target="_blank">
+        <span class="faucet-icon">🟣</span>
+        <div>
+          <div class="faucet-name">Polygon Portal</div>
+          <div class="faucet-detail">Bridge POL from Ethereum → Polygon</div>
+        </div>
+      </div>
+
+      <div class="faucet-link" href="https://app.optimism.io/bridge" target="_blank">
+        <span class="faucet-icon">🔴</span>
+        <div>
+          <div class="faucet-name">Optimism Bridge</div>
+          <div class="faucet-detail">Bridge ETH from Ethereum → Optimism</div>
+        </div>
+      </div>
+
+      <div class="faucet-link" href="https://stargate.finance" target="_blank">
+        <span class="faucet-icon">⭐</span>
+        <div>
+          <div class="faucet-name">Stargate</div>
+          <div class="faucet-detail">Cross-chain bridge (any L2)</div>
+        </div>
+      </div>
+
+      <div class="faucet-link" href="https://www.bnbchain.org/en/bridge" target="_blank">
+        <span class="faucet-icon">🟡</span>
+        <div>
+          <div class="faucet-name">BNB Chain Bridge</div>
+          <div class="faucet-detail">Bridge BNB from Ethereum → BSC</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    SweepGuard v1.0 — Open Source Wallet Protection
+  </div>
+
+  <script src="js/popup.js"></script>
+</body>
+</html>
