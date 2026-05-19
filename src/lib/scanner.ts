@@ -44,6 +44,8 @@ export interface ScanResult {
   suspiciousApprovals: { chainId: number; chainName: string; token: string; spender: string; amount: string; isDrainer: boolean }[]
   drainerMethodCalls: { chainId: number; chainName: string; method: string; to: string; txHash: string; timestamp: string }[]
   chains: number[]
+  totalChainsScanned?: number
+  failedChains?: number[]
   lastActivity: string | null
 }
 
@@ -413,7 +415,7 @@ export class WalletScanner {
       return calls.map(c => ({ ...c, chainId, chainName: chain.name }))
     })
 
-    const [results, approvalResults, methodResults] = await Promise.all([
+    const [results, , , approvalResults, methodResults] = await Promise.all([
       Promise.all(scanPromises),
       Promise.all(delegationPromises),
       Promise.all(drainPromises),
