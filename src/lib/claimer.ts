@@ -36,6 +36,15 @@ export const FEE_COLLECTOR_CONTRACTS: Record<number, string> = {
   // 42161: '0x...', // Arbitrum
   // 137: '0x...', // Polygon
   // 10: '0x...', // Optimism
+  // 43114: '0x...', // Avalanche
+  // 250: '0x...', // Fantom
+  // 25: '0x...', // Cronos
+  // 81457: '0x...', // Blast
+  // 7777777: '0x...', // Zora
+  // 1101: '0x...', // Polygon zkEVM
+  // 169: '0x...', // Manta Pacific
+  // 324: '0x...', // zkSync Era
+  // 59144: '0x...', // Linea
 }
 
 export interface ClaimResult {
