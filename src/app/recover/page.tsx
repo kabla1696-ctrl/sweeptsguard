@@ -9,6 +9,9 @@ interface AssetScan {
   tokens: { address: string; symbol: string; decimals: number; balanceFormatted: string }[]
   hasDelegation: boolean
   delegatedTo: string | null
+  delegations?: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[]
+  failedChains?: number[]
+  totalChainsScanned?: number
 }
 
 interface RecoveryStatus {
@@ -108,31 +111,51 @@ function RecoverContent() {
       return
     }
 
-    setRecovery({ step: 'executing', message: 'Revoking EIP-7702 delegation via Flashbots atomic bundle...' })
+    setRecovery({ step: 'executing', message: 'Revoking ALL delegations via Flashbots atomic bundle...' })
 
     try {
-      const res = await fetch('/api/recover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'revoke',
-          privateKey,
-          sponsorPrivateKey: sponsorKey,
-          chainId: 1
-        })
-      })
-      const data = await res.json()
+      // Revoke ALL chains that have delegations
+      const chainsToRevoke = assets?.delegations && assets.delegations.length > 0
+        ? assets.delegations.map(d => d.chainId)
+        : [1]
 
-      if (data.success) {
+      const allResults = []
+      const allErrors = []
+
+      for (const chainId of chainsToRevoke) {
+        try {
+          const res = await fetch('/api/recover', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'revoke',
+              privateKey,
+              sponsorPrivateKey: sponsorKey,
+              chainId
+            })
+          })
+          const data = await res.json()
+          if (data.success) {
+            allResults.push({ chainId, txHashes: data.txHashes || [] })
+          } else {
+            allErrors.push({ chainId, error: data.error })
+          }
+        } catch (err) {
+          allErrors.push({ chainId, error: 'Request failed' })
+        }
+      }
+
+      if (allResults.length > 0) {
+        const allTxHashes = allResults.flatMap(r => r.txHashes)
         setRecovery({
           step: 'done',
-          message: data.error || 'Delegation revoked successfully! Your wallet is now protected.',
-          txHashes: data.txHashes
+          message: `Delegations revoked on ${allResults.length} chain(s)!${allErrors.length > 0 ? ` (${allErrors.length} chain(s) failed)` : ''}`,
+          txHashes: allTxHashes
         })
       } else {
         setRecovery({
           step: 'error',
-          message: data.error || 'Revoke failed'
+          message: allErrors.map(e => `Chain ${e.chainId}: ${e.error}`).join('; ')
         })
       }
     } catch {
@@ -263,7 +286,36 @@ function RecoverContent() {
             <h2 className="text-lg font-semibold">📊 Recoverable Assets</h2>
 
             {/* Delegation Warning */}
-            {assets.hasDelegation && (
+            {assets.hasDelegation && assets.delegations && assets.delegations.length > 0 && (
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <span>🚨</span>
+                  <span className="text-red-400 font-semibold">EIP-7702 Delegation Active — {assets.delegations.length} Chain(s)</span>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {assets.delegations.map((d, i) => (
+                    <div key={i} className="flex items-center justify-between p-2 bg-red-500/5 rounded-lg">
+                      <div>
+                        <span className="text-white/70 text-sm font-medium">{d.chainName}</span>
+                        <span className="text-white/30 text-xs ml-2">→ <code className="text-white/50">{d.delegatedTo.slice(0, 10)}...{d.delegatedTo.slice(-8)}</code></span>
+                      </div>
+                      <span className="text-red-400 text-xs font-semibold">DRAINER</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-green-400 text-xs mt-3">
+                  ✅ ALL delegations will be revoked during recovery
+                </p>
+                {assets.failedChains && assets.failedChains.length > 0 && (
+                  <p className="text-yellow-400/60 text-xs mt-1">
+                    ⚠️ {assets.failedChains.length} chains failed (RPC error)
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Single delegation fallback */}
+            {assets.hasDelegation && (!assets.delegations || assets.delegations.length === 0) && (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <div className="flex items-center gap-2">
                   <span>🚨</span>
@@ -357,22 +409,30 @@ function RecoverContent() {
         )}
 
         {/* Revoke Only — no assets but delegation active */}
-        {recovery?.step === 'confirm' && assets && parseFloat(assets.ethFormatted) === 0 && assets.tokens.length === 0 && assets.hasDelegation && (
+        {recovery?.step === 'confirm' && assets && parseFloat(assets.ethFormatted) === 0 && assets.tokens.length === 0 && assets.hasDelegation && assets.delegations && assets.delegations.length > 0 && (
           <div className="space-y-4">
             <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
-              <h3 className="text-orange-400 font-semibold mb-2">🛡️ Revoke Delegation Only</h3>
+              <h3 className="text-orange-400 font-semibold mb-2">🛡️ Revoke ALL Delegations ({assets.delegations.length} chains)</h3>
               <p className="text-white/40 text-sm">
-                No funds to recover, but delegation is active. Revoking prevents the drainer from
-                stealing future deposits to this wallet.
+                No funds to recover, but delegation is active on {assets.delegations.length} chain(s). Revoking prevents the drainer from stealing future deposits.
               </p>
+              <div className="mt-3 space-y-1">
+                {assets.delegations.map((d, i) => (
+                  <div key={i} className="text-xs text-white/40">
+                    • {d.chainName} → <code className="text-white/60">{d.delegatedTo.slice(0, 10)}...{d.delegatedTo.slice(-8)}</code>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-yellow-400 text-xs">💰 Gas cost: ~$5-15 per chain (paid by sponsor wallet)</p>
+              </div>
             </div>
 
             <button
               onClick={executeRevoke}
-              disabled={!safeAddress}
-              className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 rounded-xl font-semibold text-lg disabled:opacity-50"
+              className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 rounded-xl font-semibold text-lg"
             >
-              🚫 Revoke Delegation Now
+              🚫 Revoke ALL Delegations Now
             </button>
           </div>
         )}

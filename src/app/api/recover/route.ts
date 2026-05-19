@@ -32,9 +32,37 @@ export async function POST(request: NextRequest) {
   switch (action) {
     case 'scan': {
       try {
+        // Scan ALL chains for delegations
+        const allChains = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144]
+        const delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[] = []
+        const failedChains: number[] = []
+
+        // Check delegation on ALL chains
+        const delegationPromises = allChains.map(async (cid) => {
+          try {
+            const rpcUrl = rpcUrls[cid]
+            if (!rpcUrl) { failedChains.push(cid); return null }
+            const provider = new ethers.JsonRpcProvider(rpcUrl)
+            const code = await provider.getCode(walletAddress)
+            if (code && code.startsWith('0xef0100')) {
+              const delegatedTo = '0x' + code.slice(8, 48)
+              const chainNames: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB Chain', 42161: 'Arbitrum', 137: 'Polygon', 10: 'Optimism', 43114: 'Avalanche', 250: 'Fantom', 25: 'Cronos', 81457: 'Blast', 7777777: 'Zora', 1101: 'Polygon zkEVM', 169: 'Manta', 324: 'zkSync', 59144: 'Linea' }
+              delegations.push({ chainId: cid, chainName: chainNames[cid] || `Chain ${cid}`, delegatedTo, isDrainer: false })
+              return { chainId: cid, code }
+            }
+            return null
+          } catch (err) {
+            failedChains.push(cid)
+            return null
+          }
+        })
+
+        await Promise.all(delegationPromises)
+
+        // Get ETH + token balances (Ethereum only for now)
         const rpcUrl = rpcUrls[1]
         const assets = await scanRecoverableAssets(walletAddress, rpcUrl)
-        // Serialize BigInt values to strings for JSON
+
         return NextResponse.json({
           address: walletAddress,
           ethBalance: assets.ethBalance.toString(),
@@ -46,8 +74,11 @@ export async function POST(request: NextRequest) {
             balance: t.balance.toString(),
             balanceFormatted: t.balanceFormatted
           })),
-          hasDelegation: assets.hasDelegation,
-          delegatedTo: assets.delegatedTo
+          hasDelegation: delegations.length > 0,
+          delegatedTo: delegations.length > 0 ? delegations[0].delegatedTo : null,
+          delegations,
+          failedChains,
+          totalChainsScanned: allChains.length
         })
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Scan failed'
