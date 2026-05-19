@@ -425,8 +425,39 @@ function RecoverContent() {
                 ))}
               </div>
               <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <p className="text-yellow-400 text-xs">💰 Revoke fee: Fixed $40 per wallet + gas costs (paid by sponsor wallet)</p>
-                <p className="text-yellow-400/60 text-xs mt-1">Gas cost: ~$5-15 per chain (varies by network)</p>
+                <p className="text-yellow-400 text-xs font-semibold">💰 Gas Requirements Per Chain:</p>
+                <div className="mt-2 grid grid-cols-2 gap-1">
+                  {assets.delegations.map((d, i) => {
+                    const gasInfo: Record<number, { token: string; amount: string; usd: string }> = {
+                      1: { token: 'ETH', amount: '0.003', usd: '~$7' },
+                      8453: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
+                      56: { token: 'BNB', amount: '0.001', usd: '~$0.60' },
+                      42161: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
+                      137: { token: 'MATIC', amount: '0.01', usd: '~$0.02' },
+                      10: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
+                      5000: { token: 'MNT', amount: '0.001', usd: '~$0.67' },
+                      534352: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
+                      100: { token: 'xDai', amount: '0.01', usd: '~$0.01' },
+                      7000: { token: 'ZETA', amount: '0.01', usd: '~$0.50' },
+                      1625: { token: 'G', amount: '0.01', usd: '~$0.01' },
+                      1116: { token: 'CORE', amount: '0.01', usd: '~$0.10' },
+                      1329: { token: 'SEI', amount: '0.01', usd: '~$0.04' },
+                      80094: { token: 'BERA', amount: '0.001', usd: '~$0.50' },
+                      57073: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
+                      196: { token: 'OKB', amount: '0.001', usd: '~$0.50' },
+                      43111: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
+                      8217: { token: 'KAIA', amount: '0.01', usd: '~$0.02' },
+                    }
+                    const info = gasInfo[d.chainId] || { token: 'native', amount: '0.001', usd: '~$0.50' }
+                    return (
+                      <div key={i} className="text-xs text-white/40 flex justify-between">
+                        <span>{d.chainName}</span>
+                        <span className="text-yellow-400/80">{info.amount} {info.token} ({info.usd})</span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="text-yellow-400/60 text-xs mt-2">Total sponsor wallet needs gas tokens on ALL chains above</p>
               </div>
             </div>
 
@@ -485,7 +516,14 @@ function RecoverContent() {
         {recovery?.step === 'error' && (
           <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-xl">
             <h3 className="text-red-400 font-bold text-lg mb-2">❌ Recovery Failed</h3>
-            <p className="text-white/60 text-sm">{recovery.message}</p>
+            <div className="space-y-1 max-h-40 overflow-y-auto">
+              {recovery.message.split('; ').map((msg, i) => (
+                <p key={i} className="text-white/60 text-xs">• {msg}</p>
+              ))}
+            </div>
+            <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+              <p className="text-yellow-400 text-xs font-semibold">💡 Fund sponsor wallet with native gas tokens per chain, then retry.</p>
+            </div>
             <button
               onClick={() => { setRecovery(null); setAssets(null) }}
               className="mt-4 px-4 py-2 bg-white/[0.05] rounded-lg text-sm"

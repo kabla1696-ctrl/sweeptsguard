@@ -431,26 +431,51 @@ export async function executeRevokeDelegation(
   const feeData = await provider.getFeeData()
   const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
 
-  // Gas needed: ~21000 for fund transfer + ~50000 for revoke
-  const gasNeeded = ethers.parseEther('0.003') // Enough for both txs
+  // Gas needed: ~21000 for fund transfer + ~50000 for revoke + 20% buffer
+  const gasLimit = 71000n // 21000 + 50000
+  const gasNeeded = (gasPrice * gasLimit * 120n) / 100n // 20% buffer
+  
+  // Minimum gas per chain (in wei) - fallback if calculation is too low
+  const minGasPerChain: Record<number, bigint> = {
+    1: ethers.parseEther('0.003'),      // ETH mainnet - expensive
+    8453: ethers.parseEther('0.0001'),   // Base - very cheap
+    56: ethers.parseEther('0.001'),      // BSC
+    42161: ethers.parseEther('0.0001'),  // Arbitrum - cheap
+    137: ethers.parseEther('0.01'),      // Polygon - high gas
+    10: ethers.parseEther('0.0001'),     // Optimism - cheap
+    5000: ethers.parseEther('0.001'),    // Mantle
+    534352: ethers.parseEther('0.0001'), // Scroll
+    100: ethers.parseEther('0.01'),      // Gnosis
+    7000: ethers.parseEther('0.01'),     // ZetaChain
+    1625: ethers.parseEther('0.01'),     // Gravity
+    1116: ethers.parseEther('0.01'),     // Core
+    1329: ethers.parseEther('0.01'),     // Sei
+    80094: ethers.parseEther('0.001'),   // Berachain
+    57073: ethers.parseEther('0.0001'),  // Ink
+    196: ethers.parseEther('0.001'),     // XLayer
+    43111: ethers.parseEther('0.0001'),  // Hemi
+    8217: ethers.parseEther('0.01'),     // Kaia
+  }
+  
+  const minGas = minGasPerChain[chainId] || ethers.parseEther('0.001')
+  const finalGasNeeded = gasNeeded > minGas ? gasNeeded : minGas
 
   // Get sponsor balance
   const sponsorBalance = await provider.getBalance(sponsorWallet.address)
-  if (sponsorBalance < gasNeeded) {
+  if (sponsorBalance < finalGasNeeded) {
     return {
       success: false,
-      error: `Sponsor wallet needs at least 0.003 ${gasToken} for gas. Current: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+      error: `Sponsor needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas. Current: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
     }
   }
 
   const compromisedNonce = await provider.getTransactionCount(compromisedAddress)
   const sponsorNonce = await provider.getTransactionCount(sponsorWallet.address)
 
-  // TX 1 (from sponsor): Send gas ETH to compromised wallet
-  // The drainer bot can't see this in Flashbots private mempool
+  // TX 1 (from sponsor): Send gas token to compromised wallet
   const fundTx = await sponsorWallet.signTransaction({
     to: compromisedAddress,
-    value: gasNeeded,
+    value: finalGasNeeded,
     gasLimit: 21000n,
     gasPrice,
     nonce: sponsorNonce,
