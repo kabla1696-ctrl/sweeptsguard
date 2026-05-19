@@ -32,7 +32,7 @@ const CLAIM_SIGNATURES = {
   claim: 'claim(address,uint256,bytes32[])',
   // Merkle with deadline
   claimWithDeadline: 'claim(address,uint256,bytes32[],uint256)',
-  // Simple claim (no proof)
+  // Simple claim (no params)
   claimSimple: 'claim()',
   // Claim with signature
   claimWithSig: 'claim(address,bytes)',
@@ -54,24 +54,27 @@ export class AirdropClaimer {
     method: string,
     params: Record<string, unknown>
   ): string {
-    const iface = new ethers.Interface([
-      `function ${CLAIM_SIGNATURES.claim as string}`,
-      `function ${CLAIM_SIGNATURES.claimWithDeadline as string}`,
-      `function ${CLAIM_SIGNATURES.claimSimple as string}`,
-      `function ${CLAIM_SIGNATURES.claimWithSig as string}`,
-    ])
-
     switch (method) {
       case 'claim': {
+        const iface = new ethers.Interface([
+          `function ${CLAIM_SIGNATURES.claim}`
+        ])
         const { recipient, amount, proof } = params as { recipient: string; amount: string; proof: string[] }
         return iface.encodeFunctionData('claim', [recipient, amount, proof])
       }
       case 'claimWithDeadline': {
+        const iface = new ethers.Interface([
+          `function ${CLAIM_SIGNATURES.claimWithDeadline}`
+        ])
         const { recipient, amount, proof, deadline } = params as { recipient: string; amount: string; proof: string[]; deadline: number }
         return iface.encodeFunctionData('claimWithDeadline', [recipient, amount, proof, deadline])
       }
-      case 'claimSimple':
+      case 'claimSimple': {
+        const iface = new ethers.Interface([
+          `function ${CLAIM_SIGNATURES.claimSimple}`
+        ])
         return iface.encodeFunctionData('claim', [])
+      }
       default:
         throw new Error(`Unknown claim method: ${method}`)
     }
@@ -101,7 +104,7 @@ export class AirdropClaimer {
       if (balance < minGas) {
         return {
           success: false,
-          error: `Insufficient gas. Need at least 0.001 ${chain.nativeCurrency}, have ${ethers.formatEther(balance)}`,
+          error: `Insufficient gas. Need at least 0.001 ${chain.nativeCurrency}, have ${ethers.formatEther(balance)}. Use gas sponsorship feature.`,
           chainName: chain.name,
           tokenSymbol: 'Unknown'
         }
@@ -117,6 +120,111 @@ export class AirdropClaimer {
       return {
         success: true,
         txHash: tx.hash,
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Claim failed'
+      return {
+        success: false,
+        error: errorMessage,
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    }
+  }
+
+  // Claim airdrop with gas sponsorship via Flashbots atomic bundle
+  // Sponsor wallet funds gas → compromised wallet claims → same block
+  async claimWithSponsorship(
+    claimContract: string,
+    chainId: number,
+    claimData: string,
+    hackedWalletPrivateKey: string,
+    sponsorPrivateKey: string
+  ): Promise<ClaimResult> {
+    const provider = this.providers.get(chainId)
+    const chain = CHAINS[chainId]
+
+    if (!provider || !chain) {
+      return { success: false, error: 'Chain not supported', chainName: 'Unknown', tokenSymbol: 'Unknown' }
+    }
+
+    try {
+      const hackedWallet = new ethers.Wallet(hackedWalletPrivateKey, provider)
+      const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
+
+      // Get gas price
+      const feeData = await provider.getFeeData()
+      const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
+
+      // Gas needed for claim tx (~200k gas)
+      const gasNeeded = BigInt(200000) * gasPrice + ethers.parseEther('0.001')
+
+      // Check sponsor balance
+      const sponsorBalance = await provider.getBalance(sponsorWallet.address)
+      if (sponsorBalance < gasNeeded) {
+        return {
+          success: false,
+          error: `Sponsor needs at least ${ethers.formatEther(gasNeeded)} ${chain.nativeCurrency}, have ${ethers.formatEther(sponsorBalance)}`,
+          chainName: chain.name,
+          tokenSymbol: 'Unknown'
+        }
+      }
+
+      const hackedNonce = await provider.getTransactionCount(hackedWallet.address)
+      const sponsorNonce = await provider.getTransactionCount(sponsorWallet.address)
+
+      // TX 1 (from sponsor): Send gas ETH to hacked wallet
+      const fundTx = await sponsorWallet.signTransaction({
+        to: hackedWallet.address,
+        value: gasNeeded,
+        gasLimit: 21000n,
+        gasPrice,
+        nonce: sponsorNonce,
+        chainId
+      })
+
+      // TX 2 (from hacked wallet): Claim airdrop
+      const claimTx = await hackedWallet.signTransaction({
+        to: claimContract,
+        data: claimData,
+        value: 0n,
+        gasLimit: 200000n,
+        gasPrice,
+        nonce: hackedNonce,
+        chainId
+      })
+
+      // Submit as Flashbots atomic bundle
+      const { submitRecoveryBundle } = await import('./fundRecovery')
+      const bundleResult = await submitRecoveryBundle(
+        [fundTx, claimTx],
+        chainId,
+        chain.rpc
+      )
+
+      if (bundleResult.success) {
+        return {
+          success: true,
+          txHash: bundleResult.bundleHash || 'bundle',
+          chainName: chain.name,
+          tokenSymbol: 'Unknown'
+        }
+      }
+
+      // Fallback: direct submission
+      const directTxs: string[] = [fundTx, claimTx]
+      const txHashes: string[] = []
+      for (const signedTx of directTxs) {
+        const tx = await provider.broadcastTransaction(signedTx)
+        txHashes.push(tx.hash)
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+
+      return {
+        success: true,
+        txHash: txHashes[1] || txHashes[0],
         chainName: chain.name,
         tokenSymbol: 'Unknown'
       }

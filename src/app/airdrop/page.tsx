@@ -26,9 +26,11 @@ export default function AirdropPage() {
   const [claimMethod, setClaimMethod] = useState('claim')
   const [recipientAddress, setRecipientAddress] = useState('')
   const [privateKey, setPrivateKey] = useState('')
+  const [sponsorKey, setSponsorKey] = useState('')
   const [claiming, setClaiming] = useState(false)
   const [results, setResults] = useState<ClaimResult[]>([])
   const [showKey, setShowKey] = useState(false)
+  const [showSponsorKey, setShowSponsorKey] = useState(false)
 
   const mainnetFaucets: Faucet[] = [
     { chainId: 8453, chainName: 'Base', token: 'ETH', sources: [{ name: 'Base Bridge', url: 'https://bridge.base.org', type: 'bridge', notes: 'Bridge ETH from Ethereum' }], amount: 'Variable', cooldown: 'No limit' },
@@ -70,7 +72,8 @@ export default function AirdropPage() {
           chainId,
           claimMethod,
           recipientAddress,
-          privateKey
+          privateKey,
+          sponsorPrivateKey: sponsorKey || undefined
         })
       })
       const data = await res.json()
@@ -220,6 +223,29 @@ export default function AirdropPage() {
                   </button>
                 </div>
                 <p className="text-red-400/50 text-xs mt-1">Used only for signing — never stored</p>
+              </div>
+
+              <div>
+                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                  💰 Sponsor Wallet Private Key (for gas)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSponsorKey ? 'text' : 'password'}
+                    value={sponsorKey}
+                    onChange={(e) => setSponsorKey(e.target.value)}
+                    placeholder="Optional — wallet with ETH for gas sponsorship"
+                    className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSponsorKey(!showSponsorKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                  >
+                    {showSponsorKey ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <p className="text-yellow-400/50 text-xs mt-1">For wallets with 0 gas — Flashbots atomic bundle sponsorship</p>
               </div>
 
               <button

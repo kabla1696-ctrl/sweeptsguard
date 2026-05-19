@@ -3,7 +3,7 @@ import { claimer } from '@/lib/claimer'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey } = body
+  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey } = body
 
   if (!contractAddress || !chainId || !recipientAddress || !privateKey) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -35,7 +35,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Execute claim
+    // If sponsor private key provided, use gas sponsorship via Flashbots
+    if (sponsorPrivateKey) {
+      const result = await claimer.claimWithSponsorship(
+        contractAddress,
+        chainId,
+        claimData,
+        privateKey,
+        sponsorPrivateKey
+      )
+      return NextResponse.json({ results: [result] })
+    }
+
+    // Execute claim without sponsorship
     const result = await claimer.claimAirdrop(
       contractAddress,
       chainId,
