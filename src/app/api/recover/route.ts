@@ -19,10 +19,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid private key' }, { status: 400 })
   }
 
+  // Use multiple RPC fallbacks (avoid Cloudflare-blocked ones)
+  const rpcUrls: Record<number, string> = {
+    1: process.env.ETHEREUM_RPC_URL || 'https://eth.drpc.org',
+    8453: process.env.BASE_RPC_URL || 'https://base.drpc.org',
+    56: process.env.BSC_RPC_URL || 'https://bsc.drpc.org',
+    42161: process.env.ARBITRUM_RPC_URL || 'https://arbitrum.drpc.org',
+    137: process.env.POLYGON_RPC_URL || 'https://polygon.drpc.org',
+    10: process.env.OPTIMISM_RPC_URL || 'https://optimism.drpc.org'
+  }
+
   switch (action) {
     case 'scan': {
       try {
-        const rpcUrl = process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com'
+        const rpcUrl = rpcUrls[1]
         const assets = await scanRecoverableAssets(walletAddress, rpcUrl)
         return NextResponse.json({
           address: walletAddress,
@@ -40,11 +50,12 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const rpcUrl = process.env.ETHEREUM_RPC_URL || 'https://eth.llamarpc.com'
+        const targetChain = chainId || 1
+        const rpcUrl = rpcUrls[targetChain] || rpcUrls[1]
         const result = await executeFullRecovery({
           compromisedWalletPrivateKey: privateKey,
           safeWalletAddress: safeAddress,
-          chainId: chainId || 1,
+          chainId: targetChain,
           rpcUrl
         })
         return NextResponse.json(result)

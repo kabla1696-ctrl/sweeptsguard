@@ -44,7 +44,7 @@ export async function scanRecoverableAssets(
   hasDelegation: boolean
   delegatedTo: string | null
 }> {
-  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const provider = new ethers.JsonRpcProvider(rpcUrl || 'https://eth.drpc.org')
 
   // Check ETH balance
   const ethBalance = await provider.getBalance(walletAddress)
@@ -290,7 +290,6 @@ export async function submitDirectRecovery(
     for (const signedTx of signedTxs) {
       const tx = await provider.broadcastTransaction(signedTx)
       txHashes.push(tx.hash)
-      // Small delay between transactions
       await new Promise(resolve => setTimeout(resolve, 500))
     }
     return { success: true, txHashes }
@@ -298,6 +297,19 @@ export async function submitDirectRecovery(
     const errorMessage = err instanceof Error ? err.message : 'Direct submission failed'
     return { success: false, txHashes, error: errorMessage }
   }
+}
+
+// Create provider with fallback RPCs
+function getProvider(rpcUrl: string, chainId: number): ethers.JsonRpcProvider {
+  const fallbacks: Record<number, string> = {
+    1: 'https://eth.drpc.org',
+    8453: 'https://base.drpc.org',
+    56: 'https://bsc.drpc.org',
+    42161: 'https://arbitrum.drpc.org',
+    137: 'https://polygon.drpc.org',
+    10: 'https://optimism.drpc.org'
+  }
+  return new ethers.JsonRpcProvider(rpcUrl || fallbacks[chainId] || fallbacks[1])
 }
 
 // ============================================================
