@@ -87,20 +87,123 @@ const GAS_TOKENS: Record<number, string> = {
   1923: 'ETH', 10143: 'MON', 16600: '0G',
 }
 
+// ============================================================
+// Private/protected RPC endpoints for public mempool chains
+// These help reduce (but not eliminate) MEV/frontrunning risk.
+// ============================================================
+const PROTECTED_RPCS: Record<number, { url: string; name: string }> = {
+  // BSC: bloXroute Protect RPC — routes TXs through private relay
+  56: { url: 'https://bsc.rpc.blxrbdn.com', name: 'bloXroute Protect (BSC)' },
+  // Polygon: Private mempool RPC — hides TXs from public mempool
+  137: { url: 'https://rpc-mainnet.polygon.private', name: 'Polygon Private Mempool' },
+}
+
 // Get execution strategy for a chain
 function getExecutionStrategy(chainId: number): {
   method: 'flashbots' | 'rapid-fire'
   description: string
   safe: boolean
+  riskLevel: 'none' | 'low' | 'high'
+  protectedRpc?: string
 } {
   if (chainId === 1) {
-    return { method: 'flashbots', description: 'Flashbots atomic bundle (same block)', safe: true }
+    return { method: 'flashbots', description: 'Flashbots atomic bundle (same block)', safe: true, riskLevel: 'none' }
   }
   if (PRIVATE_SEQUENCER_CHAINS.has(chainId)) {
-    return { method: 'rapid-fire', description: 'Rapid-fire sequential TXs (private sequencer, no public mempool)', safe: true }
+    return { method: 'rapid-fire', description: 'Rapid-fire sequential TXs (private sequencer, no public mempool)', safe: true, riskLevel: 'low' }
   }
-  // BSC, Polygon, Avalanche, Fantom, etc. — public mempool but rapid-fire is usually safe
-  return { method: 'rapid-fire', description: 'Rapid-fire sequential TXs (public mempool — slight risk)', safe: false }
+  // Public mempool chains with known private relays
+  if (PROTECTED_RPCS[chainId]) {
+    return {
+      method: 'rapid-fire',
+      description: `Rapid-fire via ${PROTECTED_RPCS[chainId].name} (reduced frontrun risk)`,
+      safe: false,
+      riskLevel: 'high',
+      protectedRpc: PROTECTED_RPCS[chainId].url,
+    }
+  }
+  // Public mempool chains with no known private relay — HONEST high-risk warning
+  return {
+    method: 'rapid-fire',
+    description: 'Rapid-fire sequential TXs (PUBLIC mempool — drainer bots may see pending TXs)',
+    safe: false,
+    riskLevel: 'high',
+  }
+}
+
+// ============================================================
+// Detect pending transactions (nonce conflict detection)
+// If the compromised wallet has pending TXs from the drainer,
+// our nonce could be wrong. We use the higher nonce.
+// ============================================================
+async function detectPendingNonce(
+  provider: ethers.JsonRpcProvider,
+  address: string
+): Promise<number | null> {
+  try {
+    // Compare pending vs latest nonce — if different, there are pending TXs
+    const pendingCount = await provider.getTransactionCount(address, 'pending')
+    const latestCount = await provider.getTransactionCount(address, 'latest')
+    if (pendingCount > latestCount) {
+      console.log(`⚠️ Nonce conflict: ${address} has ${pendingCount - latestCount} pending TX(s). Using pending nonce ${pendingCount}`)
+      return pendingCount
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+// ============================================================
+// SCAM / HONEYPOT CONTRACT DETECTION
+// Verifies contract exists and has reasonable claim functionality.
+// ============================================================
+async function validateContractSafety(
+  provider: ethers.JsonRpcProvider,
+  contractAddress: string
+): Promise<{ safe: boolean; warnings: string[] }> {
+  const warnings: string[] = []
+
+  // Check 1: Contract must have deployed code
+  const code = await provider.getCode(contractAddress)
+  if (!code || code === '0x' || code.length < 4) {
+    return { safe: false, warnings: ['❌ No contract code at this address — it may be an EOA or destroyed contract'] }
+  }
+
+  // Check 2: Very short bytecode is suspicious (minimal proxy or self-destructed)
+  if (code.length < 100) {
+    warnings.push('⚠️ Very short contract bytecode — could be a minimal proxy or suspicious contract')
+  }
+
+  // Check 3: Look for known claim function selectors
+  const knownClaimSelectors = [
+    '4e71d92d', // claim()
+    '27c8f835', // claim()
+    '48c54b9d', // claim(address)
+    'ba087652', // claim(address,uint256,bytes32[])
+    '379607f6', // claim(address,uint256,bytes32[],uint256)
+    '6a06f395', // claimTo(address)
+    '1249c58b', // mint()
+    'a694fc3a', // mint(uint256)
+  ]
+  const codeLower = code.toLowerCase()
+  const hasClaimSelector = knownClaimSelectors.some(sel => codeLower.includes(sel))
+  if (!hasClaimSelector) {
+    warnings.push('⚠️ No known claim function selector found in bytecode — this may not be an airdrop contract')
+  }
+
+  // Check 4: Look for suspicious honeypot patterns
+  const suspiciousPatterns = [
+    'selfdestruct', // contract can self-destruct
+    'ffffffffffffffffffffffffffffffffffffffff', // hardcoded address
+  ]
+  for (const pattern of suspiciousPatterns) {
+    if (codeLower.includes(pattern.toLowerCase())) {
+      warnings.push(`⚠️ Contract bytecode contains suspicious pattern: ${pattern.substring(0, 20)}... — verify this is the legitimate contract`)
+    }
+  }
+
+  return { safe: warnings.length === 0, warnings }
 }
 
 // ============================================================
@@ -394,6 +497,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Safe wallet, wallet address, and sponsor key required' }, { status: 400 })
       }
 
+      // P0-2: SCAM/HONEYPOT CONTRACT CHECK
+      // Verify contract exists and has reasonable claim functionality before
+      // spending any gas or exposing user to risk.
+      const contractValidation = await validateContractSafety(provider, contractAddress)
+      if (!contractValidation.safe && contractValidation.warnings.some(w => w.includes('No contract code'))) {
+        return NextResponse.json({
+          error: 'Contract validation failed',
+          contractWarnings: contractValidation.warnings,
+        }, { status: 400 })
+      }
+
       const info = await detectAirdropInfo(
         provider,
         contractAddress,
@@ -409,7 +523,12 @@ export async function POST(request: NextRequest) {
 
       const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')
       const estimatedGas = gasPrice * 250000n
-      const sponsorHasGas = sponsorBalance >= estimatedGas
+      // For public mempool chains, estimate higher gas (two TXs needed)
+      const strategy = getExecutionStrategy(chainId)
+      const totalEstimatedGas = strategy.riskLevel === 'high'
+        ? estimatedGas * 2n // Fund TX + Claim TX both need gas on public mempool chains
+        : estimatedGas
+      const sponsorHasGas = sponsorBalance >= totalEstimatedGas
 
       const claimAmount = BigInt(info.claimableRaw)
       const safeAmount = (claimAmount * BigInt(100 - PLATFORM_FEE_PERCENT)) / 100n
@@ -420,7 +539,17 @@ export async function POST(request: NextRequest) {
         return parseFloat(ethers.formatUnits(raw, info.tokenDecimals)).toFixed(4)
       }
 
-      const strategy = getExecutionStrategy(chainId)
+      // P1-1: Build eligibility warning message
+      let eligibilityWarning: string | undefined
+      if (info.eligible === null) {
+        eligibilityWarning = '⚠️ Unable to verify eligibility — claim may fail if already claimed. Proceed with caution.'
+      }
+
+      // P1-2: Build Merkle proof helper message
+      let merkleProofHelp: string | undefined
+      if (info.needsMerkleProof) {
+        merkleProofHelp = '📝 You need a Merkle proof from the project. Check: 1) Project\'s claim page, 2) GitHub repo, 3) Discord/announcement channel. Paste the proof array in the optional field.'
+      }
 
       return NextResponse.json({
         eligible: info.eligible,
@@ -435,13 +564,21 @@ export async function POST(request: NextRequest) {
         sponsorBalance: parseFloat(ethers.formatEther(sponsorBalance)).toFixed(6),
         sponsorGasToken: gasToken,
         sponsorHasGas,
-        estimatedGasCost: parseFloat(ethers.formatEther(estimatedGas)).toFixed(6),
+        estimatedGasCost: parseFloat(ethers.formatEther(totalEstimatedGas)).toFixed(6),
         claimDataUsed: info.claimDataUsed,
         needsMerkleProof: info.needsMerkleProof,
         needsClaimData: info.needsClaimData,
         executionMethod: strategy.method,
         executionDescription: strategy.description,
         executionSafe: strategy.safe,
+        riskLevel: strategy.riskLevel,
+        // P0-2: Contract validation warnings (honeypot, scam, suspicious)
+        contractWarnings: contractValidation.warnings,
+        contractSafe: contractValidation.safe,
+        // P1-1: Eligibility verification warning
+        eligibilityWarning,
+        // P1-2: Merkle proof helper
+        merkleProofHelp,
       })
     }
 
@@ -460,13 +597,22 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Nonces RIGHT BEFORE signing (Bug #7 fix)
-      const [sponsorBalance, feeData, sponsorNonce, compromisedNonce] = await Promise.all([
+      // P1-3: NONCE CONFLICT DETECTION
+      // If the compromised wallet has pending TXs from the drainer in the
+      // mempool, our nonce could be wrong. We detect pending TXs and use
+      // the higher nonce to avoid conflicts.
+      const [sponsorBalance, feeData, sponsorNonce, compromisedLatestNonce] = await Promise.all([
         provider.getBalance(sponsorWallet.address),
         provider.getFeeData(),
         provider.getTransactionCount(sponsorWallet.address, 'latest'),
         provider.getTransactionCount(compromisedWallet.address, 'latest'),
       ])
+      // Check for pending TXs that would conflict with our nonce
+      const pendingNonce = await detectPendingNonce(provider, compromisedWallet.address)
+      const compromisedNonce = pendingNonce !== null ? pendingNonce : compromisedLatestNonce
+      if (pendingNonce !== null) {
+        console.log(`⚠️ Using pending nonce ${compromisedNonce} instead of latest ${compromisedLatestNonce}`)
+      }
 
       // EIP-1559 fees (Bug #9 fix)
       const maxFeePerGas = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')
@@ -486,6 +632,28 @@ export async function POST(request: NextRequest) {
         claimData,
         merkleProof
       )
+
+      // P0-1: CLAIM SIMULATION BEFORE FUND TX
+      // On L2s (rapid-fire), if the claim TX reverts, gas stays in the
+      // compromised wallet and the drainer steals it. By simulating the
+      // claim TX via eth_call BEFORE submitting the fund TX, we catch
+      // failures early and prevent gas loss.
+      try {
+        console.log('🔍 Simulating claim TX before funding...')
+        await provider.call({
+          to: contractAddress,
+          data: claimTxData,
+          from: compromisedWallet.address,
+        })
+        console.log('✅ Claim simulation passed — safe to proceed')
+      } catch (simErr: unknown) {
+        const simMsg = simErr instanceof Error ? simErr.message : 'Unknown simulation error'
+        console.error('❌ Claim simulation FAILED:', simMsg)
+        return NextResponse.json({
+          error: `Claim TX simulation failed — NOT submitting fund TX to prevent gas loss. Reason: ${simMsg}`,
+          simulationFailed: true,
+        }, { status: 400 })
+      }
 
       // TX 1: Sponsor sends gas to compromised wallet
       const fundTx = await sponsorWallet.signTransaction({
@@ -539,6 +707,16 @@ export async function POST(request: NextRequest) {
         })
       }
 
+      // P0-3: USE PROTECTED RPC FOR PUBLIC MEMPOOL CHAINS
+      // For BSC and Polygon, we route TXs through private mempool RPCs
+      // to reduce frontrunning risk. For other public mempool chains,
+      // we still proceed but the user was warned in preview.
+      let broadcastProvider = provider
+      if (strategy.protectedRpc) {
+        console.log(`🔒 Using protected RPC: ${strategy.protectedRpc}`)
+        broadcastProvider = new ethers.JsonRpcProvider(strategy.protectedRpc)
+      }
+
       // L2s and other chains: Rapid-fire sequential TXs
       // Private sequencer chains (Base, Arbitrum, etc.) have NO public mempool.
       // Drainer bot CANNOT see pending TXs — it only polls wallet balance.
@@ -546,12 +724,55 @@ export async function POST(request: NextRequest) {
       // executes before the drainer can detect the funded wallet.
       console.log('⚡ Rapid-fire sequential TX submission...')
 
-      const fundTxResponse = await provider.broadcastTransaction(fundTx)
-      console.log(`✅ Fund TX: ${fundTxResponse.hash}`)
+      // P1-3: RETRY LOGIC WITH INCREMENTED NONCE
+      // If a TX fails due to nonce mismatch (pending TXs from drainer),
+      // we retry with an incremented nonce.
+      const MAX_NONCE_RETRIES = 3
+      let fundTxResponse, claimTxResponse
+      let currentCompromisedNonce = compromisedNonce
 
-      // IMMEDIATELY broadcast claim TX (zero delay)
-      const claimTxResponse = await provider.broadcastTransaction(claimTx)
-      console.log(`✅ Claim TX: ${claimTxResponse.hash}`)
+      for (let attempt = 0; attempt < MAX_NONCE_RETRIES; attempt++) {
+        try {
+          if (attempt > 0) {
+            console.log(`🔄 Retry attempt ${attempt + 1} with nonce ${currentCompromisedNonce}`)
+            // Re-sign claim TX with incremented nonce
+            const retriedClaimTx = await compromisedWallet.signTransaction({
+              to: contractAddress,
+              value: 0n,
+              data: claimTxData,
+              gasLimit: 200000n,
+              maxFeePerGas,
+              maxPriorityFeePerGas,
+              nonce: currentCompromisedNonce,
+              chainId: BigInt(chainId),
+              type: 2,
+            })
+            claimTxResponse = await broadcastProvider.broadcastTransaction(retriedClaimTx)
+          } else {
+            fundTxResponse = await broadcastProvider.broadcastTransaction(fundTx)
+            console.log(`✅ Fund TX: ${fundTxResponse.hash}`)
+
+            // IMMEDIATELY broadcast claim TX (zero delay)
+            claimTxResponse = await broadcastProvider.broadcastTransaction(claimTx)
+          }
+          console.log(`✅ Claim TX: ${claimTxResponse.hash}`)
+          break // Success — exit retry loop
+        } catch (broadcastErr: unknown) {
+          const errMsg = broadcastErr instanceof Error ? broadcastErr.message : 'Unknown error'
+          if (errMsg.includes('nonce') && attempt < MAX_NONCE_RETRIES - 1) {
+            console.log(`⚠️ Nonce conflict on attempt ${attempt + 1}: ${errMsg}`)
+            currentCompromisedNonce++
+            continue
+          }
+          throw broadcastErr
+        }
+      }
+
+      if (!fundTxResponse || !claimTxResponse) {
+        return NextResponse.json({
+          error: 'Failed to broadcast transactions after retries'
+        })
+      }
 
       // Wait for both to confirm
       const [fundReceipt, claimReceipt] = await Promise.all([

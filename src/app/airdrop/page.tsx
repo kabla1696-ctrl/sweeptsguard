@@ -47,6 +47,11 @@ interface PreviewData {
   executionMethod?: string
   executionDescription?: string
   executionSafe?: boolean
+  riskLevel?: 'none' | 'low' | 'high'
+  contractWarnings?: string[]
+  contractSafe?: boolean
+  eligibilityWarning?: string
+  merkleProofHelp?: string
   error?: string
 }
 
@@ -392,6 +397,30 @@ export default function AirdropPage() {
                 <span className="text-white/30 text-sm">on {selectedChain?.name}</span>
               </div>
 
+              {/* Contract Validation Warnings (P0-2) */}
+              {previewData.contractWarnings && previewData.contractWarnings.length > 0 && (
+                <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-4">
+                  <p className="text-orange-400 text-sm font-semibold mb-1">🔍 Contract Safety Check</p>
+                  {previewData.contractWarnings.map((w, i) => (
+                    <p key={i} className="text-orange-400/80 text-xs">{w}</p>
+                  ))}
+                </div>
+              )}
+
+              {/* Eligibility Verification Warning (P1-1) */}
+              {previewData.eligibilityWarning && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg mb-4">
+                  <p className="text-yellow-400 text-sm">{previewData.eligibilityWarning}</p>
+                </div>
+              )}
+
+              {/* Merkle Proof Helper (P1-2) */}
+              {previewData.merkleProofHelp && !merkleProof && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg mb-4">
+                  <p className="text-blue-400 text-sm">{previewData.merkleProofHelp}</p>
+                </div>
+              )}
+
               {/* Warnings */}
               {previewData.needsMerkleProof && !merkleProof && (
                 <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-4">
@@ -449,22 +478,27 @@ export default function AirdropPage() {
 
               {/* Execution Method */}
               {previewData.executionMethod && (
-                <div className={`p-3 rounded-lg ${previewData.executionSafe ? 'bg-blue-500/10' : 'bg-yellow-500/10'}`}>
+                <div className={`p-3 rounded-lg ${previewData.riskLevel === 'none' ? 'bg-blue-500/10' : previewData.riskLevel === 'low' ? 'bg-blue-500/10' : 'bg-red-500/10'}`}>
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-white/30 text-xs">Execution Method</p>
-                      <p className={`font-semibold ${previewData.executionSafe ? 'text-blue-400' : 'text-yellow-400'}`}>
+                      <p className={`font-semibold ${previewData.riskLevel === 'none' || previewData.riskLevel === 'low' ? 'text-blue-400' : 'text-red-400'}`}>
                         {previewData.executionDescription}
                       </p>
                     </div>
-                    <span className={`${previewData.executionSafe ? 'text-blue-400' : 'text-yellow-400'} text-xl`}>
-                      {previewData.executionSafe ? '🛡️' : '⚠️'}
+                    <span className={`${previewData.riskLevel === 'none' || previewData.riskLevel === 'low' ? 'text-blue-400' : 'text-red-400'} text-xl`}>
+                      {previewData.riskLevel === 'none' || previewData.riskLevel === 'low' ? '🛡️' : '🚨'}
                     </span>
                   </div>
-                  {!previewData.executionSafe && (
-                    <p className="text-yellow-400/70 text-xs mt-2">
-                      ⚠️ This chain has a public mempool — slight risk of front-running. Proceed with caution.
-                    </p>
+                  {previewData.riskLevel === 'high' && (
+                    <>
+                      <p className="text-red-400 text-xs mt-2 font-semibold">
+                        🚨 HIGH RISK: This chain has a public mempool. Drainer bots CAN see pending transactions and may front-run your claim.
+                      </p>
+                      <p className="text-red-400/70 text-xs mt-1">
+                        The sponsor gas funds could be stolen by the drainer before the claim TX executes. Only proceed if the amount is worth the risk.
+                      </p>
+                    </>
                   )}
                 </div>
               )}
