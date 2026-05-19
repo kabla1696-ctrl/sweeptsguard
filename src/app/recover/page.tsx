@@ -198,8 +198,9 @@ function RecoverContent() {
             <li>Funds arrive in your safe wallet. Delegation revoked.</li>
           </ol>
           <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-            <p className="text-green-400 text-xs font-semibold mb-1">💰 Platform Fee: 20%</p>
-            <p className="text-white/40 text-xs">80% → Your Safe Wallet | 20% → Platform Fee (SweepGuard development & maintenance)</p>
+            <p className="text-green-400 text-xs font-semibold mb-1">💰 Platform Fees:</p>
+            <p className="text-white/40 text-xs">• Recovered Funds: 80% → Your Safe Wallet | 20% → Platform Fee</p>
+            <p className="text-white/40 text-xs">• Delegation Revoke: Fixed $40 per wallet (paid from sponsor wallet)</p>
           </div>
         </div>
 
@@ -424,7 +425,8 @@ function RecoverContent() {
                 ))}
               </div>
               <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <p className="text-yellow-400 text-xs">💰 Gas cost: ~$5-15 per chain (paid by sponsor wallet)</p>
+                <p className="text-yellow-400 text-xs">💰 Revoke fee: Fixed $40 per wallet + gas costs (paid by sponsor wallet)</p>
+                <p className="text-yellow-400/60 text-xs mt-1">Gas cost: ~$5-15 per chain (varies by network)</p>
               </div>
             </div>
 

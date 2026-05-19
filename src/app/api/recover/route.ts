@@ -19,14 +19,30 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid private key' }, { status: 400 })
   }
 
-  // Use multiple RPC fallbacks (avoid Cloudflare-blocked ones)
+  // ALL 15 chain RPCs
   const rpcUrls: Record<number, string> = {
     1: process.env.ETHEREUM_RPC_URL || 'https://eth.drpc.org',
     8453: process.env.BASE_RPC_URL || 'https://base.drpc.org',
     56: process.env.BSC_RPC_URL || 'https://bsc.drpc.org',
     42161: process.env.ARBITRUM_RPC_URL || 'https://arbitrum.drpc.org',
     137: process.env.POLYGON_RPC_URL || 'https://polygon.drpc.org',
-    10: process.env.OPTIMISM_RPC_URL || 'https://optimism.drpc.org'
+    10: process.env.OPTIMISM_RPC_URL || 'https://optimism.drpc.org',
+    43114: 'https://api.avax.network/ext/bc/C/rpc',
+    250: 'https://rpc.ftm.tools',
+    25: 'https://evm.cronos.org',
+    81457: 'https://rpc.blast.io',
+    7777777: 'https://rpc.zora.energy',
+    1101: 'https://zkevm-rpc.com',
+    169: 'https://pacific-rpc.manta.network/http',
+    324: 'https://mainnet.era.zksync.io',
+    59144: 'https://rpc.linea.build'
+  }
+
+  // Native gas token names per chain
+  const gasTokenNames: Record<number, string> = {
+    1: 'ETH', 8453: 'ETH', 56: 'BNB', 42161: 'ETH', 137: 'MATIC', 10: 'ETH',
+    43114: 'AVAX', 250: 'FTM', 25: 'CRO', 81457: 'ETH', 7777777: 'ETH',
+    1101: 'ETH', 169: 'ETH', 324: 'ETH', 59144: 'ETH'
   }
 
   switch (action) {
@@ -37,16 +53,22 @@ export async function POST(request: NextRequest) {
         const delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[] = []
         const failedChains: number[] = []
 
-        // Check delegation on ALL chains
+        // Check delegation on ALL chains (with timeout)
+        const chainNames: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB Chain', 42161: 'Arbitrum', 137: 'Polygon', 10: 'Optimism', 43114: 'Avalanche', 250: 'Fantom', 25: 'Cronos', 81457: 'Blast', 7777777: 'Zora', 1101: 'Polygon zkEVM', 169: 'Manta', 324: 'zkSync', 59144: 'Linea' }
+
         const delegationPromises = allChains.map(async (cid) => {
           try {
             const rpcUrl = rpcUrls[cid]
             if (!rpcUrl) { failedChains.push(cid); return null }
             const provider = new ethers.JsonRpcProvider(rpcUrl)
-            const code = await provider.getCode(walletAddress)
+            // 10 second timeout per chain
+            const codePromise = provider.getCode(walletAddress)
+            const timeoutPromise = new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Timeout')), 10000)
+            )
+            const code = await Promise.race([codePromise, timeoutPromise])
             if (code && code.startsWith('0xef0100')) {
               const delegatedTo = '0x' + code.slice(8, 48)
-              const chainNames: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB Chain', 42161: 'Arbitrum', 137: 'Polygon', 10: 'Optimism', 43114: 'Avalanche', 250: 'Fantom', 25: 'Cronos', 81457: 'Blast', 7777777: 'Zora', 1101: 'Polygon zkEVM', 169: 'Manta', 324: 'zkSync', 59144: 'Linea' }
               delegations.push({ chainId: cid, chainName: chainNames[cid] || `Chain ${cid}`, delegatedTo, isDrainer: false })
               return { chainId: cid, code }
             }
@@ -115,6 +137,7 @@ export async function POST(request: NextRequest) {
       try {
         const targetChain = chainId || 1
         const rpcUrl = rpcUrls[targetChain] || rpcUrls[1]
+        const gasToken = gasTokenNames[targetChain] || 'ETH'
 
         // If sponsor private key provided, use Flashbots atomic bundle
         if (sponsorPrivateKey) {
@@ -122,12 +145,13 @@ export async function POST(request: NextRequest) {
             privateKey,
             sponsorPrivateKey,
             targetChain,
-            rpcUrl
+            rpcUrl,
+            gasToken
           )
           return NextResponse.json(result)
         }
 
-        // Otherwise, try direct revoke (wallet needs ETH for gas)
+        // Otherwise, try direct revoke (wallet needs gas token)
         const provider = new ethers.JsonRpcProvider(rpcUrl)
         const wallet = new ethers.Wallet(privateKey, provider)
 
@@ -144,14 +168,14 @@ export async function POST(request: NextRequest) {
         const feeData = await provider.getFeeData()
         const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(0)
 
-        // Check if wallet has enough ETH for gas
+        // Check if wallet has enough gas token
         const balance = await provider.getBalance(walletAddress)
         const gasNeeded = BigInt(21000) * gasPrice
 
         if (balance < gasNeeded) {
           return NextResponse.json({
             success: false,
-            error: `Insufficient gas. Need ${ethers.formatEther(gasNeeded)} ETH, wallet has ${ethers.formatEther(balance)} ETH. Provide sponsor private key for gas sponsorship via Flashbots.`
+            error: `Insufficient gas. Need ${ethers.formatEther(gasNeeded)} ${gasToken}, wallet has ${ethers.formatEther(balance)} ${gasToken}. Provide sponsor private key for gas sponsorship via Flashbots.`
           })
         }
 

@@ -407,7 +407,8 @@ export async function executeRevokeDelegation(
   compromisedWalletPrivateKey: string,
   sponsorPrivateKey: string,
   chainId: number,
-  rpcUrl: string
+  rpcUrl: string,
+  gasToken: string = 'ETH'
 ): Promise<RecoveryResult> {
   const provider = new ethers.JsonRpcProvider(rpcUrl)
   const compromisedWallet = new ethers.Wallet(compromisedWalletPrivateKey, provider)
@@ -438,7 +439,7 @@ export async function executeRevokeDelegation(
   if (sponsorBalance < gasNeeded) {
     return {
       success: false,
-      error: `Sponsor wallet needs at least 0.003 ETH for gas. Current: ${ethers.formatEther(sponsorBalance)} ETH`
+      error: `Sponsor wallet needs at least 0.003 ${gasToken} for gas. Current: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
     }
   }
 

@@ -10,7 +10,15 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const result = await scanner.scanWallet(address, DEFAULT_CHAINS)
+    // 50 second timeout (client has 60s timeout)
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Scan timed out')), 50000)
+    )
+    
+    const result = await Promise.race([
+      scanner.scanWallet(address, DEFAULT_CHAINS),
+      timeoutPromise
+    ])
     return NextResponse.json(result)
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Scan failed'

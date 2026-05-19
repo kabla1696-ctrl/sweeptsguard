@@ -50,7 +50,13 @@ function ScanContent() {
     setResult(null)
 
     try {
-      const res = await fetch(`/api/scan?address=${addr}`)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
+      
+      const res = await fetch(`/api/scan?address=${addr}`, {
+        signal: controller.signal
+      })
+      clearTimeout(timeoutId)
       const data = await res.json()
 
       if (data.error) {
@@ -58,8 +64,12 @@ function ScanContent() {
       } else {
         setResult(data)
       }
-    } catch {
-      setError('Failed to scan wallet. Please try again.')
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Scan timed out after 60 seconds. Some chains may be slow. Try again.')
+      } else {
+        setError('Failed to scan wallet. Please try again.')
+      }
     } finally {
       setScanning(false)
     }

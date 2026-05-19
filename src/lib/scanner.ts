@@ -74,13 +74,21 @@ export class WalletScanner {
     return provider
   }
 
+  // Timeout wrapper for RPC calls
+  private async withTimeout<T>(promise: Promise<T>, ms: number = 10000): Promise<T> {
+    const timeout = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('RPC timeout')), ms)
+    )
+    return Promise.race([promise, timeout])
+  }
+
   // Check EIP-7702 delegation
   async checkDelegation(address: string, chainId: number = 1): Promise<DelegationInfo> {
     const maxRetries = 2
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const provider = this.getProvider(chainId)
-        const code = await provider.getCode(address)
+        const code = await this.withTimeout(provider.getCode(address), 8000)
 
         if (code && code.startsWith(EIP7702_DELEGATION_PREFIX)) {
           // Extract delegated address (20 bytes after 0xef0100 prefix)
@@ -116,7 +124,7 @@ export class WalletScanner {
   async getNativeBalance(address: string, chainId: number): Promise<WalletAsset | null> {
     try {
       const provider = this.getProvider(chainId)
-      const balance = await provider.getBalance(address)
+      const balance = await this.withTimeout(provider.getBalance(address), 8000)
       const chain = CHAINS[chainId]
 
       // Filter out dust (less than 0.00001 ETH equivalent)
