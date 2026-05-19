@@ -85,14 +85,14 @@ export default function Home() {
             </Link>
           </div>
           <p className="text-center text-white/15 text-xs mt-3">
-            Supports 15 chains: ETH, Base, BSC, Arbitrum, Polygon, Optimism, Avalanche, Fantom, Cronos, Blast, Zora, zkEVM, Manta, zkSync, Linea
+            Supports 33 chains: ETH, Base, BSC, Arbitrum, Polygon, Optimism, Avalanche, Fantom, Cronos, Blast, Zora, zkEVM, Manta, zkSync, Linea, Mantle, Scroll, Gnosis, ZetaChain, Gravity, Core, Sei, Berachain, Ink, XLayer, Hemi, Kaia, Soneium, Morph, Swellchain, Mode, Monad, 0G
           </p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-8 mt-20 max-w-lg">
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-green-400">15</div>
+            <div className="text-2xl md:text-3xl font-bold text-green-400">33</div>
             <div className="text-white/30 text-xs mt-1">Chains</div>
           </div>
           <div className="text-center">
@@ -129,7 +129,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-center mb-12 text-white/80">Features</h2>
           <div className="grid md:grid-cols-2 gap-6">
             {[
-              { icon: '🔍', title: 'Multi-Chain Scanner', desc: 'Scan all 15 chains at once for assets and delegations.' },
+              { icon: '🔍', title: 'Multi-Chain Scanner', desc: 'Scan all 33 chains at once for assets and delegations.' },
               { icon: '🚨', title: 'Drainer Detection', desc: 'Identify known drainer contracts and EIP-7702 delegations.' },
               { icon: '🔗', title: 'Fund Tracker', desc: 'Track stolen funds across chains. See if they hit an exchange.' },
               { icon: '🎯', title: 'Airdrop Claimer', desc: 'Claim airdrops safely. Tokens go directly to your safe wallet.' },
@@ -164,7 +164,7 @@ export default function Home() {
               <p className="text-white/40 mb-6">Protect yourself while browsing. Detect drainer sites, block malicious transactions, and claim airdrops with one click.</p>
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <a
-                  href="https://github.com/kabla1696-ctrl/sweeptsguard/tree/main/extension"
+                  href="https://github.com/kabla1696-ctrl/sweeptsguard/releases"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl font-semibold text-sm hover:bg-white/[0.08] transition-all"

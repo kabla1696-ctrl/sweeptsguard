@@ -74,6 +74,9 @@ export default function AirdropPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [signature, setSignature] = useState('')
 
+  // Guide state
+  const [showGuide, setShowGuide] = useState(false)
+
   // Step 1: Preview — detect token, eligibility, amount
   const handlePreview = async () => {
     if (!contractAddress || !walletAddress || !safeWallet || !sponsorWallet) return
@@ -238,15 +241,170 @@ export default function AirdropPage() {
           </p>
         </div>
 
-        {/* How It Works */}
-        <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-8">
-          <h3 className="text-yellow-400 font-semibold mb-3">🛡️ How It Works (3 Steps)</h3>
-          <ol className="text-white/50 text-sm space-y-2 list-decimal list-inside">
-            <li><strong>Preview</strong> — Enter airdrop details → system detects token, eligibility & amount</li>
-            <li><strong>Sign</strong> — MetaMask popup → sign EIP-712 message (NOT a transaction)</li>
-            <li><strong>Claim</strong> — Sponsor wallet pays gas → smart contract claims + splits atomically</li>
-          </ol>
-          <p className="text-purple-400 text-xs mt-3">🔒 20% platform fee is mandatory — enforced by smart contract</p>
+        {/* ============ GUIDE SECTION ============ */}
+        <div className="mb-8">
+          <button
+            onClick={() => setShowGuide(!showGuide)}
+            className="w-full p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-left hover:bg-yellow-500/15 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">📖</span>
+                <div>
+                  <h3 className="text-yellow-400 font-semibold">How to Claim — Complete Guide</h3>
+                  <p className="text-white/30 text-xs">Step-by-step instructions • Read this first!</p>
+                </div>
+              </div>
+              <span className="text-yellow-400 text-xl">{showGuide ? '▼' : '▶'}</span>
+            </div>
+          </button>
+
+          {showGuide && (
+            <div className="mt-3 p-5 bg-yellow-500/5 border border-yellow-500/10 rounded-xl space-y-6">
+              {/* Warning */}
+              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg">
+                <p className="text-red-400 font-semibold text-sm mb-2">⚠️ CRITICAL WARNING</p>
+                <p className="text-red-300/80 text-sm">
+                  Entering the wrong address = <strong>permanent fund loss</strong>.
+                  Double-check EVERY address before proceeding. There is NO undo.
+                </p>
+              </div>
+
+              {/* Step 1 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 1: Select Chain</h4>
+                <p className="text-white/50 text-sm">
+                  Choose the blockchain where the airdrop is. If unsure, check the airdrop project&apos;s website.
+                  Each chain has different gas costs — L2s (Base, Arbitrum) are much cheaper than Ethereum.
+                </p>
+              </div>
+
+              {/* Step 2 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 2: Airdrop Contract Address</h4>
+                <p className="text-white/50 text-sm">
+                  Enter the <strong>airdrop contract address</strong> (NOT the token address).
+                  Find it on the project&apos;s claim page or documentation.
+                  The system will auto-detect what token you&apos;ll receive.
+                </p>
+              </div>
+
+              {/* Step 3 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 3: Your (Hacked) Wallet Address</h4>
+                <p className="text-white/50 text-sm">
+                  This is the wallet that was compromised. It must be eligible for the airdrop.
+                  <strong className="text-red-400"> DO NOT enter your private key here</strong> — you only sign in MetaMask later.
+                </p>
+              </div>
+
+              {/* Step 4 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 4: Safe Wallet Address</h4>
+                <p className="text-white/50 text-sm">
+                  This is where <strong>80%</strong> of claimed tokens will be sent.
+                  <strong className="text-red-400"> TRIPLE CHECK this address</strong> — if wrong, tokens go to wrong wallet.
+                  Use a wallet you fully control (hardware wallet recommended).
+                </p>
+              </div>
+
+              {/* Step 5 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 5: Sponsor Wallet</h4>
+                <p className="text-white/50 text-sm">
+                  The sponsor wallet pays the gas fee for the transaction. You need:
+                </p>
+                <ul className="text-white/50 text-sm mt-2 space-y-1 ml-4">
+                  <li>• <strong>Sponsor Wallet Address</strong>: A wallet with gas/native tokens</li>
+                  <li>• <strong>Sponsor Private Key</strong>: To sign the gas payment transaction</li>
+                  <li>• <strong className="text-red-400">NEVER enter your hacked wallet&apos;s private key</strong></li>
+                </ul>
+              </div>
+
+              {/* Step 6 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 6: Preview Claim</h4>
+                <p className="text-white/50 text-sm">
+                  Click <strong>&quot;Preview Claim&quot;</strong> to check:
+                </p>
+                <ul className="text-white/50 text-sm mt-2 space-y-1 ml-4">
+                  <li>✅ Is the contract valid?</li>
+                  <li>✅ Are you eligible?</li>
+                  <li>✅ How many tokens can you claim?</li>
+                  <li>✅ Does the sponsor wallet have enough gas?</li>
+                </ul>
+              </div>
+
+              {/* Step 7 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 7: Sign Authorization</h4>
+                <p className="text-white/50 text-sm">
+                  Click <strong>&quot;Sign Authorization&quot;</strong> → MetaMask will pop up with an EIP-712 message.
+                  This is a <strong>MESSAGE signature</strong>, NOT a transaction.
+                  Your private key <strong>NEVER leaves your browser</strong>.
+                </p>
+              </div>
+
+              {/* Step 8 */}
+              <div>
+                <h4 className="text-green-400 font-semibold mb-2">Step 8: Execute Claim</h4>
+                <p className="text-white/50 text-sm">
+                  Click <strong>&quot;Execute Claim&quot;</strong> → The transaction will be submitted.
+                  Sponsor wallet pays gas. Smart contract claims tokens and splits them atomically:
+                </p>
+                <div className="mt-3 p-3 bg-white/[0.03] rounded-lg">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-400">→ Safe Wallet (80%)</span>
+                    <span className="text-green-400">You receive</span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-purple-400">→ Platform Fee (20%)</span>
+                    <span className="text-purple-400">SweepGuard fee</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Common Mistakes */}
+              <div>
+                <h4 className="text-red-400 font-semibold mb-2">❌ Common Mistakes to Avoid</h4>
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400">❌</span>
+                    <p className="text-white/50 text-sm">Entering hacked wallet&apos;s private key as sponsor key</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400">❌</span>
+                    <p className="text-white/50 text-sm">Entering wrong safe wallet address (tokens go to wrong wallet)</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400">❌</span>
+                    <p className="text-white/50 text-sm">Using wrong chain (airdrop on Base but selected Ethereum)</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400">❌</span>
+                    <p className="text-white/50 text-sm">Not enough gas in sponsor wallet</p>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-red-400">❌</span>
+                    <p className="text-white/50 text-sm">Entering token address instead of airdrop contract address</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Security Model */}
+              <div>
+                <h4 className="text-blue-400 font-semibold mb-2">🛡️ Security Model</h4>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Private key stays in browser</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ EIP-712 message signature</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ One-time use (nonce)</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ 10-minute deadline</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Atomic execution</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Smart contract enforced</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ============ INPUT STEP ============ */}
@@ -274,7 +432,10 @@ export default function AirdropPage() {
 
             {/* Airdrop Contract Address */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">Airdrop Contract Address</label>
+              <label className="block text-sm text-white/50 mb-2">
+                Airdrop Contract Address
+                <span className="text-white/20 ml-2">(NOT the token address)</span>
+              </label>
               <input
                 type="text"
                 value={contractAddress}
@@ -299,7 +460,10 @@ export default function AirdropPage() {
 
             {/* Safe Wallet */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">Safe Wallet (receives 80%)</label>
+              <label className="block text-sm text-white/50 mb-2">
+                Safe Wallet (receives 80%)
+                <span className="text-red-400 ml-2">⚠️ Triple check!</span>
+              </label>
               <input
                 type="text"
                 value={safeWallet}
