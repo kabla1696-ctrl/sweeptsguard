@@ -85,18 +85,18 @@ export default function Home() {
             </Link>
           </div>
           <p className="text-center text-white/15 text-xs mt-3">
-            Supports Ethereum, Base, BSC, Arbitrum, Polygon, Optimism
+            Supports 15 chains: ETH, Base, BSC, Arbitrum, Polygon, Optimism, Avalanche, Fantom, Cronos, Blast, Zora, zkEVM, Manta, zkSync, Linea
           </p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-8 mt-20 max-w-lg">
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-green-400">6</div>
+            <div className="text-2xl md:text-3xl font-bold text-green-400">15</div>
             <div className="text-white/30 text-xs mt-1">Chains</div>
           </div>
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-emerald-400">&lt;5s</div>
+            <div className="text-2xl md:text-3xl font-bold text-emerald-400">&lt;1s</div>
             <div className="text-white/30 text-xs mt-1">Detection</div>
           </div>
           <div className="text-center">
