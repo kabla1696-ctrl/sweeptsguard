@@ -26,6 +26,7 @@ export default function Home() {
         <div className="flex gap-4">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
           <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
+          <Link href="/airdrop" className="text-sm text-white/50 hover:text-white transition-colors">Airdrop</Link>
           <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
         </div>
       </nav>
