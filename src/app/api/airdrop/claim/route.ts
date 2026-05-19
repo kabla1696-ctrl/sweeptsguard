@@ -509,6 +509,8 @@ export async function POST(request: NextRequest) {
       walletAddress,
       privateKey,
       sponsorPrivateKey,
+      sponsorAddress,
+      signature,
       claimableRaw,
       tokenAddress,
       claimData,
@@ -533,9 +535,12 @@ export async function POST(request: NextRequest) {
 
     // ============ PREVIEW ============
     if (action === 'preview') {
-      if (!safeWallet || !sponsorPrivateKey || !walletAddress) {
-        return NextResponse.json({ error: 'Safe wallet, wallet address, and sponsor key required' }, { status: 400 })
+      if (!safeWallet || !walletAddress) {
+        return NextResponse.json({ error: 'Safe wallet and wallet address required' }, { status: 400 })
       }
+
+      // Use sponsorAddress for balance check (no private key needed for preview)
+      const sponsorAddr = sponsorAddress || (sponsorPrivateKey ? new ethers.Wallet(sponsorPrivateKey).address : null)
 
       // P0-2: SCAM/HONEYPOT CONTRACT CHECK
       // Verify contract exists and has reasonable claim functionality before
@@ -557,8 +562,15 @@ export async function POST(request: NextRequest) {
         tokenAmount
       )
 
-      const sponsorWallet = new ethers.Wallet(sponsorPrivateKey)
-      const sponsorBalance = await provider.getBalance(sponsorWallet.address)
+      let sponsorBalance = 0n
+      let sponsorWalletAddr = sponsorAddr
+      if (sponsorPrivateKey) {
+        const sw = new ethers.Wallet(sponsorPrivateKey)
+        sponsorWalletAddr = sw.address
+        sponsorBalance = await provider.getBalance(sw.address)
+      } else if (sponsorAddr) {
+        sponsorBalance = await provider.getBalance(sponsorAddr)
+      }
       const feeData = await provider.getFeeData()
 
       const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')

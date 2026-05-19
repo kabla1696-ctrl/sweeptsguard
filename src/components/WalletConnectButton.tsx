@@ -4,7 +4,7 @@ import { useState } from 'react'
 
 declare global {
   interface Window {
-    ethereum?: { request: (args: { method: string }) => Promise<string[]> }
+    ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
   }
 }
 
