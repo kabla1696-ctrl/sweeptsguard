@@ -20,7 +20,9 @@ interface RecoveryStatus {
 function RecoverContent() {
   const [privateKey, setPrivateKey] = useState('')
   const [safeAddress, setSafeAddress] = useState('')
+  const [sponsorKey, setSponsorKey] = useState('')
   const [showKey, setShowKey] = useState(false)
+  const [showSponsorKey, setShowSponsorKey] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [assets, setAssets] = useState<AssetScan | null>(null)
   const [recovery, setRecovery] = useState<RecoveryStatus | null>(null)
@@ -101,7 +103,12 @@ function RecoverContent() {
       return
     }
 
-    setRecovery({ step: 'executing', message: 'Revoking EIP-7702 delegation...' })
+    if (!sponsorKey) {
+      setError('Sponsor wallet private key required — this wallet pays gas for the revoke transaction')
+      return
+    }
+
+    setRecovery({ step: 'executing', message: 'Revoking EIP-7702 delegation via Flashbots atomic bundle...' })
 
     try {
       const res = await fetch('/api/recover', {
@@ -110,7 +117,7 @@ function RecoverContent() {
         body: JSON.stringify({
           action: 'revoke',
           privateKey,
-          safeAddress: safeAddress || '0x0000000000000000000000000000000000000000',
+          sponsorPrivateKey: sponsorKey,
           chainId: 1
         })
       })
@@ -119,7 +126,7 @@ function RecoverContent() {
       if (data.success) {
         setRecovery({
           step: 'done',
-          message: data.message || 'Delegation revoked successfully!',
+          message: data.error || 'Delegation revoked successfully! Your wallet is now protected.',
           txHashes: data.txHashes
         })
       } else {
@@ -205,6 +212,29 @@ function RecoverContent() {
               placeholder="0x... where to send recovered funds"
               className="w-full px-4 py-3 bg-green-500/5 border border-green-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
             />
+          </div>
+
+          <div>
+            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+              💰 Sponsor Wallet Private Key (for gas)
+            </label>
+            <div className="relative">
+              <input
+                type={showSponsorKey ? 'text' : 'password'}
+                value={sponsorKey}
+                onChange={(e) => setSponsorKey(e.target.value)}
+                placeholder="Private key of wallet with ETH for gas (your safe wallet)"
+                className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
+              />
+              <button
+                type="button"
+                onClick={() => setShowSponsorKey(!showSponsorKey)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+              >
+                {showSponsorKey ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-yellow-400/50 text-xs mt-1">Needed only for revoke — pays gas via Flashbots atomic bundle</p>
           </div>
 
           <button

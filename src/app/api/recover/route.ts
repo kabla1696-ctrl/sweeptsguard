@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { scanRecoverableAssets, executeFullRecovery } from '@/lib/fundRecovery'
+import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation } from '@/lib/fundRecovery'
 import { ethers } from 'ethers'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, privateKey, safeAddress, chainId } = body
+  const { action, privateKey, safeAddress, chainId, sponsorPrivateKey } = body
 
   if (!privateKey) {
     return NextResponse.json({ error: 'Private key required' }, { status: 400 })
@@ -84,6 +84,19 @@ export async function POST(request: NextRequest) {
       try {
         const targetChain = chainId || 1
         const rpcUrl = rpcUrls[targetChain] || rpcUrls[1]
+
+        // If sponsor private key provided, use Flashbots atomic bundle
+        if (sponsorPrivateKey) {
+          const result = await executeRevokeDelegation(
+            privateKey,
+            sponsorPrivateKey,
+            targetChain,
+            rpcUrl
+          )
+          return NextResponse.json(result)
+        }
+
+        // Otherwise, try direct revoke (wallet needs ETH for gas)
         const provider = new ethers.JsonRpcProvider(rpcUrl)
         const wallet = new ethers.Wallet(privateKey, provider)
 
@@ -105,11 +118,9 @@ export async function POST(request: NextRequest) {
         const gasNeeded = BigInt(21000) * gasPrice
 
         if (balance < gasNeeded) {
-          // Need to fund gas first via Flashbots
-          // For now, return error
           return NextResponse.json({
             success: false,
-            error: `Insufficient gas. Need ${ethers.formatEther(gasNeeded)} ETH for gas, but wallet has ${ethers.formatEther(balance)} ETH. Fund the wallet with gas first.`
+            error: `Insufficient gas. Need ${ethers.formatEther(gasNeeded)} ETH, wallet has ${ethers.formatEther(balance)} ETH. Provide sponsor private key for gas sponsorship via Flashbots.`
           })
         }
 

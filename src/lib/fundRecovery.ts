@@ -398,3 +398,122 @@ export async function executeFullRecovery(
     txHashes: directResult.txHashes
   }
 }
+
+// ============================================================
+// REVOKE DELEGATION ONLY: For wallets with 0 balance but active delegation
+// Uses sponsor wallet to fund gas, then revokes in same atomic bundle
+// ============================================================
+export async function executeRevokeDelegation(
+  compromisedWalletPrivateKey: string,
+  sponsorPrivateKey: string,
+  chainId: number,
+  rpcUrl: string
+): Promise<RecoveryResult> {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const compromisedWallet = new ethers.Wallet(compromisedWalletPrivateKey, provider)
+  const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
+  const compromisedAddress = compromisedWallet.address
+
+  console.log(`🔄 Revoking delegation for ${compromisedAddress}`)
+  console.log(`💰 Sponsor: ${sponsorWallet.address}`)
+
+  // Check delegation
+  const code = await provider.getCode(compromisedAddress)
+  if (!code.startsWith('0xef0100')) {
+    return { success: true, delegationRevoked: false, error: 'No delegation found on this chain' }
+  }
+
+  const delegatedTo = '0x' + code.slice(8)
+  console.log(`⚠️ Delegation active to: ${delegatedTo}`)
+
+  // Get gas price
+  const feeData = await provider.getFeeData()
+  const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
+
+  // Gas needed: ~21000 for fund transfer + ~50000 for revoke
+  const gasNeeded = ethers.parseEther('0.003') // Enough for both txs
+
+  // Get sponsor balance
+  const sponsorBalance = await provider.getBalance(sponsorWallet.address)
+  if (sponsorBalance < gasNeeded) {
+    return {
+      success: false,
+      error: `Sponsor wallet needs at least 0.003 ETH for gas. Current: ${ethers.formatEther(sponsorBalance)} ETH`
+    }
+  }
+
+  const compromisedNonce = await provider.getTransactionCount(compromisedAddress)
+  const sponsorNonce = await provider.getTransactionCount(sponsorWallet.address)
+
+  // TX 1 (from sponsor): Send gas ETH to compromised wallet
+  // The drainer bot can't see this in Flashbots private mempool
+  const fundTx = await sponsorWallet.signTransaction({
+    to: compromisedAddress,
+    value: gasNeeded,
+    gasLimit: 21000n,
+    gasPrice,
+    nonce: sponsorNonce,
+    chainId
+  })
+
+  // TX 2 (from compromised): Revoke delegation via self-tx
+  // Try EIP-7702 type-4 tx first, fallback to regular self-tx
+  let revokeTx: string
+  try {
+    revokeTx = await compromisedWallet.signTransaction({
+      to: compromisedAddress, // Self
+      value: 0n,
+      gasLimit: 50000n,
+      gasPrice,
+      nonce: compromisedNonce,
+      chainId,
+      type: 4, // EIP-7702 type
+      authorizationList: [] // Empty auth list = revoke
+    } as ethers.TransactionRequest)
+  } catch {
+    // Fallback: regular self-tx clears delegation too
+    revokeTx = await compromisedWallet.signTransaction({
+      to: compromisedAddress,
+      value: 0n,
+      gasLimit: 21000n,
+      gasPrice,
+      nonce: compromisedNonce,
+      chainId
+    })
+  }
+
+  // Submit as Flashbots atomic bundle
+  // Both txs execute in SAME block — drainer can't intercept
+  console.log('🚀 Submitting revoke via Flashbots atomic bundle...')
+  const bundleResult = await submitRecoveryBundle(
+    [fundTx, revokeTx],
+    chainId,
+    rpcUrl
+  )
+
+  if (bundleResult.success) {
+    console.log('✅ Delegation revoked via Flashbots!')
+    return {
+      success: true,
+      delegationRevoked: true,
+      txHashes: bundleResult.bundleHash ? [bundleResult.bundleHash] : []
+    }
+  }
+
+  // Fallback: direct submission (sequential — small risk window)
+  console.log('⚠️ Flashbots failed, trying direct...')
+  const directResult = await submitDirectRecovery([fundTx, revokeTx], rpcUrl)
+
+  if (directResult.success) {
+    return {
+      success: true,
+      delegationRevoked: true,
+      txHashes: directResult.txHashes
+    }
+  }
+
+  return {
+    success: false,
+    error: `Revoke failed. Flashbots: ${bundleResult.error}. Direct: ${directResult.error}`
+  }
+}
