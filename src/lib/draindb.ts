@@ -215,10 +215,31 @@ export function detectDrainPattern(transactions: { to: string; chain: string }[]
   return { isCompromised: false, drainerAddresses: [], affectedChains: [], method: '' }
 }
 
-// Check if address is a known drainer
+// Check if address is a known drainer (contracts + destination addresses)
 export function isKnownDrainer(address: string): DrainerInfo | null {
   const normalized = address.toLowerCase()
-  return KNOWN_DRAINERS.find(d => d.address.toLowerCase() === normalized) || null
+
+  // Check known drainer contracts
+  const contract = KNOWN_DRAINERS.find(d => d.address.toLowerCase() === normalized)
+  if (contract) return contract
+
+  // Check known drainer destination addresses (from real drain transactions)
+  const dest = KNOWN_DRAINER_DESTINATIONS[normalized]
+  if (dest) {
+    return {
+      address: normalized,
+      name: dest.name,
+      type: 'other' as const,
+      chains: [],
+      firstSeen: '2024-01-01',
+      lastActive: '2026-05-19',
+      reportCount: 0,
+      verified: true,
+      notes: `Known drain destination. Method: ${dest.method}. Chains: ${dest.chains.join(', ')}`
+    }
+  }
+
+  return null
 }
 
 // Check if address is an exchange wallet
