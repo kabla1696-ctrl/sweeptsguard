@@ -56,74 +56,82 @@ export class TransactionTracker {
     if (!chain) return []
 
     try {
-      // Fetch transactions from Blockscout
-      const url = `${baseUrl}/addresses/${address}/transactions?sort=desc&limit=50`
-      const response = await this.withTimeout(fetch(url), 10000)
+      // Fetch native transactions from Blockscout
+      const txUrl = `${baseUrl}/addresses/${address}/transactions`
+      const [txResponse, tokenResponse] = await Promise.all([
+        this.withTimeout(fetch(txUrl), 10000).catch(() => null),
+        this.withTimeout(fetch(`${baseUrl}/addresses/${address}/token-transfers`), 10000).catch(() => null)
+      ])
 
-      if (!response.ok) return []
+      // Process native transactions
+      if (txResponse && txResponse.ok) {
+        const txData = await txResponse.json()
+        const txs = txData.items || []
 
-      const data = await response.json()
-      const txs = data.items || []
+        for (const tx of txs) {
+          // Only outgoing transactions
+          if (tx.from?.hash?.toLowerCase() !== address.toLowerCase()) continue
 
-      for (const tx of txs) {
-        // Only outgoing transactions
-        if (tx.from?.hash?.toLowerCase() !== address.toLowerCase()) continue
+          const to = tx.to?.hash || ''
+          const value = tx.value ? BigInt(tx.value) : 0n
+          const timestamp = tx.timestamp ? new Date(tx.timestamp).getTime() : Date.now()
 
-        const to = tx.to?.hash || ''
-        const value = tx.value ? BigInt(tx.value) : 0n
-        const timestamp = tx.timestamp ? new Date(tx.timestamp).getTime() : Date.now()
+          const exchangeInfo = isExchangeWallet(to)
+          const drainerInfo = isKnownDrainer(to)
 
-        const exchangeInfo = isExchangeWallet(to)
-        const drainerInfo = isKnownDrainer(to)
-
-        // Native transfer
-        if (value > 0n) {
-          transfers.push({
-            hash: tx.hash,
-            from: address,
-            to,
-            value: ethers.formatEther(value),
-            asset: chain.nativeCurrency,
-            chainId,
-            chainName: chain.name,
-            timestamp,
-            isExchangeDeposit: !!exchangeInfo,
-            exchangeName: exchangeInfo?.name,
-            isDrainerTransfer: !!drainerInfo,
-            drainerName: drainerInfo?.name,
-            blockNumber: tx.block_number || 0
-          })
-        }
-
-        // ERC-20 token transfers
-        if (tx.token_transfers && tx.token_transfers.length > 0) {
-          for (const tt of tx.token_transfers) {
-            if (tt.from?.hash?.toLowerCase() !== address.toLowerCase()) continue
-
-            const tokenTo = tt.to?.hash || ''
-            const tokenValue = tt.total?.value ? BigInt(tt.total.value) : 0n
-            const tokenDecimals = tt.total?.decimals || 18
-            const tokenSymbol = tt.total?.symbol || 'UNKNOWN'
-
-            const tokenExchangeInfo = isExchangeWallet(tokenTo)
-            const tokenDrainerInfo = isKnownDrainer(tokenTo)
-
+          // Native transfer
+          if (value > 0n) {
             transfers.push({
               hash: tx.hash,
               from: address,
-              to: tokenTo,
-              value: ethers.formatUnits(tokenValue, tokenDecimals),
-              asset: tokenSymbol,
+              to,
+              value: ethers.formatEther(value),
+              asset: chain.nativeCurrency,
               chainId,
               chainName: chain.name,
               timestamp,
-              isExchangeDeposit: !!tokenExchangeInfo,
-              exchangeName: tokenExchangeInfo?.name,
-              isDrainerTransfer: !!tokenDrainerInfo,
-              drainerName: tokenDrainerInfo?.name,
+              isExchangeDeposit: !!exchangeInfo,
+              exchangeName: exchangeInfo?.name,
+              isDrainerTransfer: !!drainerInfo,
+              drainerName: drainerInfo?.name,
               blockNumber: tx.block_number || 0
             })
           }
+        }
+      }
+
+      // Process token transfers
+      if (tokenResponse && tokenResponse.ok) {
+        const tokenData = await tokenResponse.json()
+        const tokenTxs = tokenData.items || []
+
+        for (const tt of tokenTxs) {
+          if (tt.from?.hash?.toLowerCase() !== address.toLowerCase()) continue
+
+          const tokenTo = tt.to?.hash || ''
+          const tokenValue = tt.total?.value ? BigInt(tt.total.value) : 0n
+          const tokenDecimals = tt.total?.decimals || 18
+          const tokenSymbol = tt.token?.symbol || tt.total?.symbol || 'UNKNOWN'
+          const timestamp = tt.timestamp ? new Date(tt.timestamp).getTime() : Date.now()
+
+          const tokenExchangeInfo = isExchangeWallet(tokenTo)
+          const tokenDrainerInfo = isKnownDrainer(tokenTo)
+
+          transfers.push({
+            hash: tt.tx_hash || '',
+            from: address,
+            to: tokenTo,
+            value: ethers.formatUnits(tokenValue, tokenDecimals),
+            asset: tokenSymbol,
+            chainId,
+            chainName: chain.name,
+            timestamp,
+            isExchangeDeposit: !!tokenExchangeInfo,
+            exchangeName: tokenExchangeInfo?.name,
+            isDrainerTransfer: !!tokenDrainerInfo,
+            drainerName: tokenDrainerInfo?.name,
+            blockNumber: 0
+          })
         }
       }
     } catch {
