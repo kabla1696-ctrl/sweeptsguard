@@ -6,44 +6,13 @@ import Link from 'next/link'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
-const ALL_CHAINS = [
+const SUPPORTED_CHAINS = [
   { id: 1, name: 'Ethereum', token: 'ETH' },
-  { id: 8453, name: 'Base', token: 'ETH' },
-  { id: 56, name: 'BNB Chain', token: 'BNB' },
-  { id: 42161, name: 'Arbitrum', token: 'ETH' },
-  { id: 137, name: 'Polygon', token: 'MATIC' },
-  { id: 10, name: 'Optimism', token: 'ETH' },
-  { id: 43114, name: 'Avalanche', token: 'AVAX' },
-  { id: 250, name: 'Fantom', token: 'FTM' },
-  { id: 25, name: 'Cronos', token: 'CRO' },
-  { id: 81457, name: 'Blast', token: 'ETH' },
-  { id: 7777777, name: 'Zora', token: 'ETH' },
-  { id: 1101, name: 'Polygon zkEVM', token: 'ETH' },
-  { id: 169, name: 'Manta', token: 'ETH' },
-  { id: 324, name: 'zkSync', token: 'ETH' },
-  { id: 59144, name: 'Linea', token: 'ETH' },
-  { id: 5000, name: 'Mantle', token: 'MNT' },
-  { id: 34443, name: 'Mode', token: 'ETH' },
-  { id: 534352, name: 'Scroll', token: 'ETH' },
-  { id: 100, name: 'Gnosis', token: 'xDai' },
-  { id: 7000, name: 'ZetaChain', token: 'ZETA' },
-  { id: 1625, name: 'Gravity', token: 'G' },
-  { id: 1116, name: 'Core', token: 'CORE' },
-  { id: 1329, name: 'Sei', token: 'SEI' },
-  { id: 80094, name: 'Berachain', token: 'BERA' },
-  { id: 57073, name: 'Ink', token: 'ETH' },
-  { id: 196, name: 'XLayer', token: 'OKB' },
-  { id: 43111, name: 'Hemi', token: 'ETH' },
-  { id: 8217, name: 'Kaia', token: 'KAIA' },
-  { id: 1868, name: 'Soneium', token: 'ETH' },
-  { id: 2818, name: 'Morph', token: 'ETH' },
-  { id: 1923, name: 'Swellchain', token: 'ETH' },
-  { id: 10143, name: 'Monad', token: 'MON' },
-  { id: 16600, name: '0G', token: '0G' },
 ]
 
 interface PreviewData {
-  eligible: boolean
+  eligible: boolean | null  // null = unable to verify
+  alreadyClaimed: boolean
   tokenAddress: string
   tokenSymbol: string
   tokenDecimals: number
@@ -55,17 +24,27 @@ interface PreviewData {
   sponsorGasToken: string
   sponsorHasGas: boolean
   estimatedGasCost: string
+  claimDataUsed: string
+  needsMerkleProof: boolean
+  needsClaimData: boolean
   error?: string
 }
 
 export default function AirdropPage() {
   const [contractAddress, setContractAddress] = useState('')
+  const [walletAddress, setWalletAddress] = useState('')
   const [chainId, setChainId] = useState(1)
   const [safeWallet, setSafeWallet] = useState('')
   const [privateKey, setPrivateKey] = useState('')
   const [sponsorKey, setSponsorKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [showSponsorKey, setShowSponsorKey] = useState(false)
+
+  // Optional fields
+  const [claimData, setClaimData] = useState('')
+  const [merkleProof, setMerkleProof] = useState('')
+  const [tokenAmount, setTokenAmount] = useState('')
+  const [showOptional, setShowOptional] = useState(false)
 
   // Flow states
   const [step, setStep] = useState<'input' | 'preview' | 'claiming' | 'done' | 'error'>('input')
@@ -76,7 +55,7 @@ export default function AirdropPage() {
 
   // Preview: detect token, eligibility, amount
   const handlePreview = async () => {
-    if (!contractAddress || !safeWallet || !privateKey || !sponsorKey) return
+    if (!contractAddress || !safeWallet || !privateKey || !sponsorKey || !walletAddress) return
 
     setPreviewLoading(true)
     setPreviewData(null)
@@ -91,8 +70,12 @@ export default function AirdropPage() {
           contractAddress,
           chainId,
           safeWallet,
+          walletAddress,
           sponsorPrivateKey: sponsorKey,
-          privateKey
+          privateKey,
+          claimData: claimData || undefined,
+          merkleProof: merkleProof || undefined,
+          tokenAmount: tokenAmount || undefined,
         })
       })
       const data = await res.json()
@@ -112,7 +95,7 @@ export default function AirdropPage() {
     }
   }
 
-  // Confirm: execute atomic claim + split
+  // Confirm: execute atomic claim via Flashbots bundle
   const handleConfirm = async () => {
     if (!previewData) return
 
@@ -128,16 +111,20 @@ export default function AirdropPage() {
           contractAddress,
           chainId,
           safeWallet,
+          walletAddress,
           privateKey,
           sponsorPrivateKey: sponsorKey,
           claimableRaw: previewData.claimableRaw,
-          tokenAddress: previewData.tokenAddress
+          tokenAddress: previewData.tokenAddress,
+          claimData: claimData || undefined,
+          merkleProof: merkleProof || undefined,
+          tokenAmount: tokenAmount || undefined,
         })
       })
       const data = await res.json()
 
       if (data.success) {
-        setTxHash(data.txHash || '')
+        setTxHash(data.txHash || data.bundleHash || '')
         setStep('done')
       } else {
         setErrorMsg(data.error || 'Claim failed')
@@ -149,7 +136,7 @@ export default function AirdropPage() {
     }
   }
 
-  const selectedChain = ALL_CHAINS.find(c => c.id === chainId)
+  const selectedChain = SUPPORTED_CHAINS.find(c => c.id === chainId)
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
@@ -172,14 +159,21 @@ export default function AirdropPage() {
         <h1 className="text-3xl font-bold mb-2">🎯 Airdrop Claimer</h1>
         <p className="text-white/40 mb-8">Claim airdrops from compromised wallet → 80% safe wallet, 20% platform fee</p>
 
+        {/* L2 Notice */}
+        <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl mb-6">
+          <p className="text-orange-400 text-sm">
+            ⚠️ <strong>L2 chains temporarily disabled</strong> — Flashbots protection only available on Ethereum mainnet. L2 support coming soon.
+          </p>
+        </div>
+
         {/* How It Works */}
         <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-8">
           <h3 className="text-yellow-400 font-semibold mb-3">💰 Sponsor Wallet Mode — How It Works</h3>
           <ol className="text-white/50 text-sm space-y-2 list-decimal list-inside">
-            <li>Enter airdrop contract address → system auto-detects token & eligibility</li>
+            <li>Enter airdrop contract & wallet details → system auto-detects token, eligibility & amount</li>
             <li>Compromised wallet signs the claim transaction</li>
             <li>Sponsor wallet pays gas (<span className="text-green-400">Flashbots atomic bundle</span>)</li>
-            <li>Both in same block — <span className="text-green-400">drainer can&apos;t intercept</span></li>
+            <li>Both TXs in same block — <span className="text-green-400">drainer can&apos;t intercept</span></li>
             <li><span className="text-blue-400">80%</span> tokens → safe wallet | <span className="text-purple-400">20%</span> → platform fee</li>
           </ol>
           <div className="mt-3 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
@@ -213,11 +207,25 @@ export default function AirdropPage() {
                   onChange={(e) => setChainId(Number(e.target.value))}
                   className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
                 >
-                  {ALL_CHAINS.map(c => (
+                  {SUPPORTED_CHAINS.map(c => (
                     <option key={c.id} value={c.id}>{c.name} ({c.token})</option>
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                🔴 Compromised Wallet Address
+              </label>
+              <input
+                type="text"
+                value={walletAddress}
+                onChange={(e) => setWalletAddress(e.target.value)}
+                placeholder="0x... (address of the compromised wallet)"
+                className="w-full px-4 py-3 bg-red-500/5 border border-red-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/40 text-sm font-mono"
+              />
+              <p className="text-red-400/50 text-xs mt-1">The wallet that owns the airdrop tokens</p>
             </div>
 
             <div>
@@ -253,7 +261,7 @@ export default function AirdropPage() {
                   {showKey ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <p className="text-red-400/50 text-xs mt-1">Used only for signing — never stored</p>
+              <p className="text-red-400/50 text-xs mt-1">Used only for signing — never stored or logged</p>
             </div>
 
             <div>
@@ -265,7 +273,7 @@ export default function AirdropPage() {
                   type={showSponsorKey ? 'text' : 'password'}
                   value={sponsorKey}
                   onChange={(e) => setSponsorKey(e.target.value)}
-                  placeholder="Wallet with gas tokens on this chain"
+                  placeholder="Wallet with ETH for gas on Ethereum mainnet"
                   className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
                 />
                 <button
@@ -276,12 +284,67 @@ export default function AirdropPage() {
                   {showSponsorKey ? 'Hide' : 'Show'}
                 </button>
               </div>
-              <p className="text-yellow-400/50 text-xs mt-1">Needs {selectedChain?.token || 'native token'} for gas on {selectedChain?.name || 'this chain'}</p>
+              <p className="text-yellow-400/50 text-xs mt-1">Needs {selectedChain?.token || 'ETH'} for gas on {selectedChain?.name || 'Ethereum'}</p>
             </div>
+
+            {/* Optional Fields Toggle */}
+            <button
+              type="button"
+              onClick={() => setShowOptional(!showOptional)}
+              className="text-white/30 hover:text-white/60 text-sm flex items-center gap-2"
+            >
+              {showOptional ? '▼' : '▶'} Advanced Options (optional)
+            </button>
+
+            {showOptional && (
+              <div className="space-y-4 p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                <div>
+                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                    📄 Claim Data (raw hex, optional)
+                  </label>
+                  <textarea
+                    value={claimData}
+                    onChange={(e) => setClaimData(e.target.value)}
+                    placeholder="0x... (copy from project's claim page network request or Etherscan)"
+                    rows={3}
+                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  />
+                  <p className="text-white/20 text-xs mt-1">Paste raw calldata from the project&apos;s claim page if auto-detection fails</p>
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                    🌳 Merkle Proof (JSON array, optional)
+                  </label>
+                  <textarea
+                    value={merkleProof}
+                    onChange={(e) => setMerkleProof(e.target.value)}
+                    placeholder='["0xabc...", "0xdef...", ...]'
+                    rows={3}
+                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  />
+                  <p className="text-white/20 text-xs mt-1">Get from project&apos;s claim page (inspect network request) or Etherscan read contract</p>
+                </div>
+
+                <div>
+                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                    💎 Token Amount (optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={tokenAmount}
+                    onChange={(e) => setTokenAmount(e.target.value)}
+                    placeholder="e.g. 1000 (human-readable amount, or raw wei)"
+                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  />
+                  <p className="text-white/20 text-xs mt-1">Override if auto-detection doesn&apos;t find the amount</p>
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handlePreview}
-              disabled={previewLoading || !contractAddress || !safeWallet || !privateKey || !sponsorKey}
+              disabled={previewLoading || !contractAddress || !safeWallet || !privateKey || !sponsorKey || !walletAddress}
               className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-blue-500 hover:to-purple-500 transition-all"
             >
               {previewLoading ? '⏳ Scanning Contract...' : '🔍 Preview Claim'}
@@ -297,13 +360,34 @@ export default function AirdropPage() {
 
               {/* Eligibility */}
               <div className="flex items-center gap-2 mb-4">
-                {previewData.eligible ? (
+                {previewData.alreadyClaimed ? (
+                  <span className="px-3 py-1 bg-red-600/30 rounded-full text-red-400 text-sm font-semibold">❌ Already Claimed</span>
+                ) : previewData.eligible === true ? (
                   <span className="px-3 py-1 bg-green-600/30 rounded-full text-green-400 text-sm font-semibold">✅ Eligible</span>
-                ) : (
+                ) : previewData.eligible === false ? (
                   <span className="px-3 py-1 bg-red-600/30 rounded-full text-red-400 text-sm font-semibold">❌ Not Eligible</span>
+                ) : (
+                  <span className="px-3 py-1 bg-yellow-600/30 rounded-full text-yellow-400 text-sm font-semibold">⚠️ Unable to Verify</span>
                 )}
                 <span className="text-white/30 text-sm">on {selectedChain?.name}</span>
               </div>
+
+              {/* Warnings */}
+              {previewData.needsMerkleProof && !merkleProof && (
+                <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-4">
+                  <p className="text-orange-400 text-sm">⚠️ This airdrop requires a Merkle proof. Go back and paste it in Advanced Options.</p>
+                </div>
+              )}
+              {previewData.needsClaimData && !claimData && (
+                <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-4">
+                  <p className="text-orange-400 text-sm">⚠️ Could not auto-detect claim function. Go back and paste the raw claim data from the project&apos;s page.</p>
+                </div>
+              )}
+              {previewData.eligible === null && (
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg mb-4">
+                  <p className="text-yellow-400 text-sm">⚠️ Unable to verify eligibility — proceed with caution. The claim may fail if already claimed.</p>
+                </div>
+              )}
 
               {/* Token Info */}
               <div className="grid grid-cols-2 gap-3 mb-4">
@@ -334,6 +418,14 @@ export default function AirdropPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Claim Data Used */}
+              {previewData.claimDataUsed && (
+                <div className="p-3 bg-white/[0.02] rounded-lg mb-4">
+                  <p className="text-white/30 text-xs mb-1">Claim Function Detected</p>
+                  <p className="text-white/60 text-xs font-mono break-all">{previewData.claimDataUsed}</p>
+                </div>
+              )}
 
               {/* Sponsor Gas */}
               <div className={`p-3 rounded-lg ${previewData.sponsorHasGas ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
@@ -372,14 +464,23 @@ export default function AirdropPage() {
               </button>
               <button
                 onClick={handleConfirm}
-                disabled={!previewData.eligible || !previewData.sponsorHasGas}
+                disabled={
+                  previewData.alreadyClaimed ||
+                  (!previewData.eligible && previewData.eligible !== null) ||
+                  !previewData.sponsorHasGas ||
+                  (previewData.needsMerkleProof && !merkleProof) ||
+                  (previewData.needsClaimData && !claimData)
+                }
                 className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
               >
-                ✅ Confirm & Claim
+                ⚡ Confirm & Claim (Flashbots)
               </button>
             </div>
 
-            {!previewData.eligible && (
+            {previewData.alreadyClaimed && (
+              <p className="text-red-400/60 text-xs text-center">This wallet has already claimed this airdrop</p>
+            )}
+            {!previewData.alreadyClaimed && !previewData.eligible && previewData.eligible !== null && (
               <p className="text-red-400/60 text-xs text-center">Wallet is not eligible for this airdrop</p>
             )}
             {previewData.eligible && !previewData.sponsorHasGas && (
@@ -398,7 +499,7 @@ export default function AirdropPage() {
               </svg>
               <span className="text-xl font-semibold">Executing Atomic Claim...</span>
             </div>
-            <p className="text-white/40 text-sm">Flashbots bundle submitted. Waiting for confirmation...</p>
+            <p className="text-white/40 text-sm">Flashbots bundle submitted. Both TXs execute in the same block.</p>
             <p className="text-white/20 text-xs mt-2">This usually takes 10-30 seconds</p>
           </div>
         )}
@@ -419,7 +520,7 @@ export default function AirdropPage() {
             </div>
             {txHash && (
               <a
-                href={`${selectedChain?.id === 1 ? 'https://etherscan.io' : `https://explorer.${selectedChain?.name.toLowerCase()}.com`}/tx/${txHash}`}
+                href={`https://etherscan.io/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block text-green-400/70 text-xs font-mono hover:text-green-400 mb-4"
@@ -428,7 +529,7 @@ export default function AirdropPage() {
               </a>
             )}
             <button
-              onClick={() => { setStep('input'); setPreviewData(null); setContractAddress('') }}
+              onClick={() => { setStep('input'); setPreviewData(null); setContractAddress(''); setWalletAddress('') }}
               className="w-full py-3 bg-white/[0.05] rounded-xl text-sm hover:bg-white/[0.1]"
             >
               Claim Another Airdrop
