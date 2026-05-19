@@ -170,12 +170,15 @@ export class AirdropClaimer {
 
   // Claim airdrop with gas sponsorship via Flashbots atomic bundle
   // Sponsor wallet funds gas → compromised wallet claims → same block
+  // If useFeeCollector is true, also splits 80/20 in same transaction
   async claimWithSponsorship(
     claimContract: string,
     chainId: number,
     claimData: string,
     hackedWalletPrivateKey: string,
-    sponsorPrivateKey: string
+    sponsorPrivateKey: string,
+    tokenAddress?: string,  // Required for fee collector
+    userSafeWallet?: string  // Required for fee collector
   ): Promise<ClaimResult> {
     const provider = this.providers.get(chainId)
     const chain = CHAINS[chainId]
@@ -192,8 +195,8 @@ export class AirdropClaimer {
       const feeData = await provider.getFeeData()
       const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
 
-      // Gas needed for claim tx (~200k gas)
-      const gasNeeded = BigInt(200000) * gasPrice + ethers.parseEther('0.001')
+      // Gas needed for claim tx (~200k gas) + transfers (~100k gas)
+      const gasNeeded = BigInt(300000) * gasPrice + ethers.parseEther('0.001')
 
       // Check sponsor balance
       const sponsorBalance = await provider.getBalance(sponsorWallet.address)
@@ -209,6 +212,8 @@ export class AirdropClaimer {
       const hackedNonce = await provider.getTransactionCount(hackedWallet.address)
       const sponsorNonce = await provider.getTransactionCount(sponsorWallet.address)
 
+      let transactions: string[] = []
+
       // TX 1 (from sponsor): Send gas ETH to hacked wallet
       const fundTx = await sponsorWallet.signTransaction({
         to: hackedWallet.address,
@@ -218,22 +223,50 @@ export class AirdropClaimer {
         nonce: sponsorNonce,
         chainId
       })
+      transactions.push(fundTx)
 
-      // TX 2 (from hacked wallet): Claim airdrop
-      const claimTx = await hackedWallet.signTransaction({
-        to: claimContract,
-        data: claimData,
-        value: 0n,
-        gasLimit: 200000n,
-        gasPrice,
-        nonce: hackedNonce,
-        chainId
-      })
+      // If fee collector is configured, use it for atomic splitting
+      const feeCollectorAddress = FEE_COLLECTOR_CONTRACTS[chainId]
+      if (feeCollectorAddress && tokenAddress && userSafeWallet) {
+        // Claim through FeeCollector contract (automatically splits 80/20)
+        const feeCollectorIface = new ethers.Interface([
+          'function claimAndSplit(address token, bytes calldata claimData, address claimContract, address userWallet)'
+        ])
+        const splitData = feeCollectorIface.encodeFunctionData('claimAndSplit', [
+          tokenAddress,
+          claimData,
+          claimContract,
+          userSafeWallet
+        ])
+
+        const claimTx = await hackedWallet.signTransaction({
+          to: feeCollectorAddress,
+          data: splitData,
+          value: 0n,
+          gasLimit: 300000n,
+          gasPrice,
+          nonce: hackedNonce,
+          chainId
+        })
+        transactions.push(claimTx)
+      } else {
+        // Regular claim (no fee splitting)
+        const claimTx = await hackedWallet.signTransaction({
+          to: claimContract,
+          data: claimData,
+          value: 0n,
+          gasLimit: 200000n,
+          gasPrice,
+          nonce: hackedNonce,
+          chainId
+        })
+        transactions.push(claimTx)
+      }
 
       // Submit as Flashbots atomic bundle
       const { submitRecoveryBundle } = await import('./fundRecovery')
       const bundleResult = await submitRecoveryBundle(
-        [fundTx, claimTx],
+        transactions,
         chainId,
         chain.rpc
       )
@@ -248,9 +281,8 @@ export class AirdropClaimer {
       }
 
       // Fallback: direct submission
-      const directTxs: string[] = [fundTx, claimTx]
       const txHashes: string[] = []
-      for (const signedTx of directTxs) {
+      for (const signedTx of transactions) {
         const tx = await provider.broadcastTransaction(signedTx)
         txHashes.push(tx.hash)
         await new Promise(resolve => setTimeout(resolve, 1000))

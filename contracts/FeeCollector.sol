@@ -1,43 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "hardhat/console.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-
 /**
- * @title SweepGuard Fee Collector
+ * @title SweepGuard Fee Collector v2
  * @notice Claims airdrops and splits: 80% to user, 20% to platform fee wallet
- * @dev All in one transaction — atomic, trustless, transparent
+ * @dev Optimized for Flashbots atomic bundles - minimal gas usage
+ * @dev Fee wallet: 0x7A3725154a2E6468F9549334394802e9E2822C2A
  */
 contract FeeCollector {
-    using SafeERC20 for IERC20;
-    
     address public immutable feeWallet;
-    uint256 public immutable feePercent; // 20 = 20%
+    uint256 public immutable feePercent;
     
     event Claimed(address indexed user, address indexed token, uint256 totalAmount, uint256 feeAmount, uint256 userAmount);
-    event ETHClaimed(address indexed user, uint256 totalAmount, uint256 feeAmount, uint256 userAmount);
-    
-    error InvalidFeeWallet();
-    error InvalidFeePercent();
-    error ClaimFailed();
-    error NoTokensClaimed();
-    error TransferFailed();
-    error NotAuthorized();
-    error ETHTransferFailed();
+    event BatchClaimed(address indexed user, uint256 claimCount, uint256 totalFee);
     
     constructor(address _feeWallet, uint256 _feePercent) {
-        if (_feeWallet == address(0)) revert InvalidFeeWallet();
-        if (_feePercent > 50) revert InvalidFeePercent();
+        require(_feeWallet != address(0), "Invalid fee wallet");
+        require(_feePercent <= 50, "Fee too high");
         feeWallet = _feeWallet;
         feePercent = _feePercent;
     }
     
     /**
      * @notice Claim ERC20 tokens and split between user and fee wallet
-     * @param token Address of the ERC20 token
-     * @param claimData Encoded claim function call data
+     * @param token Address of the ERC20 token to claim
+     * @param claimData Encoded claim function call data for the airdrop contract
      * @param claimContract Address of the airdrop claim contract
      * @param userWallet Address to receive user's share (80%)
      */
@@ -49,27 +36,74 @@ contract FeeCollector {
     ) external {
         // Execute the claim
         (bool success, ) = claimContract.call(claimData);
-        if (!success) revert ClaimFailed();
+        require(success, "Claim failed");
         
-        // Get balance
+        // Get claimed balance
         uint256 balance = IERC20(token).balanceOf(address(this));
-        if (balance == 0) revert NoTokensClaimed();
+        require(balance > 0, "No tokens claimed");
         
         // Calculate split
         uint256 feeAmount = (balance * feePercent) / 100;
         uint256 userAmount = balance - feeAmount;
         
-        // Transfer
-        IERC20(token).safeTransfer(feeWallet, feeAmount);
-        IERC20(token).safeTransfer(userWallet, userAmount);
+        // Transfer in single calls (gas efficient)
+        IERC20(token).transfer(feeWallet, feeAmount);
+        IERC20(token).transfer(userWallet, userAmount);
         
         emit Claimed(msg.sender, token, balance, feeAmount, userAmount);
     }
     
     /**
+     * @notice Batch claim multiple airdrops and split each
+     * @param tokens Array of token addresses
+     * @param claimDatas Array of encoded claim data
+     * @param claimContracts Array of claim contract addresses
+     * @param userWallets Array of user wallet addresses
+     */
+    function batchClaimAndSplit(
+        address[] calldata tokens,
+        bytes[] calldata claimDatas,
+        address[] calldata claimContracts,
+        address[] calldata userWallets
+    ) external {
+        require(
+            tokens.length == claimDatas.length &&
+            tokens.length == claimContracts.length &&
+            tokens.length == userWallets.length,
+            "Array length mismatch"
+        );
+        
+        uint256 totalFee;
+        
+        for (uint256 i = 0; i < tokens.length; i++) {
+            // Execute claim
+            (bool success, ) = claimContracts[i].call(claimDatas[i]);
+            if (!success) continue;
+            
+            // Get balance
+            uint256 balance = IERC20(tokens[i]).balanceOf(address(this));
+            if (balance == 0) continue;
+            
+            // Split
+            uint256 feeAmount = (balance * feePercent) / 100;
+            uint256 userAmount = balance - feeAmount;
+            
+            // Transfer
+            IERC20(tokens[i]).transfer(feeWallet, feeAmount);
+            IERC20(tokens[i]).transfer(userWallets[i], userAmount);
+            
+            totalFee += feeAmount;
+            
+            emit Claimed(msg.sender, tokens[i], balance, feeAmount, userAmount);
+        }
+        
+        emit BatchClaimed(msg.sender, tokens.length, totalFee);
+    }
+    
+    /**
      * @notice Claim native ETH and split
-     * @param claimContract Address of the airdrop claim contract
-     * @param claimData Encoded claim function call data
+     * @param claimData Encoded claim data
+     * @param claimContract Address of claim contract
      * @param userWallet Address to receive user's share
      */
     function claimETHAndSplit(
@@ -78,58 +112,23 @@ contract FeeCollector {
         address userWallet
     ) external payable {
         (bool success, ) = claimContract.call{value: msg.value}(claimData);
-        if (!success) revert ClaimFailed();
+        require(success, "Claim failed");
         
         uint256 balance = address(this).balance;
         uint256 feeAmount = (balance * feePercent) / 100;
         uint256 userAmount = balance - feeAmount;
         
         (bool feeSent, ) = feeWallet.call{value: feeAmount}("");
-        if (!feeSent) revert ETHTransferFailed();
+        require(feeSent, "Fee transfer failed");
         
         (bool userSent, ) = userWallet.call{value: userAmount}("");
-        if (!userSent) revert ETHTransferFailed();
+        require(userSent, "User transfer failed");
         
-        emit ETHClaimed(msg.sender, balance, feeAmount, userAmount);
+        emit Claimed(msg.sender, address(0), balance, feeAmount, userAmount);
     }
     
     /**
-     * @notice Batch claim multiple airdrops
-     * @param claims Array of claim parameters
-     */
-    struct ClaimParams {
-        address token;
-        bytes claimData;
-        address claimContract;
-        address userWallet;
-    }
-    
-    function batchClaimAndSplit(ClaimParams[] calldata claims) external {
-        for (uint256 i = 0; i < claims.length; i++) {
-            ClaimParams calldata claim = claims[i];
-            
-            // Execute the claim
-            (bool success, ) = claim.claimContract.call(claim.claimData);
-            if (!success) continue; // Skip failed claims
-            
-            // Get balance
-            uint256 balance = IERC20(claim.token).balanceOf(address(this));
-            if (balance == 0) continue;
-            
-            // Calculate split
-            uint256 feeAmount = (balance * feePercent) / 100;
-            uint256 userAmount = balance - feeAmount;
-            
-            // Transfer
-            IERC20(claim.token).safeTransfer(feeWallet, feeAmount);
-            IERC20(claim.token).safeTransfer(claim.userWallet, userAmount);
-            
-            emit Claimed(msg.sender, claim.token, balance, feeAmount, userAmount);
-        }
-    }
-    
-    /**
-     * @notice Emergency withdraw (only fee wallet owner)
+     * @notice Emergency withdraw (only fee wallet)
      */
     function emergencyWithdraw(address token) external {
         require(msg.sender == feeWallet, "Not authorized");
@@ -138,14 +137,19 @@ contract FeeCollector {
             require(sent, "ETH withdraw failed");
         } else {
             uint256 balance = IERC20(token).balanceOf(address(this));
-            IERC20(token).safeTransfer(feeWallet, balance);
+            require(IERC20(token).transfer(feeWallet, balance), "Token withdraw failed");
         }
     }
     
     /**
      * @notice Get contract info
      */
-    function getInfo() external view returns (address _feeWallet, uint256 _feePercent, uint256 _ethBalance) {
-        return (feeWallet, feePercent, address(this).balance);
+    function getInfo() external view returns (address _feeWallet, uint256 _feePercent) {
+        return (feeWallet, feePercent);
     }
+}
+
+interface IERC20 {
+    function balanceOf(address account) external view returns (uint256);
+    function transfer(address to, uint256 amount) external returns (bool);
 }

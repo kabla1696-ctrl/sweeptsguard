@@ -112,7 +112,9 @@ export async function POST(request: NextRequest) {
         chainId,
         claimData,
         privateKey,
-        sponsorPrivateKey
+        sponsorPrivateKey,
+        tokenAddress,  // For fee collector
+        recipientAddress  // User's safe wallet
       )
       return NextResponse.json({ results: [result] })
     }
