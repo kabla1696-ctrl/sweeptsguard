@@ -215,7 +215,7 @@ export class WalletScanner {
 
       // Get Approval events
       const approvalFilter = {
-        fromBlock,
+        fromBlock: Math.max(0, currentBlock - 5000), // Reduced from 50k
         toBlock: 'latest',
         topics: [
           ethers.id('Approval(address,address,uint256)'),
@@ -223,7 +223,10 @@ export class WalletScanner {
         ]
       }
 
-      const logs = await provider.getLogs(approvalFilter).catch(() => [])
+      const logs = await this.withTimeout(
+        provider.getLogs(approvalFilter).catch(() => []),
+        8000
+      )
       const suspicious: { token: string; spender: string; amount: string; isDrainer: boolean }[] = []
 
       for (const log of logs.slice(-50)) {
@@ -260,7 +263,7 @@ export class WalletScanner {
     try {
       const provider = this.getProvider(chainId)
       const currentBlock = await provider.getBlockNumber()
-      const fromBlock = Math.max(0, currentBlock - 50000)
+      const fromBlock = Math.max(0, currentBlock - 5000) // Reduced from 50k to 5k
 
       // Known drainer method selectors
       const DRAINER_METHODS: Record<string, string> = {
@@ -272,40 +275,36 @@ export class WalletScanner {
         '0x2b67b570': 'Permit2 (signature drain)',
       }
 
-      // Get all outgoing transactions
-      const txFilter = {
-        fromBlock,
-        toBlock: 'latest',
-        topics: [
-          null, // any tx hash
-          null, // from (any)
-          ethers.zeroPadValue(address, 32) // to = our address (could be delegated)
-        ]
-      }
-
-      const logs = await provider.getLogs(txFilter).catch(() => [])
       const drainerCalls: { method: string; to: string; txHash: string; timestamp: string }[] = []
 
-      // Check recent blocks for suspicious method calls
-      for (let blockNum = currentBlock; blockNum > Math.max(0, currentBlock - 1000); blockNum--) {
+      // FAST: Use getLogs for Transfer events FROM this address
+      const transferTopic = ethers.id('Transfer(address,address,uint256)')
+      const filter = {
+        fromBlock,
+        toBlock: 'latest',
+        topics: [transferTopic, ethers.zeroPadValue(address, 32)]
+      }
+
+      const logs = await this.withTimeout(provider.getLogs(filter).catch(() => []), 8000)
+      
+      // Get unique tx hashes
+      const txHashes = [...new Set(logs.map(l => l.transactionHash))].slice(0, 20)
+      
+      // Check each unique tx for drainer methods
+      for (const txHash of txHashes) {
         try {
-          const block = await provider.getBlock(blockNum, true)
-          if (block && block.transactions) {
-            for (const txHash of block.transactions) {
-              try {
-                const tx = await provider.getTransaction(txHash)
-                if (tx && tx.from && tx.from.toLowerCase() === address.toLowerCase()) {
-                  const methodSig = tx.data.slice(0, 10)
-                  if (DRAINER_METHODS[methodSig]) {
-                    drainerCalls.push({
-                      method: DRAINER_METHODS[methodSig],
-                      to: tx.to || 'contract creation',
-                      txHash: tx.hash,
-                      timestamp: new Date(Number(block.timestamp) * 1000).toISOString()
-                    })
-                  }
-                }
-              } catch {}
+          const tx = await this.withTimeout(provider.getTransaction(txHash), 5000)
+          if (tx && tx.from && tx.from.toLowerCase() === address.toLowerCase()) {
+            const methodSig = tx.data.slice(0, 10)
+            if (DRAINER_METHODS[methodSig]) {
+              const receipt = await this.withTimeout(provider.getTransactionReceipt(txHash), 5000)
+              const block = receipt ? await this.withTimeout(provider.getBlock(receipt.blockNumber), 5000) : null
+              drainerCalls.push({
+                method: DRAINER_METHODS[methodSig],
+                to: tx.to || 'contract creation',
+                txHash: tx.hash,
+                timestamp: block ? new Date(Number(block.timestamp) * 1000).toISOString() : new Date().toISOString()
+              })
             }
           }
         } catch {}
@@ -373,7 +372,7 @@ export class WalletScanner {
         const provider = this.getProvider(chainId)
         const chain = CHAINS[chainId]
         const currentBlock = await provider.getBlockNumber()
-        const fromBlock = Math.max(0, currentBlock - 50000) // Last ~50k blocks
+        const fromBlock = Math.max(0, currentBlock - 5000) // Reduced from 50k to 5k
 
         // Use getLogs for Transfer events FROM this address
         const filter = {
@@ -385,24 +384,43 @@ export class WalletScanner {
           ]
         }
 
-        const logs = await provider.getLogs(filter).catch(() => [])
+        const logs = await this.withTimeout(
+          provider.getLogs(filter).catch(() => []),
+          8000
+        )
         
-        for (const log of logs.slice(-20)) { // Last 20 transfers
-          const block = await provider.getBlock(log.blockNumber).catch(() => null)
-          if (block) {
-            const iface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 value)'])
+        // Get unique block numbers and fetch blocks in batch
+        const blockNumbers = [...new Set(logs.map(l => l.blockNumber))]
+        const blockMap = new Map<number, { timestamp: number }>()
+        
+        // Fetch blocks in parallel (max 5 at a time)
+        for (let i = 0; i < blockNumbers.length; i += 5) {
+          const batch = blockNumbers.slice(i, i + 5)
+          const blocks = await Promise.all(
+            batch.map(bn => this.withTimeout(provider.getBlock(bn), 5000).catch(() => null))
+          )
+          blocks.forEach((block, idx) => {
+            if (block) blockMap.set(batch[idx], { timestamp: Number(block.timestamp) })
+          })
+        }
+        
+        const iface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 value)'])
+        
+        for (const log of logs.slice(-20)) {
+          try {
             const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data })
+            const blockInfo = blockMap.get(log.blockNumber)
             if (parsed) {
               recentDrains.push({
                 chainId,
                 chainName: chain.name,
                 to: parsed.args.to,
                 value: parsed.args.value.toString(),
-                timestamp: new Date(Number(block.timestamp) * 1000).toISOString(),
+                timestamp: blockInfo ? new Date(blockInfo.timestamp * 1000).toISOString() : new Date().toISOString(),
                 txHash: log.transactionHash
               })
             }
-          }
+          } catch {}
         }
       } catch (err) {
         console.error(`Chain ${chainId} drain scan failed:`, err)
