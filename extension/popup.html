@@ -5,84 +5,228 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SweepGuard</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --card: #12121a;
+      --border: rgba(255, 255, 255, 0.06);
+      --text: #ffffff;
+      --text-dim: rgba(255, 255, 255, 0.5);
+      --accent: #10b981;
+      --accent-glow: rgba(16, 185, 129, 0.2);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --purple: #8b5cf6;
+    }
+
     body {
       width: 380px;
       min-height: 500px;
-      background: #0a0a0f;
-      color: #fff;
+      background: var(--bg);
+      color: var(--text);
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-x: hidden;
     }
 
+    /* Header */
     .header {
-      padding: 16px;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding: 16px 20px;
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.1), rgba(139, 92, 246, 0.1));
+      border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
     }
-    .header h1 {
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       font-size: 18px;
-      background: linear-gradient(135deg, #4ade80, #10b981);
+    }
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
 
+    .version {
+      font-size: 10px;
+      color: var(--text-dim);
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    /* Tabs */
     .tabs {
       display: flex;
-      padding: 8px 16px;
+      padding: 12px 16px 0;
       gap: 4px;
     }
+
     .tab {
       flex: 1;
-      padding: 8px 4px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 8px;
-      color: rgba(255,255,255,0.4);
+      padding: 10px 8px;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
       font-size: 11px;
+      font-weight: 600;
       cursor: pointer;
-      text-align: center;
+      border-radius: 8px 8px 0 0;
       transition: all 0.2s;
+      text-align: center;
     }
+
+    .tab:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
     .tab.active {
-      background: rgba(74,222,128,0.1);
-      border-color: rgba(74,222,128,0.2);
-      color: #4ade80;
+      color: var(--accent);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-bottom: none;
     }
-    .tab:hover { color: #fff; }
 
-    .content { padding: 16px; }
+    .tab-icon {
+      font-size: 16px;
+      display: block;
+      margin-bottom: 4px;
+    }
 
+    /* Content */
+    .content {
+      padding: 16px;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .card-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .card-subtitle {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Input Groups */
     .input-group {
       margin-bottom: 12px;
     }
-    .input-group label {
-      display: block;
-      font-size: 10px;
+
+    .input-label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-dim);
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      color: rgba(255,255,255,0.3);
+      letter-spacing: 0.5px;
       margin-bottom: 6px;
     }
-    .input-group input, .input-group select {
-      width: 100%;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px;
-      color: #fff;
-      font-size: 12px;
-      font-family: 'Courier New', monospace;
-      outline: none;
-    }
-    .input-group input:focus {
-      border-color: rgba(74,222,128,0.4);
-    }
-    .input-group input::placeholder {
-      color: rgba(255,255,255,0.15);
+
+    .input-label .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
     }
 
+    .dot-red { background: var(--danger); }
+    .dot-green { background: var(--accent); }
+    .dot-yellow { background: var(--warning); }
+    .dot-purple { background: var(--purple); }
+
+    input, select {
+      width: 100%;
+      padding: 10px 12px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    input::placeholder {
+      color: rgba(255, 255, 255, 0.2);
+    }
+
+    select {
+      cursor: pointer;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='rgba(255,255,255,0.5)' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10l-5 5z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    select option {
+      background: var(--card);
+      color: var(--text);
+    }
+
+    /* Buttons */
     .btn {
       width: 100%;
       padding: 12px;
@@ -92,343 +236,633 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-    }
-    .btn-primary {
-      background: linear-gradient(135deg, #059669, #10b981);
-      color: #fff;
-    }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #047857, #059669);
-    }
-    .btn-danger {
-      background: rgba(239,68,68,0.1);
-      border: 1px solid rgba(239,68,68,0.2);
-      color: #ef4444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
 
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #059669);
+      color: white;
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px var(--accent-glow);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger), #dc2626);
+      color: white;
+    }
+
+    .btn-purple {
+      background: linear-gradient(135deg, var(--purple), #7c3aed);
+      color: white;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    .btn-outline:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Status */
     .status-bar {
-      padding: 12px;
-      background: rgba(74,222,128,0.05);
-      border: 1px solid rgba(74,222,128,0.1);
-      border-radius: 10px;
-      margin-bottom: 12px;
-    }
-    .status-bar.danger {
-      background: rgba(239,68,68,0.05);
-      border-color: rgba(239,68,68,0.1);
-    }
-    .status-indicator {
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 4px;
+      padding: 10px 12px;
+      background: rgba(16, 185, 129, 0.05);
+      border: 1px solid rgba(16, 185, 129, 0.1);
+      border-radius: 8px;
+      margin-bottom: 12px;
     }
+
     .status-dot {
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background: #4ade80;
+      background: var(--accent);
       animation: pulse 2s infinite;
     }
-    .status-dot.danger { background: #ef4444; }
+
     @keyframes pulse {
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
+
     .status-text {
+      font-size: 12px;
+      color: var(--accent);
+    }
+
+    /* Chain Grid */
+    .chain-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .chain-btn {
+      padding: 8px 4px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-size: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .chain-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .chain-btn.selected {
+      background: var(--accent-glow);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .chain-btn .chain-icon {
+      font-size: 14px;
+      display: block;
+      margin-bottom: 2px;
+    }
+
+    /* Fee Display */
+    .fee-display {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(16, 185, 129, 0.1));
+      border: 1px solid rgba(139, 92, 246, 0.2);
+      border-radius: 10px;
+      padding: 14px;
+      margin: 12px 0;
+    }
+
+    .fee-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+    }
+
+    .fee-label {
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    .fee-value {
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .fee-value.green { color: var(--accent); }
+    .fee-value.purple { color: var(--purple); }
+
+    .fee-divider {
+      height: 1px;
+      background: var(--border);
+      margin: 8px 0;
+    }
+
+    /* Results */
+    .result-item {
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+
+    .result-item.success {
+      border-color: rgba(16, 185, 129, 0.2);
+      background: rgba(16, 185, 129, 0.05);
+    }
+
+    .result-item.error {
+      border-color: rgba(239, 68, 68, 0.2);
+      background: rgba(239, 68, 68, 0.05);
+    }
+
+    .result-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    .result-chain {
       font-size: 12px;
       font-weight: 600;
     }
-    .status-detail {
-      font-size: 10px;
-      color: rgba(255,255,255,0.3);
-    }
 
-    .alert {
-      padding: 10px;
-      border-radius: 8px;
-      margin-bottom: 8px;
+    .result-status {
       font-size: 11px;
-    }
-    .alert-success {
-      background: rgba(74,222,128,0.1);
-      border: 1px solid rgba(74,222,128,0.2);
-      color: #4ade80;
-    }
-    .alert-warning {
-      background: rgba(250,204,21,0.1);
-      border: 1px solid rgba(250,204,21,0.2);
-      color: #facc15;
-    }
-    .alert-danger {
-      background: rgba(239,68,68,0.1);
-      border: 1px solid rgba(239,68,68,0.2);
-      color: #ef4444;
+      padding: 2px 8px;
+      border-radius: 10px;
     }
 
-    .chain-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      margin-top: 8px;
+    .result-status.success {
+      background: rgba(16, 185, 129, 0.2);
+      color: var(--accent);
     }
-    .chain-badge {
-      padding: 4px 8px;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 6px;
+
+    .result-status.error {
+      background: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .result-tx {
       font-size: 10px;
-      color: rgba(255,255,255,0.5);
+      color: var(--text-dim);
+      font-family: monospace;
     }
 
-    .faucet-link {
+    /* Loading */
+    .loading {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Toggle */
+    .toggle-row {
       display: flex;
+      justify-content: space-between;
       align-items: center;
-      gap: 8px;
-      padding: 10px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 8px;
-      margin-bottom: 6px;
+      padding: 10px 0;
+    }
+
+    .toggle-label {
+      font-size: 12px;
+    }
+
+    .toggle {
+      width: 40px;
+      height: 22px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 11px;
+      position: relative;
       cursor: pointer;
       transition: all 0.2s;
-      text-decoration: none;
-      color: #fff;
-    }
-    .faucet-link:hover {
-      background: rgba(74,222,128,0.05);
-      border-color: rgba(74,222,128,0.1);
-    }
-    .faucet-icon { font-size: 20px; }
-    .faucet-name { font-size: 12px; font-weight: 500; }
-    .faucet-detail { font-size: 10px; color: rgba(255,255,255,0.3); }
-
-    .footer {
-      padding: 12px 16px;
-      border-top: 1px solid rgba(255,255,255,0.05);
-      text-align: center;
-      font-size: 10px;
-      color: rgba(255,255,255,0.15);
     }
 
-    .hidden { display: none; }
+    .toggle.active {
+      background: var(--accent);
+    }
 
-    .warning-box {
-      padding: 12px;
-      background: rgba(250,204,21,0.05);
-      border: 1px solid rgba(250,204,21,0.15);
+    .toggle::after {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s;
+    }
+
+    .toggle.active::after {
+      left: 20px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 4px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+    }
+
+    /* Stealth Badge */
+    .stealth-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      background: rgba(139, 92, 246, 0.1);
+      border: 1px solid rgba(139, 92, 246, 0.2);
       border-radius: 10px;
-      margin-bottom: 12px;
+      font-size: 10px;
+      color: var(--purple);
     }
-    .warning-box h3 {
-      color: #facc15;
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-    .warning-box p {
+
+    /* Info Box */
+    .info-box {
+      padding: 10px 12px;
+      background: rgba(59, 130, 246, 0.05);
+      border: 1px solid rgba(59, 130, 246, 0.1);
+      border-radius: 8px;
       font-size: 11px;
-      color: rgba(255,255,255,0.4);
+      color: rgba(59, 130, 246, 0.8);
       line-height: 1.5;
     }
 
-    .key-input {
-      position: relative;
-    }
-    .key-toggle {
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: rgba(255,255,255,0.3);
-      cursor: pointer;
+    /* Wallet Preview */
+    .wallet-preview {
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 6px;
       font-size: 10px;
+      font-family: monospace;
+      color: var(--text-dim);
+      margin-top: 4px;
+      word-break: break-all;
     }
-    .key-toggle:hover { color: rgba(255,255,255,0.6); }
   </style>
 </head>
 <body>
+  <!-- Header -->
   <div class="header">
-    <span style="font-size: 24px;">🛡️</span>
-    <h1>SweepGuard</h1>
+    <div class="logo">
+      <div class="logo-icon">🛡️</div>
+      <span class="logo-text">SweepGuard</span>
+    </div>
+    <span class="version">v2.0</span>
   </div>
 
   <!-- Tabs -->
   <div class="tabs">
-    <div class="tab active" data-tab="scan">🔍 Scan</div>
-    <div class="tab" data-tab="protect">🛡️ Protect</div>
-    <div class="tab" data-tab="airdrop">🎯 Airdrop</div>
-    <div class="tab" data-tab="faucets">🚰 Faucets</div>
+    <button class="tab active" data-tab="claim">
+      <span class="tab-icon">🎯</span>
+      Claim
+    </button>
+    <button class="tab" data-tab="transfer">
+      <span class="tab-icon">💸</span>
+      Transfer
+    </button>
+    <button class="tab" data-tab="nft">
+      <span class="tab-icon">🖼️</span>
+      NFT
+    </button>
+    <button class="tab" data-tab="settings">
+      <span class="tab-icon">⚙️</span>
+      Settings
+    </button>
   </div>
 
   <div class="content">
-    <!-- Scan Tab -->
-    <div id="scan-tab" class="tab-content">
-      <div class="input-group">
-        <label>Wallet Address</label>
-        <input type="text" id="scan-address" placeholder="0x... compromised wallet">
+    <!-- Claim Tab -->
+    <div class="tab-content active" id="tab-claim">
+      <div class="status-bar">
+        <div class="status-dot"></div>
+        <span class="status-text">Extension Active — Monitoring for claim pages</span>
+        <span class="stealth-badge">👻 Stealth</span>
       </div>
 
-      <button class="btn btn-primary" id="scan-btn">🔍 Scan All Chains</button>
-
-      <div id="scan-result" class="hidden" style="margin-top: 16px;">
-        <div id="scan-status" class="status-bar">
-          <div class="status-indicator">
-            <span class="status-dot danger"></span>
-            <span class="status-text">Scanning...</span>
+      <!-- Wallet Inputs -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(239, 68, 68, 0.1);">🔴</div>
+          <div>
+            <div class="card-title">Compromised Wallet</div>
+            <div class="card-subtitle">Private key of hacked wallet</div>
           </div>
         </div>
-        <div id="scan-alerts"></div>
-      </div>
-    </div>
-
-    <!-- Protect Tab -->
-    <div id="protect-tab" class="tab-content hidden">
-      <div class="warning-box">
-        <h3>⚠️ How Gas Sponsorship Works</h3>
-        <p>
-          Sending gas directly to your compromised wallet = drainer steals it instantly.
-          <br><br>
-          <strong>Solution:</strong> SweepGuard uses Flashbots private mempool to fund gas + claim atomically. The drainer never sees the gas arriving.
-        </p>
-      </div>
-
-      <div class="input-group">
-        <label>Safe Wallet Address (receive funds here)</label>
-        <input type="text" id="safe-address" placeholder="0x... your safe wallet">
-      </div>
-
-      <div class="input-group">
-        <label>Compromised Wallet Private Key</label>
-        <div class="key-input">
-          <input type="password" id="private-key" placeholder="Private key...">
-          <button class="key-toggle" id="toggle-key">Show</button>
+        <div class="input-group">
+          <input type="password" id="hackedKey" placeholder="0x... private key">
         </div>
       </div>
 
-      <div class="input-group">
-        <label>Telegram Bot Token (optional)</label>
-        <input type="text" id="tg-token" placeholder="123456:ABC-DEF...">
-      </div>
-
-      <div class="input-group">
-        <label>Telegram Chat ID (optional)</label>
-        <input type="text" id="tg-chat" placeholder="-1001234567890">
-      </div>
-
-      <button class="btn btn-primary" id="protect-btn">🛡️ Start Protection</button>
-
-      <div id="protect-status" class="hidden" style="margin-top: 16px;">
-        <div class="status-bar">
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            <span class="status-text">Protection Active</span>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(16, 185, 129, 0.1);">🟢</div>
+          <div>
+            <div class="card-title">Safe Wallet</div>
+            <div class="card-subtitle">Where tokens will be sent</div>
           </div>
-          <div class="status-detail">Monitoring all chains...</div>
+        </div>
+        <div class="input-group">
+          <input type="text" id="safeWallet" placeholder="0x... your safe wallet address">
         </div>
       </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(245, 158, 11, 0.1);">💰</div>
+          <div>
+            <div class="card-title">Sponsor Wallet</div>
+            <div class="card-subtitle">Wallet with ETH for gas</div>
+          </div>
+        </div>
+        <div class="input-group">
+          <input type="password" id="sponsorKey" placeholder="0x... private key (has gas)">
+        </div>
+      </div>
+
+      <!-- Chain Selection -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(139, 92, 246, 0.1);">🔗</div>
+          <div>
+            <div class="card-title">Select Chain</div>
+            <div class="card-subtitle">Choose the airdrop chain</div>
+          </div>
+        </div>
+        <div class="chain-grid" id="chainGrid">
+          <button class="chain-btn selected" data-chain="1">
+            <span class="chain-icon">⟠</span>
+            ETH
+          </button>
+          <button class="chain-btn" data-chain="8453">
+            <span class="chain-icon">🔵</span>
+            Base
+          </button>
+          <button class="chain-btn" data-chain="56">
+            <span class="chain-icon">🟡</span>
+            BSC
+          </button>
+          <button class="chain-btn" data-chain="42161">
+            <span class="chain-icon">🔷</span>
+            Arb
+          </button>
+          <button class="chain-btn" data-chain="137">
+            <span class="chain-icon">🟣</span>
+            Polygon
+          </button>
+          <button class="chain-btn" data-chain="10">
+            <span class="chain-icon">🔴</span>
+            OP
+          </button>
+          <button class="chain-btn" data-chain="43114">
+            <span class="chain-icon">🔺</span>
+            AVAX
+          </button>
+          <button class="chain-btn" data-chain="250">
+            <span class="chain-icon">👻</span>
+            FTM
+          </button>
+          <button class="chain-btn" data-chain="81457">
+            <span class="chain-icon">💥</span>
+            Blast
+          </button>
+          <button class="chain-btn" data-chain="324">
+            <span class="chain-icon">🔷</span>
+            zkSync
+          </button>
+          <button class="chain-btn" data-chain="59144">
+            <span class="chain-icon">🟢</span>
+            Linea
+          </button>
+          <button class="chain-btn" data-chain="25">
+            <span class="chain-icon">🔷</span>
+            Cronos
+          </button>
+        </div>
+      </div>
+
+      <!-- Fee Display -->
+      <div class="fee-display">
+        <div class="fee-row">
+          <span class="fee-label">Platform Fee</span>
+          <span class="fee-value purple">20%</span>
+        </div>
+        <div class="fee-divider"></div>
+        <div class="fee-row">
+          <span class="fee-label">You Receive</span>
+          <span class="fee-value green">80%</span>
+        </div>
+        <div class="fee-row">
+          <span class="fee-label">Fee Wallet</span>
+          <span class="fee-value" style="font-size: 10px; color: var(--text-dim);">0x7A37...2C2A</span>
+        </div>
+      </div>
+
+      <!-- Claim Button -->
+      <button class="btn btn-primary" id="claimBtn">
+        🎯 Claim Airdrop — 80% to Safe Wallet
+      </button>
+
+      <!-- Results -->
+      <div id="claimResults" style="margin-top: 12px;"></div>
     </div>
 
-    <!-- Airdrop Tab -->
-    <div id="airdrop-tab" class="tab-content hidden">
-      <div class="warning-box">
-        <h3>🎯 Safe Airdrop Claiming</h3>
-        <p>
-          Claim airdrops from your compromised wallet without exposing gas funds.
-          Tokens are sent directly to your safe wallet.
-        </p>
+    <!-- Transfer Tab -->
+    <div class="tab-content" id="tab-transfer">
+      <div class="info-box" style="margin-bottom: 12px;">
+        💡 Transfer tokens from compromised wallet to safe wallet using sponsor gas. Works on any chain!
       </div>
 
-      <div class="input-group">
-        <label>Airdrop Contract Address</label>
-        <input type="text" id="airdrop-contract" placeholder="0x...">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(59, 130, 246, 0.1);">📥</div>
+          <div>
+            <div class="card-title">Transfer Tokens</div>
+            <div class="card-subtitle">Move tokens to safe wallet</div>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span class="dot dot-purple"></span>
+            Token Address
+          </div>
+          <input type="text" id="tokenAddress" placeholder="0x... token contract (or ETH)">
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span class="dot dot-green"></span>
+            Amount
+          </div>
+          <input type="text" id="transferAmount" placeholder="Amount to transfer (or 'all')">
+        </div>
+
+        <button class="btn btn-purple" id="transferBtn">
+          💸 Transfer to Safe Wallet
+        </button>
       </div>
 
-      <div class="input-group">
-        <label>Chain</label>
-        <select id="airdrop-chain">
-          <option value="1">Ethereum</option>
-          <option value="8453">Base</option>
-          <option value="56">BNB Chain</option>
-          <option value="42161">Arbitrum</option>
-          <option value="137">Polygon</option>
-          <option value="10">Optimism</option>
-        </select>
-      </div>
-
-      <div class="input-group">
-        <label>Recipient (Safe Wallet)</label>
-        <input type="text" id="airdrop-recipient" placeholder="0x... safe wallet">
-      </div>
-
-      <button class="btn btn-primary" id="claim-btn">🎯 Claim with Gas Sponsor</button>
-
-      <div id="claim-result" class="hidden" style="margin-top: 12px;">
-        <div id="claim-alert" class="alert"></div>
-      </div>
+      <div id="transferResults" style="margin-top: 12px;"></div>
     </div>
 
-    <!-- Faucets Tab -->
-    <div id="faucets-tab" class="tab-content hidden">
-      <p style="font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 16px;">
-        Bridge ETH to L2s for gas. SweepGuard handles gas sponsorship for claims automatically.
-      </p>
+    <!-- NFT Tab -->
+    <div class="tab-content" id="tab-nft">
+      <div class="info-box" style="margin-bottom: 12px;">
+        🖼️ Claim NFTs from compromised wallet. No platform fee for NFTs!
+      </div>
 
-      <div class="faucet-link" href="https://bridge.base.org" target="_blank">
-        <span class="faucet-icon">🔵</span>
-        <div>
-          <div class="faucet-name">Base Bridge</div>
-          <div class="faucet-detail">Bridge ETH from Ethereum → Base</div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(245, 158, 11, 0.1);">🖼️</div>
+          <div>
+            <div class="card-title">NFT Claim</div>
+            <div class="card-subtitle">Claim NFTs — 0% fee!</div>
+          </div>
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span class="dot dot-yellow"></span>
+            NFT Contract
+          </div>
+          <input type="text" id="nftContract" placeholder="0x... NFT contract address">
+        </div>
+
+        <div class="input-group">
+          <div class="input-label">
+            <span class="dot dot-green"></span>
+            Recipient (Safe Wallet)
+          </div>
+          <input type="text" id="nftRecipient" placeholder="0x... where to send NFT">
+        </div>
+
+        <button class="btn btn-outline" id="nftBtn">
+          🖼️ Claim NFT to Safe Wallet
+        </button>
+      </div>
+
+      <div id="nftResults" style="margin-top: 12px;"></div>
+    </div>
+
+    <!-- Settings Tab -->
+    <div class="tab-content" id="tab-settings">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(139, 92, 246, 0.1);">⚙️</div>
+          <div>
+            <div class="card-title">Settings</div>
+            <div class="card-subtitle">Configure extension behavior</div>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Auto-detect claim pages</span>
+          <div class="toggle active" id="toggleDetect"></div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Stealth mode</span>
+          <div class="toggle active" id="toggleStealth"></div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Show notifications</span>
+          <div class="toggle active" id="toggleNotify"></div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Auto-claim when detected</span>
+          <div class="toggle" id="toggleAutoClaim"></div>
+        </div>
+
+        <div class="toggle-row">
+          <span class="toggle-label">Flashbots private mempool</span>
+          <div class="toggle active" id="toggleFlashbots"></div>
         </div>
       </div>
 
-      <div class="faucet-link" href="https://bridge.arbitrum.io" target="_blank">
-        <span class="faucet-icon">🔷</span>
-        <div>
-          <div class="faucet-name">Arbitrum Bridge</div>
-          <div class="faucet-detail">Bridge ETH from Ethereum → Arbitrum</div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(16, 185, 129, 0.1);">💾</div>
+          <div>
+            <div class="card-title">Save Wallets</div>
+            <div class="card-subtitle">Store wallet info locally</div>
+          </div>
         </div>
+
+        <button class="btn btn-outline" id="saveBtn" style="margin-bottom: 8px;">
+          💾 Save Configuration
+        </button>
+
+        <button class="btn btn-outline" id="clearBtn">
+          🗑️ Clear All Data
+        </button>
       </div>
 
-      <div class="faucet-link" href="https://portal.polygon.technology" target="_blank">
-        <span class="faucet-icon">🟣</span>
-        <div>
-          <div class="faucet-name">Polygon Portal</div>
-          <div class="faucet-detail">Bridge POL from Ethereum → Polygon</div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(59, 130, 246, 0.1);">ℹ️</div>
+          <div>
+            <div class="card-title">About</div>
+            <div class="card-subtitle">SweepGuard v2.0</div>
+          </div>
         </div>
-      </div>
-
-      <div class="faucet-link" href="https://app.optimism.io/bridge" target="_blank">
-        <span class="faucet-icon">🔴</span>
-        <div>
-          <div class="faucet-name">Optimism Bridge</div>
-          <div class="faucet-detail">Bridge ETH from Ethereum → Optimism</div>
-        </div>
-      </div>
-
-      <div class="faucet-link" href="https://stargate.finance" target="_blank">
-        <span class="faucet-icon">⭐</span>
-        <div>
-          <div class="faucet-name">Stargate</div>
-          <div class="faucet-detail">Cross-chain bridge (any L2)</div>
-        </div>
-      </div>
-
-      <div class="faucet-link" href="https://www.bnbchain.org/en/bridge" target="_blank">
-        <span class="faucet-icon">🟡</span>
-        <div>
-          <div class="faucet-name">BNB Chain Bridge</div>
-          <div class="faucet-detail">Bridge BNB from Ethereum → BSC</div>
+        <div style="font-size: 11px; color: var(--text-dim); line-height: 1.6;">
+          <p>🛡️ SweepGuard — Wallet Protector</p>
+          <p>Claim airdrops from compromised wallets safely.</p>
+          <p style="margin-top: 8px;">• 80% to your safe wallet</p>
+          <p>• 20% platform fee</p>
+          <p>• Flashbots atomic bundles</p>
+          <p>• 15 chains supported</p>
+          <p style="margin-top: 8px; color: var(--accent);">sweeptsguard.vercel.app</p>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="footer">
-    SweepGuard v1.0 — Open Source Wallet Protection
-  </div>
-
-  <script src="js/popup.js"></script>
+  <script src="popup.js"></script>
 </body>
 </html>
