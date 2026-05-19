@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -23,7 +23,7 @@ interface ScanResult {
   chains: number[]
 }
 
-export default function ScanPage() {
+function ScanContent() {
   const searchParams = useSearchParams()
   const addressParam = searchParams.get('address')
 
@@ -200,5 +200,23 @@ export default function ScanPage() {
         )}
       </div>
     </main>
+  )
+}
+
+export default function ScanPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">
+        <div className="inline-flex items-center gap-3">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Loading...
+        </div>
+      </div>
+    }>
+      <ScanContent />
+    </Suspense>
   )
 }
