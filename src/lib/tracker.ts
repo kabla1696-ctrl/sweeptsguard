@@ -39,8 +39,16 @@ export class TransactionTracker {
     }
   }
 
+  // Timeout wrapper
+  private async withTimeout<T>(promise: Promise<T>, ms: number = 8000): Promise<T> {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
+    ])
+  }
+
   // Track all outgoing transfers from an address
-  async trackOutflows(address: string, chainId: number, fromBlock: number = -1000): Promise<TrackedTransfer[]> {
+  async trackOutflows(address: string, chainId: number, fromBlock: number = -500): Promise<TrackedTransfer[]> {
     const provider = this.providers.get(chainId)
     const chain = CHAINS[chainId]
     if (!provider || !chain) return []
@@ -48,23 +56,53 @@ export class TransactionTracker {
     const transfers: TrackedTransfer[] = []
 
     try {
-      // Track native transfers (ETH)
-      const nativeFilter = {
-        fromBlock,
-        toBlock: 'latest',
-        topics: [
-          ethers.id('Transfer(address,address,uint256)'),
-          ethers.zeroPadValue(address, 32)
-        ]
+      // Get current block with timeout
+      const latestBlock = await this.withTimeout(provider.getBlockNumber(), 8000).catch(() => 0)
+      if (!latestBlock) return []
+
+      const startBlock = Math.max(0, latestBlock + fromBlock)
+
+      // Track native transfers (ETH) + ERC-20 transfers in one batch
+      const [nativeLogs, erc20Logs] = await Promise.all([
+        this.withTimeout(provider.getLogs({
+          fromBlock: startBlock,
+          toBlock: latestBlock,
+          topics: [
+            ethers.id('Transfer(address,address,uint256)'),
+            ethers.zeroPadValue(address, 32)
+          ]
+        }), 10000).catch(() => []),
+        this.withTimeout(provider.getLogs({
+          fromBlock: startBlock,
+          toBlock: latestBlock,
+          topics: [
+            ethers.id('Transfer(address,address,uint256)'),
+            null,
+            ethers.zeroPadValue(address, 32)
+          ]
+        }), 10000).catch(() => [])
+      ])
+
+      // Batch fetch block timestamps (max 20 unique blocks)
+      const uniqueBlocks = new Set<number>()
+      for (const log of [...nativeLogs, ...erc20Logs]) {
+        uniqueBlocks.add(log.blockNumber)
       }
+      const blockNumbers = [...uniqueBlocks].slice(0, 20)
+      const blockTimestamps = new Map<number, number>()
+      await Promise.all(
+        blockNumbers.map(async (bn) => {
+          try {
+            const block = await this.withTimeout(provider.getBlock(bn), 5000)
+            if (block) blockTimestamps.set(bn, block.timestamp * 1000)
+          } catch {}
+        })
+      )
 
-      const logs = await provider.getLogs(nativeFilter).catch(() => [])
-
-      for (const log of logs) {
+      // Process native outflows
+      for (const log of nativeLogs) {
         const to = '0x' + log.topics[2].slice(26)
         const value = BigInt(log.data)
-        const block = await provider.getBlock(log.blockNumber)
-
         const exchangeInfo = isExchangeWallet(to)
         const drainerInfo = isKnownDrainer(to)
 
@@ -76,7 +114,7 @@ export class TransactionTracker {
           asset: chain.nativeCurrency,
           chainId,
           chainName: chain.name,
-          timestamp: block ? block.timestamp * 1000 : Date.now(),
+          timestamp: blockTimestamps.get(log.blockNumber) || Date.now(),
           isExchangeDeposit: !!exchangeInfo,
           exchangeName: exchangeInfo?.name,
           isDrainerTransfer: !!drainerInfo,
@@ -85,34 +123,28 @@ export class TransactionTracker {
         })
       }
 
-      // Track ERC-20 transfers
-      const erc20Filter = {
-        fromBlock,
-        toBlock: 'latest',
-        topics: [
-          ethers.id('Transfer(address,address,uint256)'),
-          ethers.zeroPadValue(address, 32)
-        ]
-      }
-
-      const erc20Logs = await provider.getLogs(erc20Filter).catch(() => [])
-
-      for (const log of erc20Logs) {
+      // Process ERC-20 inflows (max 30 logs)
+      const erc20Batch = erc20Logs.slice(0, 30)
+      for (const log of erc20Batch) {
+        const from = '0x' + log.topics[1].slice(26)
         const to = '0x' + log.topics[2].slice(26)
         const value = BigInt(log.data)
-        const block = await provider.getBlock(log.blockNumber)
 
-        // Get token info
-        const tokenContract = new ethers.Contract(log.address, [
-          'function symbol() view returns (string)',
-          'function decimals() view returns (uint8)'
-        ], provider)
+        // Skip if this is not an outflow from address
+        if (from.toLowerCase() !== address.toLowerCase()) continue
 
         let symbol = 'UNKNOWN'
         let decimals = 18
         try {
-          symbol = await tokenContract.symbol()
-          decimals = await tokenContract.decimals()
+          const iface = new ethers.Interface(['function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
+          const symbolData = iface.encodeFunctionData('symbol')
+          const decimalsData = iface.encodeFunctionData('decimals')
+          const [symbolResult, decimalsResult] = await Promise.all([
+            this.withTimeout(provider.call({ to: log.address, data: symbolData }), 3000).catch(() => '0x'),
+            this.withTimeout(provider.call({ to: log.address, data: decimalsData }), 3000).catch(() => '0x')
+          ])
+          try { symbol = iface.decodeFunctionResult('symbol', symbolResult)[0] as string } catch {}
+          try { decimals = Number(iface.decodeFunctionResult('decimals', decimalsResult)[0]) } catch {}
         } catch {}
 
         const exchangeInfo = isExchangeWallet(to)
@@ -120,13 +152,13 @@ export class TransactionTracker {
 
         transfers.push({
           hash: log.transactionHash,
-          from: address,
+          from,
           to,
           value: ethers.formatUnits(value, decimals),
           asset: symbol,
           chainId,
           chainName: chain.name,
-          timestamp: block ? block.timestamp * 1000 : Date.now(),
+          timestamp: blockTimestamps.get(log.blockNumber) || Date.now(),
           isExchangeDeposit: !!exchangeInfo,
           exchangeName: exchangeInfo?.name,
           isDrainerTransfer: !!drainerInfo,
@@ -138,19 +170,23 @@ export class TransactionTracker {
       // Skip errors
     }
 
-    // Sort by timestamp descending
-    return transfers.sort((a, b) => b.timestamp - a.timestamp)
+    return transfers
   }
 
   // Track funds across multiple chains
   async trackAllChains(address: string, chainIds: number[] = [1, 8453, 56]): Promise<TrackedTransfer[]> {
     const allTransfers: TrackedTransfer[] = []
 
-    const promises = chainIds.map(chainId =>
-      this.trackOutflows(address, chainId)
+    // Parallel scan with 45s overall timeout
+    const scanPromise = Promise.all(
+      chainIds.map(chainId => this.trackOutflows(address, chainId))
     )
 
-    const results = await Promise.all(promises)
+    const results = await Promise.race([
+      scanPromise,
+      new Promise<TrackedTransfer[][]>((resolve) => setTimeout(() => resolve([]), 45000))
+    ])
+
     results.forEach(transfers => allTransfers.push(...transfers))
 
     return allTransfers.sort((a, b) => b.timestamp - a.timestamp)
