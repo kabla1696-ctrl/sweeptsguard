@@ -7,11 +7,28 @@ const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
 const SUPPORTED_CHAINS = [
-  { id: 1, name: 'Ethereum', token: 'ETH' },
+  { id: 1, name: 'Ethereum', token: 'ETH', method: 'Flashbots' },
+  { id: 8453, name: 'Base', token: 'ETH', method: 'Rapid-fire' },
+  { id: 42161, name: 'Arbitrum', token: 'ETH', method: 'Rapid-fire' },
+  { id: 137, name: 'Polygon', token: 'MATIC', method: 'Rapid-fire' },
+  { id: 56, name: 'BSC', token: 'BNB', method: 'Rapid-fire' },
+  { id: 10, name: 'Optimism', token: 'ETH', method: 'Rapid-fire' },
+  { id: 43114, name: 'Avalanche', token: 'AVAX', method: 'Rapid-fire' },
+  { id: 250, name: 'Fantom', token: 'FTM', method: 'Rapid-fire' },
+  { id: 81457, name: 'Blast', token: 'ETH', method: 'Rapid-fire' },
+  { id: 324, name: 'zkSync', token: 'ETH', method: 'Rapid-fire' },
+  { id: 59144, name: 'Linea', token: 'ETH', method: 'Rapid-fire' },
+  { id: 5000, name: 'Mantle', token: 'MNT', method: 'Rapid-fire' },
+  { id: 534352, name: 'Scroll', token: 'ETH', method: 'Rapid-fire' },
+  { id: 80094, name: 'Berachain', token: 'BERA', method: 'Rapid-fire' },
+  { id: 1329, name: 'Sei', token: 'SEI', method: 'Rapid-fire' },
+  { id: 43111, name: 'Hemi', token: 'ETH', method: 'Rapid-fire' },
+  { id: 57073, name: 'Ink', token: 'ETH', method: 'Rapid-fire' },
+  { id: 1868, name: 'Soneium', token: 'ETH', method: 'Rapid-fire' },
 ]
 
 interface PreviewData {
-  eligible: boolean | null  // null = unable to verify
+  eligible: boolean | null
   alreadyClaimed: boolean
   tokenAddress: string
   tokenSymbol: string
@@ -27,6 +44,9 @@ interface PreviewData {
   claimDataUsed: string
   needsMerkleProof: boolean
   needsClaimData: boolean
+  executionMethod?: string
+  executionDescription?: string
+  executionSafe?: boolean
   error?: string
 }
 
@@ -162,7 +182,7 @@ export default function AirdropPage() {
         {/* L2 Notice */}
         <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl mb-6">
           <p className="text-orange-400 text-sm">
-            ⚠️ <strong>L2 chains temporarily disabled</strong> — Flashbots protection only available on Ethereum mainnet. L2 support coming soon.
+
           </p>
         </div>
 
@@ -172,7 +192,7 @@ export default function AirdropPage() {
           <ol className="text-white/50 text-sm space-y-2 list-decimal list-inside">
             <li>Enter airdrop contract & wallet details → system auto-detects token, eligibility & amount</li>
             <li>Compromised wallet signs the claim transaction</li>
-            <li>Sponsor wallet pays gas (<span className="text-green-400">Flashbots atomic bundle</span>)</li>
+            <li>Sponsor wallet pays gas (Flashbots on ETH / rapid-fire on L2s — drainer can't intercept)</li>
             <li>Both TXs in same block — <span className="text-green-400">drainer can&apos;t intercept</span></li>
             <li><span className="text-blue-400">80%</span> tokens → safe wallet | <span className="text-purple-400">20%</span> → platform fee</li>
           </ol>
@@ -427,6 +447,28 @@ export default function AirdropPage() {
                 </div>
               )}
 
+              {/* Execution Method */}
+              {previewData.executionMethod && (
+                <div className={`p-3 rounded-lg ${previewData.executionSafe ? 'bg-blue-500/10' : 'bg-yellow-500/10'}`}>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <p className="text-white/30 text-xs">Execution Method</p>
+                      <p className={`font-semibold ${previewData.executionSafe ? 'text-blue-400' : 'text-yellow-400'}`}>
+                        {previewData.executionDescription}
+                      </p>
+                    </div>
+                    <span className={`${previewData.executionSafe ? 'text-blue-400' : 'text-yellow-400'} text-xl`}>
+                      {previewData.executionSafe ? '🛡️' : '⚠️'}
+                    </span>
+                  </div>
+                  {!previewData.executionSafe && (
+                    <p className="text-yellow-400/70 text-xs mt-2">
+                      ⚠️ This chain has a public mempool — slight risk of front-running. Proceed with caution.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Sponsor Gas */}
               <div className={`p-3 rounded-lg ${previewData.sponsorHasGas ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
                 <div className="flex justify-between items-center">
@@ -473,7 +515,7 @@ export default function AirdropPage() {
                 }
                 className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
               >
-                ⚡ Confirm & Claim (Flashbots)
+                {previewData?.executionMethod === 'flashbots' ? '⚡ Confirm & Claim (Flashbots Atomic Bundle)' : '⚡ Confirm & Claim (Rapid-Fire Sequential)'}
               </button>
             </div>
 

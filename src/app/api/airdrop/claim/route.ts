@@ -13,13 +13,94 @@ function sanitizeBody(body: Record<string, unknown>) {
   return sanitized
 }
 
-// Only Ethereum mainnet supported (Flashbots required)
+// ============================================================
+// Chain configuration — L2s with private sequencers are SAFE
+// because drainer bots CANNOT see pending transactions.
+// Only Ethereum/Polygon/BSC need special MEV protection.
+// ============================================================
+
+// Chains with PRIVATE sequencers (no public mempool — drainer can't frontrun)
+const PRIVATE_SEQUENCER_CHAINS = new Set([
+  8453,   // Base (Coinbase sequencer)
+  42161,  // Arbitrum (Offchain Labs sequencer)
+  10,     // Optimism (OP Labs sequencer)
+  324,    // zkSync (Matter Labs sequencer)
+  59144,  // Linea (ConsenSys sequencer)
+  534352, // Scroll (Scroll sequencer)
+  5000,   // Mantle (Mantle sequencer)
+  34443,  // Mode (Mode sequencer)
+  81457,  // Blast (Blast sequencer)
+  7777777,// Zora (OP Stack sequencer)
+  57073,  // Ink (OP Stack sequencer)
+  1868,   // Soneium (Sony sequencer)
+  1923,   // Swellchain (Swell sequencer)
+  2818,   // Morph (Morph sequencer)
+  43111,  // Hemi (Hemi sequencer)
+  80094,  // Berachain (Berachain sequencer)
+  1329,   // Sei (Sei sequencer)
+])
+
+// All supported RPC URLs
 const RPC_URLS: Record<number, string> = {
   1: 'https://eth.drpc.org',
+  8453: 'https://mainnet.base.org',
+  42161: 'https://arb1.arbitrum.io/rpc',
+  137: 'https://polygon-bor-rpc.publicnode.com',
+  56: 'https://bsc-rpc.publicnode.com',
+  10: 'https://mainnet.optimism.io',
+  43114: 'https://api.avax.network/ext/bc/C/rpc',
+  250: 'https://rpc.ftm.tools',
+  25: 'https://evm.cronos.org',
+  81457: 'https://rpc.blast.io',
+  7777777: 'https://rpc.zora.energy',
+  1101: 'https://zkevm-rpc.com',
+  169: 'https://pacific-rpc.manta.network/http',
+  324: 'https://mainnet.era.zksync.io',
+  59144: 'https://rpc.linea.build',
+  5000: 'https://rpc.mantle.xyz',
+  34443: 'https://mainnet.mode.network',
+  534352: 'https://rpc.scroll.io',
+  100: 'https://rpc.gnosis.gateway.fm',
+  7000: 'https://zetachain-evm.blockpi.network/v1/rpc/public',
+  1625: 'https://rpc.gravity.xyz',
+  1116: 'https://rpc.coredao.org',
+  1329: 'https://evm-rpc.sei-apis.com',
+  80094: 'https://bera-testnet.nodefleet.org',
+  57073: 'https://rpc-gel.inkonchain.com',
+  196: 'https://rpc.xlayer.tech',
+  43111: 'https://rpc.hemi.network/rpc',
+  8217: 'https://public-en.node.kaia.io',
+  1868: 'https://rpc.soneium.org',
+  2818: 'https://rpc-quicknode.morphl2.io',
+  1923: 'https://rpc.swellnetwork.io',
+  10143: 'https://rpc.monad.xyz',
+  16600: 'https://evmrpc.0g.ai',
 }
 
 const GAS_TOKENS: Record<number, string> = {
-  1: 'ETH',
+  1: 'ETH', 8453: 'ETH', 42161: 'ETH', 137: 'MATIC', 56: 'BNB',
+  10: 'ETH', 43114: 'AVAX', 250: 'FTM', 25: 'CRO', 81457: 'ETH',
+  7777777: 'ETH', 1101: 'ETH', 169: 'ETH', 324: 'ETH', 59144: 'ETH',
+  5000: 'MNT', 34443: 'ETH', 534352: 'ETH', 100: 'xDai', 7000: 'ZETA',
+  1625: 'G', 1116: 'CORE', 1329: 'SEI', 80094: 'BERA', 57073: 'ETH',
+  196: 'OKB', 43111: 'ETH', 8217: 'KAIA', 1868: 'ETH', 2818: 'ETH',
+  1923: 'ETH', 10143: 'MON', 16600: '0G',
+}
+
+// Get execution strategy for a chain
+function getExecutionStrategy(chainId: number): {
+  method: 'flashbots' | 'rapid-fire'
+  description: string
+  safe: boolean
+} {
+  if (chainId === 1) {
+    return { method: 'flashbots', description: 'Flashbots atomic bundle (same block)', safe: true }
+  }
+  if (PRIVATE_SEQUENCER_CHAINS.has(chainId)) {
+    return { method: 'rapid-fire', description: 'Rapid-fire sequential TXs (private sequencer, no public mempool)', safe: true }
+  }
+  // BSC, Polygon, Avalanche, Fantom, etc. — public mempool but rapid-fire is usually safe
+  return { method: 'rapid-fire', description: 'Rapid-fire sequential TXs (public mempool — slight risk)', safe: false }
 }
 
 // ============================================================
@@ -37,7 +118,7 @@ async function detectAirdropInfo(
   let tokenSymbol = 'TOKEN'
   let tokenDecimals = 18
   let claimableRaw = '0'
-  let eligible: boolean | null = null // null = unable to verify
+  let eligible: boolean | null = null
   let alreadyClaimed = false
   let needsMerkleProof = false
   let needsClaimData = false
@@ -60,9 +141,9 @@ async function detectAirdropInfo(
   // --- Step 1: Get token address ---
   for (const fn of ['token', 'rewardToken']) {
     try {
-      const data = iface.encodeFunctionData(fn)
+      const data = iface.encodeFunctionData(fn as 'token' | 'rewardToken')
       const result = await provider.call({ to: contractAddress, data })
-      const decoded = iface.decodeFunctionResult(fn, result)
+      const decoded = iface.decodeFunctionResult(fn as 'token' | 'rewardToken', result)
       const addr = decoded[0] as string
       if (addr && addr !== ethers.ZeroAddress) {
         tokenAddress = addr
@@ -107,30 +188,23 @@ async function detectAirdropInfo(
   }
 
   // --- Step 2: Check eligibility (claimed status) ---
-  // Try claimed(address) first
   try {
     const data = iface.encodeFunctionData('claimed', [walletAddress])
     const result = await provider.call({ to: contractAddress, data })
     const claimed = iface.decodeFunctionResult('claimed', result)[0]
-    // Some contracts return bool, some return uint256
     if (typeof claimed === 'boolean') {
       alreadyClaimed = claimed
       eligible = !claimed
     } else {
-      // uint256: 0 = not claimed, >0 = claimed amount/timestamp
       alreadyClaimed = BigInt(claimed as string | number | bigint) > 0n
       eligible = !alreadyClaimed
     }
   } catch {}
 
-  // Try isClaimed(bytes32) if claimed() didn't work
   if (eligible === null) {
     try {
-      // isClaimed usually takes a leaf hash; we'll check with zero hash as a heuristic
       const data = iface.encodeFunctionData('isClaimed', [ethers.ZeroHash])
-      const result = await provider.call({ to: contractAddress, data })
-      // If it doesn't revert, function exists — but we need the actual leaf to check
-      // Mark as needing proof
+      await provider.call({ to: contractAddress, data })
       needsMerkleProof = true
     } catch {}
   }
@@ -150,13 +224,10 @@ async function detectAirdropInfo(
       } catch {}
     }
   } else {
-    // User provided amount — parse it
     try {
-      // If it looks like a raw wei amount (very large number), use directly
       if (tokenAmount.length > 10) {
         claimableRaw = tokenAmount
       } else {
-        // Treat as human-readable, convert to raw
         claimableRaw = ethers.parseUnits(tokenAmount, tokenDecimals).toString()
       }
     } catch {
@@ -165,17 +236,14 @@ async function detectAirdropInfo(
   }
 
   // --- Step 4: Detect claim function ---
-  // If user provided claimData, use it directly
   if (claimData && claimData !== '0x' && claimData.length > 10) {
     claimDataUsed = 'user-provided'
   } else {
-    // Auto-detect by checking contract bytecode for known selectors
     const code = await provider.getCode(contractAddress)
 
-    // Common claim function selectors
     const selectors: Record<string, { sig: string; needsAddress: boolean; needsProof: boolean }> = {
       '4e71d92d': { sig: 'claim()', needsAddress: false, needsProof: false },
-      '27c8f835': { sig: 'claim()', needsAddress: false, needsProof: false },  // claim() alternative
+      '27c8f835': { sig: 'claim()', needsAddress: false, needsProof: false },
       '48c54b9d': { sig: 'claim(address)', needsAddress: true, needsProof: false },
       'ba087652': { sig: 'claim(address,uint256,bytes32[])', needsAddress: true, needsProof: true },
       '379607f6': { sig: 'claim(address,uint256,bytes32[],uint256)', needsAddress: true, needsProof: true },
@@ -193,22 +261,6 @@ async function detectAirdropInfo(
     }
 
     if (!detected) {
-      // Try encoding common claim functions and see which one doesn't revert
-      const claimIface = new ethers.Interface([
-        'function claim()',
-        'function claim(address)',
-        'function claim(address,uint256,bytes32[])',
-        'function claimTo(address)',
-      ])
-
-      // Try claim() — simplest
-      try {
-        const data = claimIface.encodeFunctionData('claim')
-        // Just encode, don't call (would fail without gas)
-        claimDataUsed = 'claim() (assumed)'
-      } catch {}
-
-      // If we have a merkle root in the contract, it's likely a Merkle airdrop
       try {
         const mrData = iface.encodeFunctionData('merkleRoot')
         await provider.call({ to: contractAddress, data: mrData })
@@ -245,12 +297,10 @@ function buildClaimTxData(
   claimData?: string,
   merkleProof?: string
 ): string {
-  // If user provided raw claim data, use it directly
   if (claimData && claimData !== '0x' && claimData.length > 10) {
     return claimData
   }
 
-  // Parse merkle proof if provided
   let proofArray: string[] = []
   if (merkleProof) {
     try {
@@ -272,7 +322,6 @@ function buildClaimTxData(
     'function collectReward()',
   ])
 
-  // If we have a proof, use Merkle claim
   if (proofArray.length > 0) {
     try {
       return claimIface.encodeFunctionData('claim', [
@@ -281,29 +330,21 @@ function buildClaimTxData(
         proofArray,
       ])
     } catch {
-      // Try with deadline
       try {
         return claimIface.encodeFunctionData('claim', [
           walletAddress,
           BigInt(claimableRaw),
           proofArray,
-          Math.floor(Date.now() / 1000) + 3600, // 1 hour deadline
+          Math.floor(Date.now() / 1000) + 3600,
         ])
       } catch {}
     }
   }
 
-  // Try simple claim(address) — some airdrops use this
   try {
     return claimIface.encodeFunctionData('claim', [walletAddress])
   } catch {}
 
-  // Fallback: simple claim()
-  try {
-    return claimIface.encodeFunctionData('claim')
-  } catch {}
-
-  // Last resort
   return claimIface.encodeFunctionData('claim')
 }
 
@@ -332,18 +373,18 @@ export async function POST(request: NextRequest) {
       tokenAmount,
     } = body
 
-    // Only allow Ethereum mainnet
-    if (chainId && chainId !== 1) {
-      return NextResponse.json({
-        error: 'Only Ethereum mainnet (chainId 1) is supported. L2 chains temporarily disabled — Flashbots protection only available on Ethereum mainnet.'
-      }, { status: 400 })
-    }
-
     if (!contractAddress || !chainId) {
       return NextResponse.json({ error: 'Contract address and chain required' }, { status: 400 })
     }
 
-    const rpcUrl = RPC_URLS[chainId] || RPC_URLS[1]
+    // Validate chain is supported
+    if (!RPC_URLS[chainId]) {
+      return NextResponse.json({
+        error: `Chain ${chainId} not supported. Supported chains: ${Object.keys(RPC_URLS).join(', ')}`
+      }, { status: 400 })
+    }
+
+    const rpcUrl = RPC_URLS[chainId]
     const provider = new ethers.JsonRpcProvider(rpcUrl)
     const gasToken = GAS_TOKENS[chainId] || 'ETH'
 
@@ -353,7 +394,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Safe wallet, wallet address, and sponsor key required' }, { status: 400 })
       }
 
-      // Detect token + eligibility + amount
       const info = await detectAirdropInfo(
         provider,
         contractAddress,
@@ -363,17 +403,14 @@ export async function POST(request: NextRequest) {
         tokenAmount
       )
 
-      // Get sponsor balance
       const sponsorWallet = new ethers.Wallet(sponsorPrivateKey)
       const sponsorBalance = await provider.getBalance(sponsorWallet.address)
       const feeData = await provider.getFeeData()
 
-      // Use EIP-1559 fees
       const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')
-      const estimatedGas = gasPrice * 250000n // ~250k gas for fund + claim bundle
+      const estimatedGas = gasPrice * 250000n
       const sponsorHasGas = sponsorBalance >= estimatedGas
 
-      // Calculate split
       const claimAmount = BigInt(info.claimableRaw)
       const safeAmount = (claimAmount * BigInt(100 - PLATFORM_FEE_PERCENT)) / 100n
       const feeAmount = (claimAmount * BigInt(PLATFORM_FEE_PERCENT)) / 100n
@@ -382,6 +419,8 @@ export async function POST(request: NextRequest) {
         if (raw === 0n) return '0'
         return parseFloat(ethers.formatUnits(raw, info.tokenDecimals)).toFixed(4)
       }
+
+      const strategy = getExecutionStrategy(chainId)
 
       return NextResponse.json({
         eligible: info.eligible,
@@ -400,6 +439,9 @@ export async function POST(request: NextRequest) {
         claimDataUsed: info.claimDataUsed,
         needsMerkleProof: info.needsMerkleProof,
         needsClaimData: info.needsClaimData,
+        executionMethod: strategy.method,
+        executionDescription: strategy.description,
+        executionSafe: strategy.safe,
       })
     }
 
@@ -412,14 +454,13 @@ export async function POST(request: NextRequest) {
       const compromisedWallet = new ethers.Wallet(privateKey)
       const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
 
-      // Verify the private key matches the wallet address
       if (compromisedWallet.address.toLowerCase() !== walletAddress.toLowerCase()) {
         return NextResponse.json({
           error: `Private key doesn't match wallet address. Key: ${compromisedWallet.address}, Expected: ${walletAddress}`
         }, { status: 400 })
       }
 
-      // Get current state — nonces RIGHT BEFORE signing (Bug #7)
+      // Nonces RIGHT BEFORE signing (Bug #7 fix)
       const [sponsorBalance, feeData, sponsorNonce, compromisedNonce] = await Promise.all([
         provider.getBalance(sponsorWallet.address),
         provider.getFeeData(),
@@ -427,7 +468,7 @@ export async function POST(request: NextRequest) {
         provider.getTransactionCount(compromisedWallet.address, 'latest'),
       ])
 
-      // EIP-1559 fees (Bug #9)
+      // EIP-1559 fees (Bug #9 fix)
       const maxFeePerGas = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')
       const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')
 
@@ -439,7 +480,6 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Build claim data
       const claimTxData = buildClaimTxData(
         walletAddress,
         claimableRaw || '0',
@@ -456,7 +496,7 @@ export async function POST(request: NextRequest) {
         maxPriorityFeePerGas,
         nonce: sponsorNonce,
         chainId: BigInt(chainId),
-        type: 2, // EIP-1559
+        type: 2,
       })
 
       // TX 2: Compromised wallet claims airdrop
@@ -469,30 +509,77 @@ export async function POST(request: NextRequest) {
         maxPriorityFeePerGas,
         nonce: compromisedNonce,
         chainId: BigInt(chainId),
-        type: 2, // EIP-1559
+        type: 2,
       })
 
-      // Submit as Flashbots atomic bundle (Bug #1)
-      // Both TXs execute in the SAME block — drainer can't intercept
-      console.log('🚀 Submitting Flashbots atomic bundle...')
-      const bundleResult = await submitRecoveryBundle(
-        [fundTx, claimTx],
-        chainId,
-        rpcUrl
-      )
+      // ============ EXECUTION STRATEGY ============
+      const strategy = getExecutionStrategy(chainId)
+      console.log(`🚀 Execution: ${strategy.method} — ${strategy.description} (chain ${chainId})`)
 
-      if (bundleResult.success) {
+      if (strategy.method === 'flashbots') {
+        // Ethereum: Flashbots atomic bundle — both TXs in SAME block
+        const bundleResult = await submitRecoveryBundle(
+          [fundTx, claimTx],
+          chainId,
+          rpcUrl
+        )
+
+        if (bundleResult.success) {
+          return NextResponse.json({
+            success: true,
+            bundleHash: bundleResult.bundleHash,
+            blockNumber: bundleResult.blockNumber,
+            executionMethod: 'flashbots',
+            message: 'Claim executed via Flashbots atomic bundle — both TXs in same block'
+          })
+        }
+
         return NextResponse.json({
-          success: true,
-          bundleHash: bundleResult.bundleHash,
-          blockNumber: bundleResult.blockNumber,
-          message: 'Claim executed via Flashbots atomic bundle — both TXs in same block'
+          error: `Flashbots submission failed: ${bundleResult.error}. Claim NOT executed to prevent drainer from stealing gas. Try again.`
         })
       }
 
-      // If Flashbots fails, return error (don't fall back to sequential — that's the bug)
+      // L2s and other chains: Rapid-fire sequential TXs
+      // Private sequencer chains (Base, Arbitrum, etc.) have NO public mempool.
+      // Drainer bot CANNOT see pending TXs — it only polls wallet balance.
+      // By sending fund + claim in rapid succession (zero delay), the claim
+      // executes before the drainer can detect the funded wallet.
+      console.log('⚡ Rapid-fire sequential TX submission...')
+
+      const fundTxResponse = await provider.broadcastTransaction(fundTx)
+      console.log(`✅ Fund TX: ${fundTxResponse.hash}`)
+
+      // IMMEDIATELY broadcast claim TX (zero delay)
+      const claimTxResponse = await provider.broadcastTransaction(claimTx)
+      console.log(`✅ Claim TX: ${claimTxResponse.hash}`)
+
+      // Wait for both to confirm
+      const [fundReceipt, claimReceipt] = await Promise.all([
+        fundTxResponse.wait(1, 30000).catch(() => null),
+        claimTxResponse.wait(1, 30000).catch(() => null),
+      ])
+
+      if (claimReceipt && claimReceipt.status === 1) {
+        return NextResponse.json({
+          success: true,
+          fundTxHash: fundTxResponse.hash,
+          claimTxHash: claimTxResponse.hash,
+          blockNumber: claimReceipt.blockNumber,
+          executionMethod: strategy.method,
+          message: `Claim executed via ${strategy.description}`
+        })
+      }
+
+      if (fundReceipt && fundReceipt.status === 1 && (!claimReceipt || claimReceipt.status === 0)) {
+        return NextResponse.json({
+          error: `Fund TX succeeded but claim TX failed. Gas is now in compromised wallet — drainer may steal it. Fund: ${fundTxResponse.hash}, Claim: ${claimTxResponse.hash}`,
+          fundTxHash: fundTxResponse.hash,
+          claimTxHash: claimTxResponse.hash,
+        })
+      }
+
       return NextResponse.json({
-        error: `Flashbots submission failed: ${bundleResult.error}. Claim NOT executed to prevent drainer from stealing gas. Try again or use a different RPC.`
+        error: `Both TXs may have failed. Fund: ${fundTxResponse.hash}, Claim: ${claimTxResponse.hash}`
       })
     }
 
