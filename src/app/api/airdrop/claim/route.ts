@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { claimer } from '@/lib/claimer'
+import { claimer, PLATFORM_FEE_WALLET, PLATFORM_FEE_PERCENT } from '@/lib/claimer'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey, mode, eligibleAddress } = body
+  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey, mode, eligibleAddress, tokenAddress, useFeeCollector } = body
 
   if (!contractAddress || !chainId || !privateKey) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -27,6 +27,26 @@ export async function POST(request: NextRequest) {
 
       // Use recipientAddress as the safe wallet if provided, otherwise eligibleAddress
       const safeWallet = recipientAddress || eligibleAddress
+
+      // If useFeeCollector is true, use FeeCollector contract (20% fee)
+      if (useFeeCollector && tokenAddress) {
+        const result = await claimer.claimWithFee(
+          contractAddress,
+          chainId,
+          claimData,
+          tokenAddress,
+          safeWallet,
+          privateKey
+        )
+        return NextResponse.json({ 
+          results: [result],
+          fee: {
+            wallet: PLATFORM_FEE_WALLET,
+            percent: PLATFORM_FEE_PERCENT,
+            note: '20% of claimed tokens sent to platform fee wallet'
+          }
+        })
+      }
 
       const result = await claimer.claimFromAnyWallet(
         contractAddress,
@@ -63,6 +83,26 @@ export async function POST(request: NextRequest) {
       default: {
         claimData = body.claimData || '0x'
       }
+    }
+
+    // If useFeeCollector is true, use FeeCollector contract
+    if (useFeeCollector && tokenAddress && recipientAddress) {
+      const result = await claimer.claimWithFee(
+        contractAddress,
+        chainId,
+        claimData,
+        tokenAddress,
+        recipientAddress,
+        privateKey
+      )
+      return NextResponse.json({ 
+        results: [result],
+        fee: {
+          wallet: PLATFORM_FEE_WALLET,
+          percent: PLATFORM_FEE_PERCENT,
+          note: '20% of claimed tokens sent to platform fee wallet'
+        }
+      })
     }
 
     // If sponsor private key provided, use gas sponsorship via Flashbots

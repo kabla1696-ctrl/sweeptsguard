@@ -3,6 +3,9 @@
 import { useState } from 'react'
 import Link from 'next/link'
 
+const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
+const PLATFORM_FEE_PERCENT = 20
+
 interface Faucet {
   chainId: number
   chainName: string
@@ -32,6 +35,7 @@ export default function AirdropPage() {
   const [results, setResults] = useState<ClaimResult[]>([])
   const [showKey, setShowKey] = useState(false)
   const [showSponsorKey, setShowSponsorKey] = useState(false)
+  const [useFeeCollector, setUseFeeCollector] = useState(true) // Default ON for platform fee
 
   const mainnetFaucets: Faucet[] = [
     { chainId: 8453, chainName: 'Base', token: 'ETH', sources: [{ name: 'Base Bridge', url: 'https://bridge.base.org', type: 'bridge', notes: 'Bridge ETH from Ethereum' }], amount: 'Variable', cooldown: 'No limit' },
@@ -79,7 +83,8 @@ export default function AirdropPage() {
           eligibleAddress: recipientAddress,  // compromised wallet
           recipientAddress: recipientAddress,  // where tokens go
           privateKey,  // your wallet with gas
-          mode: 'claimFromAnyWallet'
+          mode: 'claimFromAnyWallet',
+          useFeeCollector
         }
       } else if (claimMode === 'sponsor') {
         // Sponsor wallet mode
@@ -112,6 +117,15 @@ export default function AirdropPage() {
       const data = await res.json()
       if (data.results) {
         setResults(data.results)
+        if (data.fee) {
+          // Show fee info in results
+          setResults(prev => [...prev, {
+            success: true,
+            chainName: 'Platform Fee',
+            txHash: data.fee.wallet,
+            error: `${data.fee.percent}% fee sent to platform wallet`
+          }])
+        }
       } else if (data.error) {
         setResults([{ success: false, error: data.error, chainName: 'Unknown' }])
       }
@@ -260,6 +274,27 @@ export default function AirdropPage() {
                     : 'Tokens will be sent here'
                   }
                 </p>
+              </div>
+
+              {/* Fee Collector Toggle */}
+              <div className="p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useFeeCollector}
+                    onChange={(e) => setUseFeeCollector(e.target.checked)}
+                    className="w-5 h-5 rounded accent-purple-500"
+                  />
+                  <div>
+                    <span className="text-purple-400 font-medium">💰 Use Platform Fee Collector</span>
+                    <p className="text-white/40 text-xs mt-0.5">
+                      20% of claimed tokens go to platform wallet ({PLATFORM_FEE_WALLET.slice(0, 8)}...{PLATFORM_FEE_WALLET.slice(-6)})
+                    </p>
+                    <p className="text-white/30 text-xs">
+                      Trustless smart contract — atomic split in same transaction
+                    </p>
+                  </div>
+                </label>
               </div>
 
               {/* Private Key — label changes based on mode */}

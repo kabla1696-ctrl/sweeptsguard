@@ -18,12 +18,35 @@ export interface AirdropClaim {
   error?: string
 }
 
+// ============================================================
+// FEE COLLECTOR CONFIGURATION
+// Platform fee: 20% of claimed airdrops
+// Fee wallet: Abir's wallet
+// ============================================================
+
+export const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
+export const PLATFORM_FEE_PERCENT = 20 // 20%
+
+// Deployed FeeCollector contract addresses (deploy per chain)
+export const FEE_COLLECTOR_CONTRACTS: Record<number, string> = {
+  // TODO: Deploy FeeCollector.sol on each chain and add address here
+  // 1: '0x...', // Ethereum
+  // 8453: '0x...', // Base
+  // 56: '0x...', // BNB Chain
+  // 42161: '0x...', // Arbitrum
+  // 137: '0x...', // Polygon
+  // 10: '0x...', // Optimism
+}
+
 export interface ClaimResult {
   success: boolean
   txHash?: string
   error?: string
   chainName: string
   tokenSymbol: string
+  totalClaimed?: string
+  feeAmount?: string
+  userAmount?: string
 }
 
 // Common airdrop claim function signatures
@@ -279,6 +302,71 @@ export class AirdropClaimer {
         to: claimContract,
         data: claimData,
         gasLimit: 250000n,
+      })
+
+      return {
+        success: true,
+        txHash: tx.hash,
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Claim failed'
+      return {
+        success: false,
+        error: errorMessage,
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    }
+  }
+
+  // Claim airdrop with platform fee (20% to fee wallet)
+  // Uses FeeCollector contract for trustless atomic splitting
+  async claimWithFee(
+    claimContract: string,
+    chainId: number,
+    claimData: string,
+    tokenAddress: string,
+    userSafeWallet: string,
+    fromPrivateKey: string
+  ): Promise<ClaimResult> {
+    const provider = this.providers.get(chainId)
+    const chain = CHAINS[chainId]
+
+    if (!provider || !chain) {
+      return { success: false, error: 'Chain not supported', chainName: 'Unknown', tokenSymbol: 'Unknown' }
+    }
+
+    const feeCollectorAddress = FEE_COLLECTOR_CONTRACTS[chainId]
+    if (!feeCollectorAddress) {
+      return {
+        success: false,
+        error: `FeeCollector not deployed on ${chain.name}. Deploy FeeCollector.sol first.`,
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    }
+
+    try {
+      const fromWallet = new ethers.Wallet(fromPrivateKey, provider)
+
+      // Encode claimAndSplit call
+      const feeCollectorIface = new ethers.Interface([
+        'function claimAndSplit(address token, bytes calldata claimData, address claimContract, address userWallet)'
+      ])
+
+      const splitData = feeCollectorIface.encodeFunctionData('claimAndSplit', [
+        tokenAddress,
+        claimData,
+        claimContract,
+        userSafeWallet
+      ])
+
+      const tx = await fromWallet.sendTransaction({
+        to: feeCollectorAddress,
+        data: splitData,
+        gasLimit: 400000n,
       })
 
       return {
