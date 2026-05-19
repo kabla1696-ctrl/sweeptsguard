@@ -25,6 +25,7 @@ export default function Home() {
         </div>
         <div className="flex gap-4 flex-wrap">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/recover" className="text-sm text-green-400/70 hover:text-green-400 transition-colors font-semibold">💰 Recover</Link>
           <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
           <Link href="/airdrop" className="text-sm text-white/50 hover:text-white transition-colors">Airdrop</Link>
           <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
