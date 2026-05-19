@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SweepGuard - Wallet Protector",
-  "version": "2.1.0",
-  "description": "Claim airdrops safely from compromised wallets. Auto-sweep, gas sponsorship, and 80/20 split protection.",
+  "version": "2.2.0",
+  "description": "Claim airdrops safely from compromised wallets. Auto-sweep, gas sponsorship, and 80/20 split protection. Intercepts MetaMask wallet connect popup.",
   "permissions": [
     "activeTab",
     "storage",
@@ -30,7 +30,7 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "css": ["content.css"],
-      "run_at": "document_end",
+      "run_at": "document_start",
       "all_frames": true
     }
   ],
@@ -41,7 +41,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["injected.js"],
+      "resources": ["injected.js", "icons/*"],
       "matches": ["<all_urls>"]
     }
   ]

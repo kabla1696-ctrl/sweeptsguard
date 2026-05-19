@@ -1,4 +1,4 @@
-// SweepGuard Extension - Background Service Worker v2.1
+// SweepGuard Extension - Background Service Worker v2.2
 // Handles messages from content scripts and manages state
 
 const API_BASE = 'https://sweeptsguard.vercel.app';
@@ -7,9 +7,9 @@ const FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A';
 // Store page detections
 const pageDetections = new Map();
 
-// Listen for messages from content scripts
+// Listen for messages
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[SweepGuard Background] Message received:', message.type);
+  console.log('[SweepGuard Background] Message:', message.type);
   
   switch (message.type) {
     case 'CLAIM_PAGE_DETECTED':
@@ -37,9 +37,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse(info);
       break;
       
+    case 'GET_WALLETS':
+      // Return saved wallets to injected provider
+      chrome.storage.local.get(['wallets'], (result) => {
+        sendResponse(result.wallets || {});
+      });
+      return true; // Keep message channel open for async response
+      
     case 'OPEN_POPUP':
       // Open popup programmatically
       chrome.action.openPopup();
+      sendResponse({ success: true });
+      break;
+      
+    case 'PROVIDER_INJECTED':
+      console.log('[SweepGuard Background] Provider injected on:', message.data?.url);
       sendResponse({ success: true });
       break;
       
@@ -47,14 +59,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ error: 'Unknown message type' });
   }
   
-  return true; // Keep message channel open
+  return true;
 });
 
 // Handle claim page detection
 function handleClaimPageDetected(data, tabId) {
   console.log('[SweepGuard Background] Claim page detected:', data.url);
   
-  // Store detection
   pageDetections.set(tabId, {
     ...data,
     isClaimPage: true,
@@ -78,7 +89,6 @@ function handleClaimPageDetected(data, tabId) {
 function handleWalletModalDetected(data, tabId) {
   console.log('[SweepGuard Background] Wallet modal detected:', data.url);
   
-  // Update stored info
   const existing = pageDetections.get(tabId) || {};
   pageDetections.set(tabId, {
     ...existing,
@@ -95,7 +105,6 @@ function handleWalletModalDetected(data, tabId) {
 function handleWalletConnectRequest(data, tabId) {
   console.log('[SweepGuard Background] Wallet connect request:', data.url);
   
-  // Update stored info
   const existing = pageDetections.get(tabId) || {};
   pageDetections.set(tabId, {
     ...existing,
@@ -108,12 +117,10 @@ function handleWalletConnectRequest(data, tabId) {
 function handleTransactionDetected(data, tabId) {
   console.log('[SweepGuard Background] Transaction detected:', data);
   
-  // Check if it's a claim transaction
   const claimSelectors = ['0x2e7ba6ef', '0x379607f5', '0x48c54b9d', '0xa578a715'];
   if (data.selector && claimSelectors.includes(data.selector)) {
     console.log('[SweepGuard Background] Claim transaction detected!');
     
-    // Update badge
     chrome.action.setBadgeText({ text: '✅', tabId });
     chrome.action.setBadgeBackgroundColor({ color: '#10b981', tabId });
   }
@@ -122,10 +129,7 @@ function handleTransactionDetected(data, tabId) {
 // Monitor tab updates
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
-    // Reset detection for this tab
     pageDetections.delete(tabId);
-    
-    // Clear badge
     chrome.action.setBadgeText({ text: '', tabId });
   }
 });
@@ -140,12 +144,11 @@ setInterval(() => {
       pageDetections.delete(tabId);
     }
   }
-}, 300000); // Every 5 minutes
+}, 300000);
 
 // Extension install handler
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    // Set default settings
     chrome.storage.local.set({
       settings: {
         autoDetect: true,
@@ -163,4 +166,4 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-console.log('[SweepGuard Background] Service worker loaded');
+console.log('[SweepGuard Background] Service worker loaded v2.2');

