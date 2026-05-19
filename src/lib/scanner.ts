@@ -74,31 +74,40 @@ export class WalletScanner {
 
   // Check EIP-7702 delegation
   async checkDelegation(address: string, chainId: number = 1): Promise<DelegationInfo> {
-    try {
-      const provider = this.getProvider(chainId)
-      const code = await provider.getCode(address)
+    const maxRetries = 2
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const provider = this.getProvider(chainId)
+        const code = await provider.getCode(address)
 
-      if (code && code.startsWith(EIP7702_DELEGATION_PREFIX)) {
-        // Extract delegated address (20 bytes after 0xef0100 prefix)
-        // Format: 0xef0100 + 40 hex chars (20 bytes)
-        const delegatedTo = '0x' + code.slice(8, 48)
-        const isDrainer = KNOWN_DRAINERS[delegatedTo.toLowerCase()] !== undefined ||
-                          KNOWN_DRAINERS[delegatedTo] !== undefined
+        if (code && code.startsWith(EIP7702_DELEGATION_PREFIX)) {
+          // Extract delegated address (20 bytes after 0xef0100 prefix)
+          // Format: 0xef0100 + 40 hex chars (20 bytes)
+          const delegatedTo = '0x' + code.slice(8, 48)
+          const isDrainer = KNOWN_DRAINERS[delegatedTo.toLowerCase()] !== undefined ||
+                            KNOWN_DRAINERS[delegatedTo] !== undefined
 
-        return {
-          hasDelegation: true,
-          delegatedTo,
-          isDrainer,
-          drainerName: KNOWN_DRAINERS[delegatedTo.toLowerCase()] ||
-                       KNOWN_DRAINERS[delegatedTo] ||
-                       (isDrainer ? 'Unknown Drainer' : undefined)
+          return {
+            hasDelegation: true,
+            delegatedTo,
+            isDrainer,
+            drainerName: KNOWN_DRAINERS[delegatedTo.toLowerCase()] ||
+                         KNOWN_DRAINERS[delegatedTo] ||
+                         (isDrainer ? 'Unknown Drainer' : undefined)
+          }
         }
-      }
 
-      return { hasDelegation: false, delegatedTo: null, isDrainer: false }
-    } catch {
-      return { hasDelegation: false, delegatedTo: null, isDrainer: false }
+        return { hasDelegation: false, delegatedTo: null, isDrainer: false }
+      } catch (err) {
+        if (attempt === maxRetries) {
+          console.error(`Delegation check failed for chain ${chainId}:`, err)
+          return { hasDelegation: false, delegatedTo: null, isDrainer: false }
+        }
+        // Wait before retry
+        await new Promise(r => setTimeout(r, 500))
+      }
     }
+    return { hasDelegation: false, delegatedTo: null, isDrainer: false }
   }
 
   // Get native balance (ETH, BNB, etc.)
@@ -304,36 +313,48 @@ export class WalletScanner {
     const activeChains: number[] = []
     const delegations: ScanResult['delegations'] = []
     const recentDrains: ScanResult['recentDrains'] = []
+    const failedChains: number[] = []
 
-    // Check delegation on ALL chains
+    // Check delegation on ALL chains (with error tracking)
     const delegationPromises = chainIds.map(async (chainId) => {
       const chain = CHAINS[chainId]
-      const info = await this.checkDelegation(address, chainId)
-      if (info.hasDelegation) {
-        delegations.push({
-          chainId,
-          chainName: chain.name,
-          delegatedTo: info.delegatedTo!,
-          isDrainer: info.isDrainer,
-          drainerName: info.drainerName
-        })
+      try {
+        const info = await this.checkDelegation(address, chainId)
+        if (info.hasDelegation) {
+          delegations.push({
+            chainId,
+            chainName: chain.name,
+            delegatedTo: info.delegatedTo!,
+            isDrainer: info.isDrainer,
+            drainerName: info.drainerName
+          })
+        }
+        return { chainId, info, success: true }
+      } catch (err) {
+        console.error(`Chain ${chain.name} (${chainId}) delegation check failed:`, err)
+        failedChains.push(chainId)
+        return { chainId, info: { hasDelegation: false, delegatedTo: null, isDrainer: false }, success: false }
       }
-      return { chainId, info }
     })
 
-    // Scan all chains in parallel
+    // Scan all chains in parallel (with error tracking)
     const scanPromises = chainIds.map(async (chainId) => {
-      const [native, tokens] = await Promise.all([
-        this.getNativeBalance(address, chainId),
-        this.getTokenBalances(address, chainId)
-      ])
+      try {
+        const [native, tokens] = await Promise.all([
+          this.getNativeBalance(address, chainId),
+          this.getTokenBalances(address, chainId)
+        ])
 
-      const chainAssets: WalletAsset[] = []
-      if (native) chainAssets.push(native)
-      chainAssets.push(...tokens)
+        const chainAssets: WalletAsset[] = []
+        if (native) chainAssets.push(native)
+        chainAssets.push(...tokens)
 
-      if (chainAssets.length > 0) activeChains.push(chainId)
-      return chainAssets
+        if (chainAssets.length > 0) activeChains.push(chainId)
+        return chainAssets
+      } catch (err) {
+        console.error(`Chain ${chainId} scan failed:`, err)
+        return []
+      }
     })
 
     // Get recent outgoing transactions (where drained funds went)
@@ -344,9 +365,6 @@ export class WalletScanner {
         const currentBlock = await provider.getBlockNumber()
         const fromBlock = Math.max(0, currentBlock - 50000) // Last ~50k blocks
 
-        // Get recent transactions FROM this address
-        const txs: { hash: string; to: string; value: bigint; blockNumber: number }[] = []
-        
         // Use getLogs for Transfer events FROM this address
         const filter = {
           fromBlock,
@@ -376,8 +394,8 @@ export class WalletScanner {
             }
           }
         }
-      } catch {
-        // Skip failed chains
+      } catch (err) {
+        console.error(`Chain ${chainId} drain scan failed:`, err)
       }
     })
 
@@ -425,6 +443,8 @@ export class WalletScanner {
       suspiciousApprovals: allApprovals,
       drainerMethodCalls: allMethodCalls,
       chains: activeChains,
+      totalChainsScanned: chainIds.length,
+      failedChains,
       lastActivity: recentDrains.length > 0 ? recentDrains[0].timestamp : null
     }
   }

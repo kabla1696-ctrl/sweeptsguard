@@ -25,6 +25,8 @@ interface ScanResult {
     chainName: string
   }[]
   chains: number[]
+  totalChainsScanned?: number
+  failedChains?: number[]
   lastActivity: string | null
 }
 
@@ -316,6 +318,26 @@ function ScanContent() {
                 Last activity: {new Date(result.lastActivity).toLocaleString()}
               </div>
             )}
+
+            {/* Scan Status */}
+            <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-white/40">Chains scanned:</span>
+                <span className="text-white/70 font-medium">{result.totalChainsScanned || 15} / 15</span>
+              </div>
+              {result.failedChains && result.failedChains.length > 0 && (
+                <div className="flex items-center justify-between text-sm mt-2">
+                  <span className="text-yellow-400/60">Failed chains:</span>
+                  <span className="text-yellow-400/80 font-medium">{result.failedChains.length} (RPC error)</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-sm mt-2">
+                <span className="text-white/40">Delegations found:</span>
+                <span className={`font-medium ${result.delegations.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {result.delegations.length} / {result.totalChainsScanned || 15} chains
+                </span>
+              </div>
+            </div>
 
             {/* Next Steps */}
             <div className="p-6 bg-green-500/5 border border-green-500/20 rounded-2xl">
