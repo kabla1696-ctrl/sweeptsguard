@@ -25,6 +25,7 @@ export default function Home() {
         </div>
         <div className="flex gap-4">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
           <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
         </div>
       </nav>
@@ -98,7 +99,7 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-6">
             {[
               { icon: '🔍', title: '1. Scan', desc: 'Enter your compromised wallet address. We check all chains for assets and EIP-7702 delegations.' },
-              { icon: '🔗', title: '2. Connect', desc: 'Connect your safe wallet. Set up monitoring with one click. We watch for incoming funds 24/7.' },
+              { icon: '🔗', title: '2. Track', desc: 'Track where your stolen funds went. See if they reached an exchange or drainer wallet.' },
               { icon: '⚡', title: '3. Auto-Sweep', desc: 'When funds arrive, we automatically sweep them to your safe wallet within seconds.' }
             ].map((step) => (
               <div key={step.title} className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:border-green-500/20 transition-all">

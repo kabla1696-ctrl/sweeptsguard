@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createMonitor, type MonitorAlert } from '@/lib/monitor'
-import type { SweepResult } from '@/lib/sweeper'
+import { createMonitor, type MonitorAlert, type SweepResult } from '@/lib/monitor'
 
 // In-memory store (in production, use Redis/DB)
 const monitors = new Map<string, ReturnType<typeof createMonitor>>()
@@ -9,7 +8,7 @@ const monitorSweeps = new Map<string, SweepResult[]>()
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, address, safeAddress, privateKey, chainIds } = body
+  const { action, address, safeAddress, privateKey, chainIds, telegramBotToken, telegramChatId } = body
 
   if (!address) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
@@ -37,15 +36,15 @@ export async function POST(request: NextRequest) {
         safeAddress,
         privateKey,
         chainIds: chainIds || [1, 8453, 56, 42161, 137, 10],
-        checkIntervalMs: 5000, // Check every 5 seconds
+        checkIntervalMs: 5000,
+        telegramBotToken,
+        telegramChatId,
         onAlert: (alert) => {
           alerts.push(alert)
-          // Keep last 100 alerts
           if (alerts.length > 100) alerts.shift()
         },
         onSweep: (result) => {
           sweeps.push(result)
-          // Keep last 50 sweeps
           if (sweeps.length > 50) sweeps.shift()
         }
       })
@@ -84,7 +83,6 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     running: monitor !== undefined,
     address,
-    safeAddress: '',
     chains: [1, 8453, 56, 42161, 137, 10],
     alerts: alerts.slice(-20),
     sweeps: sweeps.slice(-20)

@@ -1,0 +1,236 @@
+'use client'
+
+import { useState } from 'react'
+import Link from 'next/link'
+
+interface Transfer {
+  hash: string
+  from: string
+  to: string
+  value: string
+  asset: string
+  chainName: string
+  timestamp: number
+  isExchangeDeposit: boolean
+  exchangeName?: string
+  isDrainerTransfer: boolean
+  drainerName?: string
+}
+
+export default function TrackerPage() {
+  const [address, setAddress] = useState('')
+  const [tracking, setTracking] = useState(false)
+  const [transfers, setTransfers] = useState<Transfer[]>([])
+  const [error, setError] = useState('')
+
+  const trackFunds = async () => {
+    if (!address || !address.startsWith('0x') || address.length !== 42) {
+      setError('Please enter a valid EVM address')
+      return
+    }
+
+    setTracking(true)
+    setError('')
+    setTransfers([])
+
+    try {
+      const res = await fetch(`/api/track?address=${address}`)
+      const data = await res.json()
+
+      if (data.error) {
+        setError(data.error)
+      } else {
+        setTransfers(data.transfers || [])
+      }
+    } catch {
+      setError('Failed to track funds. Please try again.')
+    } finally {
+      setTracking(false)
+    }
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    trackFunds()
+  }
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString()
+  }
+
+  const getExplorerUrl = (chainName: string, hash: string) => {
+    const explorers: Record<string, string> = {
+      'Ethereum': 'https://etherscan.io',
+      'Base': 'https://basescan.org',
+      'BNB Chain': 'https://bscscan.com',
+      'Arbitrum': 'https://arbiscan.io',
+      'Polygon': 'https://polygonscan.com',
+      'Optimism': 'https://optimistic.etherscan.io'
+    }
+    const base = explorers[chainName] || 'https://etherscan.io'
+    return `${base}/tx/${hash}`
+  }
+
+  return (
+    <main className="min-h-screen bg-[#0a0a0f] text-white">
+      {/* Nav */}
+      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="text-2xl">🛡️</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+            SweepGuard
+          </span>
+        </Link>
+        <div className="flex gap-4">
+          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+        </div>
+      </nav>
+
+      <div className="max-w-4xl mx-auto px-6 py-12">
+        <h1 className="text-3xl font-bold mb-2">Fund Tracker</h1>
+        <p className="text-white/40 mb-8">Track where stolen funds have been sent</p>
+
+        {/* Track Form */}
+        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
+          <input
+            type="text"
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            placeholder="Enter wallet address to track (0x...)"
+            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+          />
+          <button
+            type="submit"
+            disabled={tracking}
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
+          >
+            {tracking ? 'Tracking...' : 'Track Funds'}
+          </button>
+        </form>
+
+        {/* Error */}
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
+            {error}
+          </div>
+        )}
+
+        {/* Loading */}
+        {tracking && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center gap-3 text-green-400">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Tracking fund movements...
+            </div>
+          </div>
+        )}
+
+        {/* Results */}
+        {transfers.length > 0 && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold">
+                Fund Movements ({transfers.length})
+              </h2>
+            </div>
+
+            <div className="space-y-3">
+              {transfers.map((transfer, i) => (
+                <div key={i} className={`p-4 rounded-xl border ${
+                  transfer.isExchangeDeposit
+                    ? 'bg-yellow-500/5 border-yellow-500/20'
+                    : transfer.isDrainerTransfer
+                    ? 'bg-red-500/5 border-red-500/20'
+                    : 'bg-white/[0.02] border-white/[0.05]'
+                }`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-white/30 text-xs">{transfer.chainName}</span>
+                        {transfer.isExchangeDeposit && (
+                          <span className="px-2 py-0.5 bg-yellow-500/20 rounded-full text-yellow-400 text-xs">
+                            🏦 {transfer.exchangeName}
+                          </span>
+                        )}
+                        {transfer.isDrainerTransfer && (
+                          <span className="px-2 py-0.5 bg-red-500/20 rounded-full text-red-400 text-xs">
+                            🚨 {transfer.drainerName}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-sm">
+                        <span className="text-white/50">From: </span>
+                        <span className="font-mono text-white/70">{transfer.from.slice(0, 8)}...{transfer.from.slice(-6)}</span>
+                      </div>
+
+                      <div className="text-sm mt-1">
+                        <span className="text-white/50">To: </span>
+                        <span className="font-mono text-white/70">{transfer.to.slice(0, 8)}...{transfer.to.slice(-6)}</span>
+                      </div>
+
+                      <div className="text-sm mt-2">
+                        <span className="text-green-400 font-semibold">{transfer.value} {transfer.asset}</span>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <a
+                        href={getExplorerUrl(transfer.chainName, transfer.hash)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-green-400/50 text-xs hover:text-green-400 font-mono"
+                      >
+                        {transfer.hash.slice(0, 10)}...
+                      </a>
+                      <div className="text-white/20 text-xs mt-1">
+                        {formatDate(transfer.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Summary */}
+            <div className="mt-8 p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+              <h3 className="font-semibold mb-2">Summary</h3>
+              <div className="grid grid-cols-3 gap-4 text-center">
+                <div>
+                  <div className="text-2xl font-bold text-green-400">
+                    {transfers.filter(t => !t.isExchangeDeposit && !t.isDrainerTransfer).length}
+                  </div>
+                  <div className="text-white/30 text-xs">Regular</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-yellow-400">
+                    {transfers.filter(t => t.isExchangeDeposit).length}
+                  </div>
+                  <div className="text-white/30 text-xs">Exchange</div>
+                </div>
+                <div>
+                  <div className="text-2xl font-bold text-red-400">
+                    {transfers.filter(t => t.isDrainerTransfer).length}
+                  </div>
+                  <div className="text-white/30 text-xs">Drainer</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* No results */}
+        {!tracking && transfers.length === 0 && !error && (
+          <div className="text-center py-12 text-white/30">
+            <p className="text-lg mb-2">Enter a wallet address to track</p>
+            <p className="text-sm">We&apos;ll scan all chains for fund movements</p>
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}

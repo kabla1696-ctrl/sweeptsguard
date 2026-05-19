@@ -7,9 +7,8 @@ import Link from 'next/link'
 interface MonitorStatus {
   running: boolean
   address: string
-  safeAddress: string
   chains: number[]
-  alerts: { type: string; message: string; timestamp: number; chainName: string }[]
+  alerts: { type: string; message: string; timestamp: number; chainName: string; amount?: string; asset?: string }[]
   sweeps: { success: boolean; chainName: string; asset: string; amount: string; txHash?: string; error?: string }[]
 }
 
@@ -20,9 +19,12 @@ function DashboardContent() {
   const [address, setAddress] = useState(addressParam || '')
   const [safeAddress, setSafeAddress] = useState('')
   const [privateKey, setPrivateKey] = useState('')
+  const [telegramBotToken, setTelegramBotToken] = useState('')
+  const [telegramChatId, setTelegramChatId] = useState('')
   const [monitoring, setMonitoring] = useState(false)
   const [status, setStatus] = useState<MonitorStatus | null>(null)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
+  const [activeTab, setActiveTab] = useState<'setup' | 'alerts' | 'sweeps'>('setup')
 
   const startMonitoring = useCallback(async () => {
     if (!address || !safeAddress || !privateKey) return
@@ -36,7 +38,9 @@ function DashboardContent() {
           address,
           safeAddress,
           privateKey,
-          chainIds: [1, 8453, 56, 42161, 137, 10]
+          chainIds: [1, 8453, 56, 42161, 137, 10],
+          telegramBotToken: telegramBotToken || undefined,
+          telegramChatId: telegramChatId || undefined
         })
       })
       const data = await res.json()
@@ -47,7 +51,7 @@ function DashboardContent() {
     } catch (err) {
       console.error('Failed to start monitoring:', err)
     }
-  }, [address, safeAddress, privateKey])
+  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId])
 
   const stopMonitoring = useCallback(async () => {
     try {
@@ -99,85 +103,7 @@ function DashboardContent() {
         <h1 className="text-3xl font-bold mb-2">Protection Dashboard</h1>
         <p className="text-white/40 mb-8">Set up auto-sweep monitoring for your compromised wallet</p>
 
-        {/* Setup Form */}
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
-          <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-              Compromised Wallet
-            </label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="0x..."
-              className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-              Safe Wallet (Sweep To)
-            </label>
-            <input
-              type="text"
-              value={safeAddress}
-              onChange={(e) => setSafeAddress(e.target.value)}
-              placeholder="0x..."
-              className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-            />
-          </div>
-        </div>
-
-        <div className="mb-8">
-          <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-            Private Key (for compromised wallet)
-          </label>
-          <div className="relative">
-            <input
-              type={showPrivateKey ? 'text' : 'password'}
-              value={privateKey}
-              onChange={(e) => setPrivateKey(e.target.value)}
-              placeholder="Private key of compromised wallet..."
-              className="w-full px-4 py-3 pr-20 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-            />
-            <button
-              onClick={() => setShowPrivateKey(!showPrivateKey)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
-            >
-              {showPrivateKey ? 'Hide' : 'Show'}
-            </button>
-          </div>
-          <p className="text-white/20 text-xs mt-2">
-            ⚠️ This key is used to sign sweep transactions. Never share it. For production, use a backend service.
-          </p>
-        </div>
-
-        {/* Controls */}
-        <div className="flex gap-4 mb-8">
-          {!monitoring ? (
-            <button
-              onClick={startMonitoring}
-              disabled={!address || !safeAddress || !privateKey}
-              className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
-            >
-              🛡️ Start Protection
-            </button>
-          ) : (
-            <button
-              onClick={stopMonitoring}
-              className="px-8 py-3 bg-red-600/20 border border-red-500/30 rounded-xl font-semibold text-red-400 hover:bg-red-600/30 transition-all"
-            >
-              Stop Monitoring
-            </button>
-          )}
-          <button
-            onClick={pollStatus}
-            className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl hover:bg-white/[0.08] transition-all"
-          >
-            🔄 Refresh
-          </button>
-        </div>
-
-        {/* Status */}
+        {/* Status Bar */}
         {monitoring && (
           <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-2xl mb-8">
             <div className="flex items-center gap-3">
@@ -190,64 +116,212 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* Alerts */}
-        {status?.alerts && status.alerts.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-lg font-semibold mb-4">🚨 Alerts</h2>
-            <div className="space-y-2">
-              {status.alerts.map((alert, i) => (
-                <div key={i} className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-yellow-400 text-sm font-medium">{alert.type}</span>
-                      <p className="text-white/60 text-sm mt-1">{alert.message}</p>
-                    </div>
-                    <span className="text-white/20 text-xs">{alert.chainName}</span>
-                  </div>
+        {/* Tabs */}
+        <div className="flex gap-2 mb-8">
+          {(['setup', 'alerts', 'sweeps'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === tab
+                  ? 'bg-green-600 text-white'
+                  : 'bg-white/[0.05] text-white/50 hover:text-white'
+              }`}
+            >
+              {tab === 'setup' ? '⚙️ Setup' : tab === 'alerts' ? '🚨 Alerts' : '⚡ Sweeps'}
+              {tab === 'alerts' && status?.alerts && status.alerts.length > 0 && (
+                <span className="ml-2 px-1.5 py-0.5 bg-red-500 rounded-full text-xs">
+                  {status.alerts.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Setup Tab */}
+        {activeTab === 'setup' && (
+          <div className="space-y-6">
+            <div className="grid md:grid-cols-2 gap-6">
+              <div>
+                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                  Compromised Wallet
+                </label>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                  Safe Wallet (Sweep To)
+                </label>
+                <input
+                  type="text"
+                  value={safeAddress}
+                  onChange={(e) => setSafeAddress(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                Private Key (for compromised wallet)
+              </label>
+              <div className="relative">
+                <input
+                  type={showPrivateKey ? 'text' : 'password'}
+                  value={privateKey}
+                  onChange={(e) => setPrivateKey(e.target.value)}
+                  placeholder="Private key of compromised wallet..."
+                  className="w-full px-4 py-3 pr-20 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                />
+                <button
+                  onClick={() => setShowPrivateKey(!showPrivateKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                >
+                  {showPrivateKey ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+              <h3 className="text-sm font-semibold mb-3 text-white/70">📱 Telegram Alerts (Optional)</h3>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-white/30 mb-1 block">Bot Token</label>
+                  <input
+                    type="text"
+                    value={telegramBotToken}
+                    onChange={(e) => setTelegramBotToken(e.target.value)}
+                    placeholder="123456:ABC-DEF..."
+                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  />
                 </div>
-              ))}
+                <div>
+                  <label className="text-xs text-white/30 mb-1 block">Chat ID</label>
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="-1001234567890"
+                    className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  />
+                </div>
+              </div>
+              <p className="text-white/20 text-xs mt-2">
+                Get instant alerts when funds are detected or swept. Create a bot via @BotFather.
+              </p>
+            </div>
+
+            <div className="flex gap-4">
+              {!monitoring ? (
+                <button
+                  onClick={startMonitoring}
+                  disabled={!address || !safeAddress || !privateKey}
+                  className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
+                >
+                  🛡️ Start Protection
+                </button>
+              ) : (
+                <button
+                  onClick={stopMonitoring}
+                  className="px-8 py-3 bg-red-600/20 border border-red-500/30 rounded-xl font-semibold text-red-400 hover:bg-red-600/30 transition-all"
+                >
+                  Stop Monitoring
+                </button>
+              )}
+              <button
+                onClick={pollStatus}
+                className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl hover:bg-white/[0.08] transition-all"
+              >
+                🔄 Refresh
+              </button>
             </div>
           </div>
         )}
 
-        {/* Sweep Results */}
-        {status?.sweeps && status.sweeps.length > 0 && (
+        {/* Alerts Tab */}
+        {activeTab === 'alerts' && (
           <div>
-            <h2 className="text-lg font-semibold mb-4">⚡ Sweep History</h2>
-            <div className="space-y-2">
-              {status.sweeps.map((sweep, i) => (
-                <div key={i} className={`p-4 rounded-xl border ${
-                  sweep.success
-                    ? 'bg-green-500/5 border-green-500/20'
-                    : 'bg-red-500/5 border-red-500/20'
-                }`}>
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <span className={sweep.success ? 'text-green-400' : 'text-red-400'}>
-                        {sweep.success ? '✅' : '❌'} {sweep.asset}
-                      </span>
-                      <span className="text-white/30 text-sm ml-2">{sweep.chainName}</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-mono text-sm">{sweep.amount}</div>
-                      {sweep.txHash && (
-                        <a
-                          href={`https://etherscan.io/tx/${sweep.txHash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-green-400/50 text-xs hover:text-green-400"
-                        >
-                          {sweep.txHash.slice(0, 10)}...
-                        </a>
-                      )}
-                      {sweep.error && (
-                        <div className="text-red-400/50 text-xs">{sweep.error}</div>
-                      )}
+            {status?.alerts && status.alerts.length > 0 ? (
+              <div className="space-y-3">
+                {status.alerts.map((alert, i) => (
+                  <div key={i} className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-yellow-400 text-sm font-medium">
+                          {alert.type === 'drainer_detected' ? '🚨' : '💰'} {alert.type}
+                        </span>
+                        <p className="text-white/60 text-sm mt-1">{alert.message}</p>
+                        {alert.amount && (
+                          <p className="text-green-400 text-sm mt-1">
+                            {alert.amount} {alert.asset}
+                          </p>
+                        )}
+                      </div>
+                      <span className="text-white/20 text-xs">{alert.chainName}</span>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-white/30">
+                <p className="text-lg mb-2">No alerts yet</p>
+                <p className="text-sm">Alerts will appear when balance changes are detected</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sweeps Tab */}
+        {activeTab === 'sweeps' && (
+          <div>
+            {status?.sweeps && status.sweeps.length > 0 ? (
+              <div className="space-y-3">
+                {status.sweeps.map((sweep, i) => (
+                  <div key={i} className={`p-4 rounded-xl border ${
+                    sweep.success
+                      ? 'bg-green-500/5 border-green-500/20'
+                      : 'bg-red-500/5 border-red-500/20'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <span className={sweep.success ? 'text-green-400' : 'text-red-400'}>
+                          {sweep.success ? '✅' : '❌'} {sweep.asset}
+                        </span>
+                        <span className="text-white/30 text-sm ml-2">{sweep.chainName}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-sm">{sweep.amount}</div>
+                        {sweep.txHash && (
+                          <a
+                            href={`https://etherscan.io/tx/${sweep.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-green-400/50 text-xs hover:text-green-400"
+                          >
+                            {sweep.txHash.slice(0, 10)}...
+                          </a>
+                        )}
+                        {sweep.error && (
+                          <div className="text-red-400/50 text-xs">{sweep.error}</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-white/30">
+                <p className="text-lg mb-2">No sweeps yet</p>
+                <p className="text-sm">Sweeps will happen automatically when funds are detected</p>
+              </div>
+            )}
           </div>
         )}
       </div>
