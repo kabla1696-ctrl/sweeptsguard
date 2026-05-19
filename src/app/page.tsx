@@ -129,7 +129,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-center mb-12 text-white/80">Features</h2>
           <div className="grid md:grid-cols-2 gap-6">
             {[
-              { icon: '🔍', title: 'Multi-Chain Scanner', desc: 'Scan all 6 chains at once for assets and delegations.' },
+              { icon: '🔍', title: 'Multi-Chain Scanner', desc: 'Scan all 15 chains at once for assets and delegations.' },
               { icon: '🚨', title: 'Drainer Detection', desc: 'Identify known drainer contracts and EIP-7702 delegations.' },
               { icon: '🔗', title: 'Fund Tracker', desc: 'Track stolen funds across chains. See if they hit an exchange.' },
               { icon: '🎯', title: 'Airdrop Claimer', desc: 'Claim airdrops safely. Tokens go directly to your safe wallet.' },
