@@ -21,12 +21,45 @@ export const KNOWN_DRAINERS: DrainerInfo[] = [
     address: '0xCce0A2eBE17c5E532802896Fc8AfCaaB8aBD8ba0',
     name: 'Inferno Drainer (EIP-7702)',
     type: 'eip7702',
-    chains: [1, 8453, 56, 42161, 137, 10],
+    chains: [1],
     firstSeen: '2025-01-01',
     lastActive: '2026-05-19',
     reportCount: 150,
     verified: true,
-    notes: 'EIP-7702 delegation drainer. Automated bot drains funds within seconds.'
+    notes: 'EIP-7702 delegation drainer on Ethereum. Automated bot drains funds within seconds.'
+  },
+  {
+    address: '0xb0d6b42f6406d8b9ae980de584c21f517bf0b746',
+    name: 'Inferno Drainer (Base)',
+    type: 'eip7702',
+    chains: [8453],
+    firstSeen: '2025-01-01',
+    lastActive: '2026-05-19',
+    reportCount: 50,
+    verified: true,
+    notes: 'EIP-7702 delegation drainer on Base chain.'
+  },
+  {
+    address: '0x354bd0d713d6674605a6a41eea93cf8a8a01dc85',
+    name: 'Inferno Drainer (Arbitrum)',
+    type: 'eip7702',
+    chains: [42161],
+    firstSeen: '2025-01-01',
+    lastActive: '2026-05-19',
+    reportCount: 50,
+    verified: true,
+    notes: 'EIP-7702 delegation drainer on Arbitrum.'
+  },
+  {
+    address: '0x56a645ef8cc03631a28be1fc6c803eda7bfbbc5a',
+    name: 'Inferno Drainer (Polygon)',
+    type: 'eip7702',
+    chains: [137],
+    firstSeen: '2025-01-01',
+    lastActive: '2026-05-19',
+    reportCount: 50,
+    verified: true,
+    notes: 'EIP-7702 delegation drainer on Polygon.'
   },
   {
     address: '0x0000000000000000000000000000000000000000',

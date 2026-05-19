@@ -47,7 +47,10 @@ export interface ScanResult {
 
 // Known drainer contract addresses (community-maintained)
 const KNOWN_DRAINERS: Record<string, string> = {
-  '0xCce0A2eBE17c5E532802896Fc8AfCaaB8aBD8ba0': 'Inferno Drainer (EIP-7702)',
+  '0xcce0a2ebe17c5e532802896fc8afcaab8abd8ba0': 'Inferno Drainer (EIP-7702)',
+  '0xb0d6b42f6406d8b9ae980de584c21f517bf0b746': 'Inferno Drainer (Base)',
+  '0x354bd0d713d6674605a6a41eea93cf8a8a01dc85': 'Inferno Drainer (Arbitrum)',
+  '0x56a645ef8cc03631a28be1fc6c803eda7bfbbc5a': 'Inferno Drainer (Polygon)',
   '0x0000000000000000000000000000000000000000': 'Null Address',
   // Add more as discovered
 }
@@ -74,8 +77,9 @@ export class WalletScanner {
       const code = await provider.getCode(address)
 
       if (code && code.startsWith(EIP7702_DELEGATION_PREFIX)) {
-        // Extract delegated address (last 20 bytes after prefix)
-        const delegatedTo = '0x' + code.slice(22) // Remove 0xef0100 + 2 padding zeros
+        // Extract delegated address (20 bytes after 0xef0100 prefix)
+        // Format: 0xef0100 + 40 hex chars (20 bytes)
+        const delegatedTo = '0x' + code.slice(8, 48)
         const isDrainer = KNOWN_DRAINERS[delegatedTo.toLowerCase()] !== undefined ||
                           KNOWN_DRAINERS[delegatedTo] !== undefined
 

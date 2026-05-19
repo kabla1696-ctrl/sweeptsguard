@@ -17,7 +17,7 @@ export const CHAINS: Record<number, ChainConfig> = {
     id: 1,
     name: 'Ethereum',
     shortName: 'ETH',
-    rpc: process.env.NEXT_PUBLIC_ETH_RPC || 'https://eth.llamarpc.com',
+    rpc: process.env.NEXT_PUBLIC_ETH_RPC || 'https://eth.drpc.org',
     wsRpc: process.env.NEXT_PUBLIC_ETH_WS_RPC,
     explorer: 'https://etherscan.io',
     explorerApi: 'https://api.etherscan.io/v2/api',
