@@ -1,0 +1,112 @@
+/* SweepGuard Content Script Styles */
+
+#sweeptguard-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483647;
+  padding: 12px 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: sweeptguard-slideDown 0.3s ease;
+}
+
+@keyframes sweeptguard-slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+#sweeptguard-banner.danger {
+  background: rgba(239,68,68,0.95);
+  color: #fff;
+}
+
+#sweeptguard-banner.warning {
+  background: rgba(250,204,21,0.95);
+  color: #000;
+}
+
+#sweeptguard-banner .dismiss-btn {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: inherit;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+#sweeptguard-banner .dismiss-btn:hover {
+  background: rgba(255,255,255,0.3);
+}
+
+/* Modal overlay */
+.sweeptguard-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sweeptguard-modal {
+  background: #0a0a0f;
+  border: 1px solid rgba(74,222,128,0.2);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+
+.sweeptguard-modal h2 {
+  color: #4ade80;
+  font-size: 18px;
+  margin-bottom: 12px;
+}
+
+.sweeptguard-modal p {
+  color: rgba(255,255,255,0.6);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.sweeptguard-modal .btn-group {
+  display: flex;
+  gap: 8px;
+}
+
+.sweeptguard-modal .btn {
+  flex: 1;
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sweeptguard-modal .btn-danger {
+  background: rgba(239,68,68,0.1);
+  border: 1px solid rgba(239,68,68,0.2);
+  color: #ef4444;
+}
+
+.sweeptguard-modal .btn-safe {
+  background: linear-gradient(135deg, #059669, #10b981);
+  color: #fff;
+}
