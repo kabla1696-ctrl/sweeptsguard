@@ -34,9 +34,20 @@ export async function POST(request: NextRequest) {
       try {
         const rpcUrl = rpcUrls[1]
         const assets = await scanRecoverableAssets(walletAddress, rpcUrl)
+        // Serialize BigInt values to strings for JSON
         return NextResponse.json({
           address: walletAddress,
-          ...assets
+          ethBalance: assets.ethBalance.toString(),
+          ethFormatted: assets.ethFormatted,
+          tokens: assets.tokens.map(t => ({
+            address: t.address,
+            symbol: t.symbol,
+            decimals: t.decimals,
+            balance: t.balance.toString(),
+            balanceFormatted: t.balanceFormatted
+          })),
+          hasDelegation: assets.hasDelegation,
+          delegatedTo: assets.delegatedTo
         })
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Scan failed'
@@ -58,7 +69,11 @@ export async function POST(request: NextRequest) {
           chainId: targetChain,
           rpcUrl
         })
-        return NextResponse.json(result)
+        // Serialize BigInt values
+        return NextResponse.json({
+          ...result,
+          ethRecovered: result.ethRecovered?.toString()
+        })
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Recovery failed'
         return NextResponse.json({ error: errorMessage }, { status: 500 })
