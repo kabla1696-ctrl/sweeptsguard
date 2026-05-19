@@ -1,10 +1,10 @@
-// SweepGuard Content Script v3.1 — INJECTS FIRST
+// SweepGuard Content Script v3.2 — Message Relay
 (function() {
   'use strict';
   if(window.__sweeptsguard_loaded) return;
   window.__sweeptsguard_loaded = true;
   
-  // INJECT IMMEDIATELY at document_start
+  // Inject provider FIRST
   try {
     const s = document.createElement('script');
     s.src = chrome.runtime.getURL('injected.js');
@@ -12,33 +12,56 @@
     (document.head||document.documentElement||document).appendChild(s);
   } catch(e) {}
   
-  // Also try via inline script for instant injection
+  // Also inject inline for instant override
   try {
     const inline = document.createElement('script');
-    inline.textContent = `
-      (function(){
-        if(window.__sweeptsguard_inline) return;
-        window.__sweeptsguard_inline = true;
-        
-        // Override ethereum property getter
-        let _eth = window.ethereum;
-        Object.defineProperty(window, 'ethereum', {
-          get() { return _eth; },
-          set(v) {
-            _eth = v;
-            console.log('[SweepGuard] ethereum provider set, overriding...');
-          },
-          configurable: true
-        });
-      })();
-    `;
+    inline.textContent = `(function(){let _eth=window.ethereum;Object.defineProperty(window,'ethereum',{get(){return _eth},set(v){_eth=v},configurable:true});})();`;
     (document.documentElement||document).prepend(inline);
     inline.remove();
   } catch(e) {}
   
-  console.log('[SweepGuard] Content v3.1 injected at:', document.readyState);
+  console.log('[SweepGuard] Content v3.2 on:', window.location.href);
   
-  // Re-inject on DOM ready (in case page replaces elements)
+  // ===== MESSAGE RELAY: injected.js ↔ background.js =====
+  window.addEventListener('message', async (e) => {
+    if (e.source !== window) return;
+    if (e.data?.type !== 'SG_REQUEST') return;
+    
+    const { id, action, ...rest } = e.data;
+    
+    try {
+      let response;
+      
+      if (action === 'GET_WALLET_ADDRESS') {
+        // Get wallets from chrome.storage via background
+        response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ type: 'GET_WALLETS' }, (resp) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(resp);
+          });
+        });
+      } else if (action === 'OPEN_POPUP') {
+        chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+        response = { ok: true };
+      } else if (action === 'CLAIM_AIRDROP') {
+        response = await new Promise((resolve, reject) => {
+          chrome.runtime.sendMessage({ type: 'CLAIM_AIRDROP', ...rest }, (resp) => {
+            if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
+            else resolve(resp);
+          });
+        });
+      } else {
+        response = { error: 'Unknown action' };
+      }
+      
+      // Send response back to injected script
+      window.postMessage({ type: 'SG_RESPONSE', id, success: true, data: response }, '*');
+    } catch(err) {
+      window.postMessage({ type: 'SG_RESPONSE', id, success: false, error: err.message }, '*');
+    }
+  });
+  
+  // Re-inject on DOM ready if needed
   if(document.readyState==='loading') {
     document.addEventListener('DOMContentLoaded', () => {
       if(!window.__sweeptsguard_provider) {
@@ -84,7 +107,6 @@
     const d = document.createElement('div');
     d.id = 'sg-ind';
     d.innerHTML = `<div id="sg-ib" style="position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:12px 20px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 8px 24px rgba(16,185,129,0.3);z-index:999998;cursor:pointer;display:flex;align-items:center;gap:8px;border:2px solid rgba(255,255,255,0.2);user-select:none">🛡️ <span>SweepGuard</span><span style="background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:6px;font-size:10px">ACTIVE</span></div>`;
-    d.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:999998;';
     document.body.appendChild(d);
     document.getElementById('sg-ib')?.addEventListener('click',()=>{try{chrome.runtime.sendMessage({type:'OPEN_POPUP'});}catch(e){}});
   }
@@ -111,7 +133,6 @@
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init);
   else init();
   
-  // SPA detection
   let last = location.href;
   setInterval(()=>{if(location.href!==last){last=location.href;init();}},1000);
 })();

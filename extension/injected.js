@@ -1,5 +1,5 @@
-// SweepGuard Injected Provider v3.1 — MUST RUN FIRST
-// Intercepts ALL wallet providers including Rabby, Keplr, OKX, etc.
+// SweepGuard Injected Provider v3.2
+// Uses window.postMessage to communicate with content script → background
 
 (function() {
   'use strict';
@@ -7,18 +7,37 @@
   if (window.__sweeptsguard_provider) return;
   window.__sweeptsguard_provider = true;
   
-  // Store ALL original providers
   const originalEthereum = window.ethereum;
-  const providers = [];
+  let pendingCallbacks = {};
+  let cbId = 0;
   
-  // Collect all existing providers
-  if (originalEthereum) providers.push(originalEthereum);
-  if (window.phantom?.ethereum) providers.push(window.phantom.ethereum);
-  if (window.okxwallet) providers.push(window.okxwallet);
-  if (window.rabby) providers.push(window.rabby);
-  if (window.keplr) providers.push(window.keplr);
+  // Listen for responses from content script
+  window.addEventListener('message', (e) => {
+    if (e.source !== window) return;
+    if (e.data?.type === 'SG_RESPONSE' && e.data?.id) {
+      const cb = pendingCallbacks[e.data.id];
+      if (cb) {
+        if (e.data.success) cb.resolve(e.data.data);
+        else cb.reject(new Error(e.data.error || 'Failed'));
+        delete pendingCallbacks[e.data.id];
+      }
+    }
+  });
   
-  console.log('[SweepGuard] Found', providers.length, 'existing providers');
+  // Send message to content script and wait for response
+  function askContent(msg) {
+    return new Promise((resolve, reject) => {
+      const id = 'sg_' + (++cbId) + '_' + Date.now();
+      pendingCallbacks[id] = { resolve, reject };
+      window.postMessage({ type: 'SG_REQUEST', id, ...msg }, '*');
+      setTimeout(() => {
+        if (pendingCallbacks[id]) {
+          delete pendingCallbacks[id];
+          reject(new Error('Timeout'));
+        }
+      }, 10000);
+    });
+  }
   
   // ===== CONNECT POPUP =====
   function showConnectPopup() {
@@ -31,7 +50,6 @@
       el.innerHTML = `
         <div id="sg-bg" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(12px);z-index:9999999;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;animation:sgIn .2s">
           <div style="background:linear-gradient(145deg,#0a0a14,#14142a);border:1px solid rgba(255,255,255,0.08);border-radius:24px;width:400px;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,0.6);animation:sgUp .3s">
-            <!-- Header -->
             <div style="padding:20px 24px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(139,92,246,0.1));border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="display:flex;align-items:center;gap:12px">
                 <div style="width:44px;height:44px;background:linear-gradient(135deg,#10b981,#8b5cf6);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px">🛡️</div>
@@ -43,7 +61,6 @@
               <button id="sg-x" style="background:rgba(255,255,255,0.08);border:none;color:#fff;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:18px">✕</button>
             </div>
             
-            <!-- Site -->
             <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="color:rgba(255,255,255,0.3);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Connecting to</div>
               <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid rgba(255,255,255,0.06)">
@@ -55,7 +72,6 @@
               </div>
             </div>
             
-            <!-- Wallets -->
             <div style="padding:16px 24px">
               <div style="color:rgba(255,255,255,0.3);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Choose Wallet</div>
               
@@ -70,46 +86,30 @@
               
               <button id="sg-mm" style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:all .2s">
                 <div style="width:48px;height:48px;background:rgba(245,158,11,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px">🦊</div>
-                <div style="text-align:left">
-                  <div style="color:#fff;font-size:16px;font-weight:600">MetaMask</div>
-                  <div style="color:rgba(255,255,255,0.4);font-size:11px">Original MetaMask wallet</div>
-                </div>
+                <div style="text-align:left"><div style="color:#fff;font-size:16px;font-weight:600">MetaMask</div><div style="color:rgba(255,255,255,0.4);font-size:11px">Original MetaMask wallet</div></div>
               </button>
               
               <button id="sg-rabby" style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:all .2s">
                 <div style="width:48px;height:48px;background:rgba(139,92,246,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px">🐰</div>
-                <div style="text-align:left">
-                  <div style="color:#fff;font-size:16px;font-weight:600">Rabby Wallet</div>
-                  <div style="color:rgba(255,255,255,0.4);font-size:11px">Rabby browser wallet</div>
-                </div>
+                <div style="text-align:left"><div style="color:#fff;font-size:16px;font-weight:600">Rabby Wallet</div><div style="color:rgba(255,255,255,0.4);font-size:11px">Rabby browser wallet</div></div>
               </button>
               
               <button id="sg-okx" style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:all .2s">
                 <div style="width:48px;height:48px;background:rgba(0,0,0,0.3);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px">⭕</div>
-                <div style="text-align:left">
-                  <div style="color:#fff;font-size:16px;font-weight:600">OKX Wallet</div>
-                  <div style="color:rgba(255,255,255,0.4);font-size:11px">OKX Web3 wallet</div>
-                </div>
+                <div style="text-align:left"><div style="color:#fff;font-size:16px;font-weight:600">OKX Wallet</div><div style="color:rgba(255,255,255,0.4);font-size:11px">OKX Web3 wallet</div></div>
               </button>
               
               <button id="sg-phantom" style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:10px;transition:all .2s">
                 <div style="width:48px;height:48px;background:rgba(139,92,246,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px">👻</div>
-                <div style="text-align:left">
-                  <div style="color:#fff;font-size:16px;font-weight:600">Phantom</div>
-                  <div style="color:rgba(255,255,255,0.4);font-size:11px">Phantom multi-chain wallet</div>
-                </div>
+                <div style="text-align:left"><div style="color:#fff;font-size:16px;font-weight:600">Phantom</div><div style="color:rgba(255,255,255,0.4);font-size:11px">Phantom multi-chain wallet</div></div>
               </button>
               
               <button id="sg-keplr" style="width:100%;padding:14px 16px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);border-radius:14px;cursor:pointer;display:flex;align-items:center;gap:14px;transition:all .2s">
                 <div style="width:48px;height:48px;background:rgba(245,158,11,0.15);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px">🔑</div>
-                <div style="text-align:left">
-                  <div style="color:#fff;font-size:16px;font-weight:600">Keplr</div>
-                  <div style="color:rgba(255,255,255,0.4);font-size:11px">Cosmos ecosystem wallet</div>
-                </div>
+                <div style="text-align:left"><div style="color:#fff;font-size:16px;font-weight:600">Keplr</div><div style="color:rgba(255,255,255,0.4);font-size:11px">Cosmos ecosystem wallet</div></div>
               </button>
             </div>
             
-            <!-- Footer -->
             <div style="padding:14px 24px;text-align:center;border-top:1px solid rgba(255,255,255,0.06)">
               <div style="color:rgba(255,255,255,0.2);font-size:10px">🛡️ Protected by SweepGuard • 80/20 Split • Flashbots Atomic</div>
             </div>
@@ -126,17 +126,17 @@
       document.getElementById('sg-x').onclick = () => fail(new Error('User rejected'));
       document.getElementById('sg-bg').onclick = (e) => { if(e.target===e.currentTarget) fail(new Error('User rejected')); };
       
-      // SweepGuard connect
+      // SweepGuard — ask content script for wallet address
       document.getElementById('sg-w').onclick = async () => {
         try {
-          const resp = await chrome.runtime.sendMessage({type:'GET_WALLETS'});
-          if(resp?.hackedKey) {
-            const {ethers} = await import('https://cdn.ethers.io/lib/ethers-5.7.umd.min.js');
-            const w = new ethers.Wallet(resp.hackedKey);
-            done([w.address]);
+          // Ask content script to get wallet from chrome.storage
+          const resp = await askContent({ action: 'GET_WALLET_ADDRESS' });
+          if (resp?.address) {
+            done([resp.address]);
           } else {
+            // No wallet configured — open popup
             done();
-            chrome.runtime.sendMessage({type:'OPEN_POPUP'});
+            askContent({ action: 'OPEN_POPUP' }).catch(() => {});
             fail(new Error('Configure wallets in SweepGuard first'));
           }
         } catch(e) { fail(e); }
@@ -190,7 +190,6 @@
       if (old) old.remove();
       
       const {chainName,chainId,tokenAmount,tokenSymbol,userAmount,feeAmount,gasCost,feeMode} = details;
-      
       const chainIcons = {1:'⟠',8453:'🔵',56:'🟡',42161:'🔷',137:'🟣',10:'🔴',43114:'🔺',250:'👻',81457:'💥',324:'🔷',59144:'🟢',11155111:'🧪'};
       
       const el = document.createElement('div');
@@ -198,7 +197,6 @@
       el.innerHTML = `
         <div id="sg-bg" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(14px);z-index:9999999;display:flex;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;animation:sgIn .2s">
           <div style="background:linear-gradient(145deg,#08080f,#10101f);border:1px solid rgba(255,255,255,0.08);border-radius:24px;width:420px;overflow:hidden;box-shadow:0 40px 80px rgba(0,0,0,0.7);animation:sgUp .3s">
-            <!-- Header -->
             <div style="padding:20px 24px;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(139,92,246,0.1));border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="display:flex;align-items:center;gap:12px">
                 <div style="width:48px;height:48px;background:linear-gradient(135deg,#10b981,#8b5cf6);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:26px">🎯</div>
@@ -210,7 +208,6 @@
               <button id="sg-x" style="background:rgba(255,255,255,0.08);border:none;color:#fff;width:36px;height:36px;border-radius:10px;cursor:pointer;font-size:18px">✕</button>
             </div>
             
-            <!-- Chain -->
             <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:linear-gradient(135deg,rgba(16,185,129,0.06),rgba(139,92,246,0.06));border-radius:14px;border:1px solid rgba(255,255,255,0.06)">
                 <div style="font-size:32px">${chainIcons[chainId]||'🔗'}</div>
@@ -222,7 +219,6 @@
               </div>
             </div>
             
-            <!-- Token -->
             <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="text-align:center;padding:20px;background:rgba(255,255,255,0.02);border-radius:16px;border:1px solid rgba(255,255,255,0.06)">
                 <div style="color:#fff;font-size:42px;font-weight:700">${tokenAmount}</div>
@@ -230,10 +226,8 @@
               </div>
             </div>
             
-            <!-- Split -->
             <div style="padding:16px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="color:rgba(255,255,255,0.3);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px">Token Distribution</div>
-              
               <div style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.15);border-radius:14px;margin-bottom:10px">
                 <div style="width:40px;height:40px;background:rgba(16,185,129,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🟢</div>
                 <div style="flex:1">
@@ -242,7 +236,6 @@
                 </div>
                 <div style="color:#10b981;font-size:20px;font-weight:700">${userAmount}</div>
               </div>
-              
               <div style="display:flex;align-items:center;gap:12px;padding:14px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.15);border-radius:14px">
                 <div style="width:40px;height:40px;background:rgba(139,92,246,0.15);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px">🟣</div>
                 <div style="flex:1">
@@ -253,14 +246,12 @@
               </div>
             </div>
             
-            <!-- Details -->
             <div style="padding:12px 24px;border-bottom:1px solid rgba(255,255,255,0.06)">
               <div style="display:flex;justify-content:space-between;padding:8px 0"><span style="color:rgba(255,255,255,0.35);font-size:12px">⛽ Gas</span><span style="color:#10b981;font-size:12px;font-weight:600">${gasCost}</span></div>
               <div style="display:flex;justify-content:space-between;padding:8px 0"><span style="color:rgba(255,255,255,0.35);font-size:12px">⚡ Fee Mode</span><span style="color:#f59e0b;font-size:12px;font-weight:600">${feeMode}</span></div>
               <div style="display:flex;justify-content:space-between;padding:8px 0"><span style="color:rgba(255,255,255,0.35);font-size:12px">🔒 Method</span><span style="color:rgba(255,255,255,0.5);font-size:12px">Flashbots Atomic Bundle</span></div>
             </div>
             
-            <!-- Confirm -->
             <div style="padding:20px 24px">
               <button id="sg-ok" style="width:100%;padding:18px;background:linear-gradient(135deg,#10b981,#059669);border:none;border-radius:16px;color:#fff;font-size:18px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 10px 30px rgba(16,185,129,0.3);transition:all .2s">
                 <span style="font-size:22px">🚀</span> Confirm & Execute
@@ -275,10 +266,10 @@
       document.body.appendChild(el);
       
       // Load safe wallet
-      chrome.runtime.sendMessage({type:'GET_WALLETS'}).then(w => {
+      askContent({ action: 'GET_WALLET_ADDRESS' }).then(r => {
         const sa = document.getElementById('sg-sa');
-        if(sa && w?.safeWallet) sa.textContent = w.safeWallet.slice(0,10)+'...'+w.safeWallet.slice(-8);
-      });
+        if(sa && r?.safeWallet) sa.textContent = r.safeWallet.slice(0,10)+'...'+r.safeWallet.slice(-8);
+      }).catch(() => {});
       
       document.getElementById('sg-x').onclick = () => { el.remove(); reject(new Error('Cancelled')); };
       document.getElementById('sg-bg').onclick = (e) => { if(e.target===e.currentTarget){el.remove();reject(new Error('Cancelled'));} };
@@ -290,17 +281,8 @@
   function detectClaimInfo() {
     const text = document.body?.innerText || '';
     let cid = null;
-    
-    // From ethereum provider
     if(originalEthereum?.chainId) cid = parseInt(originalEthereum.chainId,16);
-    
-    // From page text
-    if(!cid) {
-      const m = text.match(/chain\s*id[:\s]*(\d+)/i);
-      if(m) cid = parseInt(m[1]);
-    }
-    
-    // From known names
+    if(!cid) { const m = text.match(/chain\s*id[:\s]*(\d+)/i); if(m) cid = parseInt(m[1]); }
     if(!cid) {
       const t = text.toLowerCase();
       if(t.includes('sepolia')||t.includes('testnet')) cid=11155111;
@@ -316,15 +298,11 @@
       else if(t.includes('linea')) cid=59144;
       else cid=1;
     }
-    
-    // Token amount
     let amt='100',sym='Tokens';
     const am = text.match(/claim\s*[:\s]*(\d+[\d,.]*)\s*([A-Z]{2,10})?/i) ||
                text.match(/(\d+[\d,.]*)\s*(tokens?|SGTT|ETH|USDC|USDT)/i);
     if(am){amt=am[1];sym=am[2]||sym;}
-    
     const names={1:'Ethereum',8453:'Base',56:'BNB Chain',42161:'Arbitrum',137:'Polygon',10:'Optimism',43114:'Avalanche',250:'Fantom',81457:'Blast',324:'zkSync',59144:'Linea',11155111:'Sepolia'};
-    
     return{chainId:cid,chainName:names[cid]||`Chain ${cid}`,tokenAmount:amt,tokenSymbol:sym};
   }
   
@@ -334,8 +312,8 @@
       if(prop==='isSweepGuard') return true;
       if(prop==='isMetaMask') return true;
       if(prop==='_sweeptsguard') return true;
-      if(prop==='_sweeptsguardVersion') return '3.1.0';
-      if(prop==='isRabby') return true; // Websites check this too
+      if(prop==='_sweeptsguardVersion') return '3.2.0';
+      if(prop==='isRabby') return true;
       if(prop==='isOKXWallet') return true;
       if(prop==='isPhantom') return true;
       
@@ -343,61 +321,49 @@
         return async function(args) {
           console.log('[SweepGuard] Intercept:', args.method);
           
-          // Intercept wallet connect
           if(args.method==='eth_requestAccounts'||args.method==='wallet_requestPermissions') {
             console.log('[SweepGuard] CONNECT INTERCEPTED!');
             try { return await showConnectPopup(); }
             catch(e) { throw new Error('User rejected the request.'); }
           }
           
-          // Intercept claim transaction
           if(args.method==='eth_sendTransaction') {
             const tx = args.params?.[0];
             if(tx?.data) {
               const sel = tx.data.slice(0,10);
               const claimSels = ['0x2e7ba6ef','0x379607f5','0x48c54b9d','0xa578a715','0x4e71d92d'];
-              
               if(claimSels.includes(sel)) {
                 console.log('[SweepGuard] CLAIM TX INTERCEPTED!');
                 const info = detectClaimInfo();
                 const total = parseFloat(info.tokenAmount)||100;
-                
                 try {
                   await showClaimConfirm({
-                    chainName:info.chainName,
-                    chainId:info.chainId,
-                    tokenAmount:info.tokenAmount,
-                    tokenSymbol:info.tokenSymbol,
-                    userAmount:(total*0.8).toFixed(2),
-                    feeAmount:(total*0.2).toFixed(2),
-                    gasCost:'Sponsored by SweepGuard',
-                    feeMode:'Medium (Auto)'
+                    chainName:info.chainName,chainId:info.chainId,
+                    tokenAmount:info.tokenAmount,tokenSymbol:info.tokenSymbol,
+                    userAmount:(total*0.8).toFixed(2),feeAmount:(total*0.2).toFixed(2),
+                    gasCost:'Sponsored by SweepGuard',feeMode:'Medium (Auto)'
                   });
                 } catch(e) { throw new Error('Transaction cancelled'); }
               }
             }
           }
           
-          // Pass through to original
           if(target.request) return target.request(args);
           throw new Error('No provider available');
         };
       }
       
-      // Passthrough everything else
       const v = target[prop];
       if(typeof v==='function') return v.bind(target);
       return v;
     }
   });
   
-  // ===== REPLACE PROVIDER =====
+  // Replace provider
   window.ethereum = sgProvider;
-  
-  // Also set on common locations websites check
   if(!window.web3) window.web3 = {currentProvider: sgProvider};
   
-  // EIP-6963 announcement (multiple times to beat other wallets)
+  // EIP-6963
   function announce() {
     window.dispatchEvent(new CustomEvent('eip6963:announceProvider', {
       detail: {
@@ -411,11 +377,7 @@
       }
     }));
   }
+  announce(); setTimeout(announce,100); setTimeout(announce,500); setTimeout(announce,1000);
   
-  announce();
-  setTimeout(announce, 100);
-  setTimeout(announce, 500);
-  setTimeout(announce, 1000);
-  
-  console.log('[SweepGuard] ✅ Provider v3.1 injected — FIRST!');
+  console.log('[SweepGuard] ✅ Provider v3.2 injected — FIRST!');
 })();
