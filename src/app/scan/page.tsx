@@ -12,6 +12,8 @@ interface ScanResult {
     isDrainer: boolean
     drainerName?: string
   }
+  delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[]
+  recentDrains: { chainId: number; chainName: string; to: string; value: string; timestamp: string; txHash: string }[]
   assets: {
     type: string
     symbol: string
@@ -21,6 +23,7 @@ interface ScanResult {
     chainName: string
   }[]
   chains: number[]
+  lastActivity: string | null
 }
 
 function ScanContent() {
@@ -182,6 +185,71 @@ function ScanContent() {
                 </div>
               )}
             </div>
+
+            {/* Multi-Chain Delegations */}
+            {result.delegations && result.delegations.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold mb-4">
+                  🚨 Active Delegations ({result.delegations.length} chains)
+                </h2>
+                <div className="space-y-2">
+                  {result.delegations.map((d, i) => (
+                    <div key={i} className="p-4 bg-red-500/5 border border-red-500/20 rounded-xl">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <span className="text-red-400 font-semibold">{d.chainName}</span>
+                          {d.drainerName && (
+                            <span className="text-red-300 text-xs ml-2">({d.drainerName})</span>
+                          )}
+                        </div>
+                        <code className="text-white/50 text-xs">{d.delegatedTo.slice(0, 10)}...{d.delegatedTo.slice(-8)}</code>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Recent Drain Transactions */}
+            {result.recentDrains && result.recentDrains.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold mb-4">
+                  💸 Recent Outgoing Transfers ({result.recentDrains.length})
+                </h2>
+                <div className="space-y-2">
+                  {result.recentDrains.map((tx, i) => (
+                    <div key={i} className="p-4 bg-yellow-500/5 border border-yellow-500/20 rounded-xl">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-yellow-400 text-sm">{tx.chainName}</span>
+                          <p className="text-white/40 text-xs mt-1">
+                            To: <code className="text-white/60">{tx.to.slice(0, 10)}...{tx.to.slice(-8)}</code>
+                          </p>
+                          <p className="text-white/30 text-xs">
+                            {new Date(tx.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <a
+                          href={`https://etherscan.io/tx/${tx.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-green-400 text-xs hover:underline"
+                        >
+                          View TX →
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Last Activity */}
+            {result.lastActivity && (
+              <div className="text-center text-white/30 text-sm">
+                Last activity: {new Date(result.lastActivity).toLocaleString()}
+              </div>
+            )}
 
             {/* Next Steps */}
             <div className="p-6 bg-green-500/5 border border-green-500/20 rounded-2xl">

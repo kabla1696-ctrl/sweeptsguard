@@ -39,6 +39,8 @@ export interface ScanResult {
   assets: WalletAsset[]
   totalUsdValue: number
   delegation: DelegationInfo
+  delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[]
+  recentDrains: { chainId: number; chainName: string; to: string; value: string; timestamp: string; txHash: string }[]
   chains: number[]
   lastActivity: string | null
 }
@@ -179,9 +181,24 @@ export class WalletScanner {
   async scanWallet(address: string, chainIds: number[] = [1, 8453, 56]): Promise<ScanResult> {
     const allAssets: WalletAsset[] = []
     const activeChains: number[] = []
+    const delegations: ScanResult['delegations'] = []
+    const recentDrains: ScanResult['recentDrains'] = []
 
-    // Check delegation on mainnet
-    const delegation = await this.checkDelegation(address, 1)
+    // Check delegation on ALL chains
+    const delegationPromises = chainIds.map(async (chainId) => {
+      const chain = CHAINS[chainId]
+      const info = await this.checkDelegation(address, chainId)
+      if (info.hasDelegation) {
+        delegations.push({
+          chainId,
+          chainName: chain.name,
+          delegatedTo: info.delegatedTo!,
+          isDrainer: info.isDrainer,
+          drainerName: info.drainerName
+        })
+      }
+      return { chainId, info }
+    })
 
     // Scan all chains in parallel
     const scanPromises = chainIds.map(async (chainId) => {
@@ -198,16 +215,75 @@ export class WalletScanner {
       return chainAssets
     })
 
-    const results = await Promise.all(scanPromises)
+    // Get recent outgoing transactions (where drained funds went)
+    const drainPromises = chainIds.map(async (chainId) => {
+      try {
+        const provider = this.getProvider(chainId)
+        const chain = CHAINS[chainId]
+        const currentBlock = await provider.getBlockNumber()
+        const fromBlock = Math.max(0, currentBlock - 50000) // Last ~50k blocks
+
+        // Get recent transactions FROM this address
+        const txs: { hash: string; to: string; value: bigint; blockNumber: number }[] = []
+        
+        // Use getLogs for Transfer events FROM this address
+        const filter = {
+          fromBlock,
+          toBlock: 'latest',
+          topics: [
+            ethers.id('Transfer(address,address,uint256)'),
+            ethers.zeroPadValue(address, 32)
+          ]
+        }
+
+        const logs = await provider.getLogs(filter).catch(() => [])
+        
+        for (const log of logs.slice(-20)) { // Last 20 transfers
+          const block = await provider.getBlock(log.blockNumber).catch(() => null)
+          if (block) {
+            const iface = new ethers.Interface(['event Transfer(address indexed from, address indexed to, uint256 value)'])
+            const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data })
+            if (parsed) {
+              recentDrains.push({
+                chainId,
+                chainName: chain.name,
+                to: parsed.args.to,
+                value: parsed.args.value.toString(),
+                timestamp: new Date(Number(block.timestamp) * 1000).toISOString(),
+                txHash: log.transactionHash
+              })
+            }
+          }
+        }
+      } catch {
+        // Skip failed chains
+      }
+    })
+
+    const [results] = await Promise.all([
+      Promise.all(scanPromises),
+      Promise.all(delegationPromises),
+      Promise.all(drainPromises)
+    ])
     results.forEach(assets => allAssets.push(...assets))
+
+    // Main delegation (first found or Ethereum)
+    const mainDelegation = delegations.find(d => d.chainId === 1) || delegations[0]
 
     return {
       address,
       assets: allAssets,
       totalUsdValue: 0, // TODO: Price API integration
-      delegation,
+      delegation: mainDelegation ? {
+        hasDelegation: true,
+        delegatedTo: mainDelegation.delegatedTo,
+        isDrainer: mainDelegation.isDrainer,
+        drainerName: mainDelegation.drainerName
+      } : { hasDelegation: false, delegatedTo: null, isDrainer: false },
+      delegations,
+      recentDrains: recentDrains.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20),
       chains: activeChains,
-      lastActivity: null
+      lastActivity: recentDrains.length > 0 ? recentDrains[0].timestamp : null
     }
   }
 
