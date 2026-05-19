@@ -23,11 +23,21 @@ export default function Home() {
             SweepGuard
           </span>
         </div>
-        <div className="flex gap-4">
+        <div className="flex gap-4 flex-wrap">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
           <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
           <Link href="/airdrop" className="text-sm text-white/50 hover:text-white transition-colors">Airdrop</Link>
           <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/wallets" className="text-sm text-white/50 hover:text-white transition-colors">Wallets</Link>
+          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
+          <Link href="/freeze" className="text-sm text-white/50 hover:text-white transition-colors">Freeze</Link>
+          <Link href="/gas" className="text-sm text-white/50 hover:text-white transition-colors">Gas</Link>
+          <Link href="/bridge" className="text-sm text-white/50 hover:text-white transition-colors">Bridge</Link>
+          <Link href="/portfolio" className="text-sm text-white/50 hover:text-white transition-colors">Portfolio</Link>
+          <Link href="/defi" className="text-sm text-white/50 hover:text-white transition-colors">DeFi</Link>
+          <Link href="/audit" className="text-sm text-white/50 hover:text-white transition-colors">Audit</Link>
+          <Link href="/reputation" className="text-sm text-white/50 hover:text-white transition-colors">Reputation</Link>
+          <Link href="/scam-check" className="text-sm text-white/50 hover:text-white transition-colors">Scam Check</Link>
         </div>
       </nav>
 
@@ -124,8 +134,16 @@ export default function Home() {
               { icon: '🎯', title: 'Airdrop Claimer', desc: 'Claim airdrops safely. Tokens go directly to your safe wallet.' },
               { icon: '🚰', title: 'Gas Sponsor', desc: 'Atomic Flashbots bundles — gas + claim in one tx, invisible to drainer.' },
               { icon: '⚡', title: 'Auto-Sweep', desc: 'Real-time monitoring. Sweep incoming funds within seconds.' },
-              { icon: '📱', title: 'Telegram Alerts', desc: 'Get instant notifications for balance changes and sweeps.' },
-              { icon: '🧩', title: 'Chrome Extension', desc: 'Drainer detection, wallet protection, one-click claim from any page.' }
+              { icon: '📱', title: 'Multi-Channel Alerts', desc: 'Get instant notifications via Telegram, Discord, or Slack.' },
+              { icon: '🧩', title: 'Chrome Extension', desc: 'Drainer detection, wallet protection, one-click claim from any page.' },
+              { icon: '💼', title: 'Multi-Wallet', desc: 'Manage multiple compromised wallets from one dashboard.' },
+              { icon: '📊', title: 'Portfolio Tracker', desc: 'Track safe wallet assets across all chains with real-time data.' },
+              { icon: '🌉', title: 'Cross-Chain Bridge', desc: 'Built-in bridge interface using Stargate/LI.FI for easy transfers.' },
+              { icon: '🏦', title: 'DeFi Positions', desc: 'Check compromised wallet for Aave, Compound, Uniswap LP positions.' },
+              { icon: '🔬', title: 'AI Scam Detection', desc: 'Analyze transaction patterns and detect honeypot tokens.' },
+              { icon: '⛽', title: 'Gas Tracker', desc: 'Real-time gas prices for all chains with low/avg/high estimates.' },
+              { icon: '🛡️', title: 'Contract Audit', desc: 'Check if smart contracts are audited by known security firms.' },
+              { icon: '📧', title: 'Exchange Freeze', desc: 'Generate freeze request templates for Binance, Coinbase, OKX, Bybit.' }
             ].map((feature) => (
               <div key={feature.title} className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:border-green-500/20 transition-all">
                 <div className="text-3xl mb-4">{feature.icon}</div>

@@ -21,6 +21,8 @@ function DashboardContent() {
   const [privateKey, setPrivateKey] = useState('')
   const [telegramBotToken, setTelegramBotToken] = useState('')
   const [telegramChatId, setTelegramChatId] = useState('')
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('')
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('')
   const [monitoring, setMonitoring] = useState(false)
   const [status, setStatus] = useState<MonitorStatus | null>(null)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
@@ -40,7 +42,9 @@ function DashboardContent() {
           privateKey,
           chainIds: [1, 8453, 56, 42161, 137, 10],
           telegramBotToken: telegramBotToken || undefined,
-          telegramChatId: telegramChatId || undefined
+          telegramChatId: telegramChatId || undefined,
+          discordWebhookUrl: discordWebhookUrl || undefined,
+          slackWebhookUrl: slackWebhookUrl || undefined
         })
       })
       const data = await res.json()
@@ -51,7 +55,7 @@ function DashboardContent() {
     } catch (err) {
       console.error('Failed to start monitoring:', err)
     }
-  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId])
+  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl])
 
   const stopMonitoring = useCallback(async () => {
     try {
@@ -190,31 +194,53 @@ function DashboardContent() {
             </div>
 
             <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
-              <h3 className="text-sm font-semibold mb-3 text-white/70">📱 Telegram Alerts (Optional)</h3>
-              <div className="grid md:grid-cols-2 gap-4">
+              <h3 className="text-sm font-semibold mb-3 text-white/70">📢 Alert Channels (Optional)</h3>
+              <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-white/30 mb-1 block">Telegram Bot Token</label>
+                    <input
+                      type="text"
+                      value={telegramBotToken}
+                      onChange={(e) => setTelegramBotToken(e.target.value)}
+                      placeholder="123456:ABC-DEF..."
+                      className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/30 mb-1 block">Telegram Chat ID</label>
+                    <input
+                      type="text"
+                      value={telegramChatId}
+                      onChange={(e) => setTelegramChatId(e.target.value)}
+                      placeholder="-1001234567890"
+                      className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                    />
+                  </div>
+                </div>
                 <div>
-                  <label className="text-xs text-white/30 mb-1 block">Bot Token</label>
+                  <label className="text-xs text-white/30 mb-1 block">Discord Webhook URL</label>
                   <input
                     type="text"
-                    value={telegramBotToken}
-                    onChange={(e) => setTelegramBotToken(e.target.value)}
-                    placeholder="123456:ABC-DEF..."
+                    value={discordWebhookUrl}
+                    onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+                    placeholder="https://discord.com/api/webhooks/..."
                     className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-white/30 mb-1 block">Chat ID</label>
+                  <label className="text-xs text-white/30 mb-1 block">Slack Webhook URL</label>
                   <input
                     type="text"
-                    value={telegramChatId}
-                    onChange={(e) => setTelegramChatId(e.target.value)}
-                    placeholder="-1001234567890"
+                    value={slackWebhookUrl}
+                    onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                    placeholder="https://hooks.slack.com/services/..."
                     className="w-full px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
                   />
                 </div>
               </div>
               <p className="text-white/20 text-xs mt-2">
-                Get instant alerts when funds are detected or swept. Create a bot via @BotFather.
+                Get instant alerts via Telegram, Discord, or Slack when funds are detected or swept.
               </p>
             </div>
 

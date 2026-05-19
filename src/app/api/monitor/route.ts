@@ -8,7 +8,7 @@ const monitorSweeps = new Map<string, SweepResult[]>()
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { action, address, safeAddress, privateKey, chainIds, telegramBotToken, telegramChatId } = body
+  const { action, address, safeAddress, privateKey, chainIds, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl } = body
 
   if (!address) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
         checkIntervalMs: 5000,
         telegramBotToken,
         telegramChatId,
+        discordWebhookUrl,
+        slackWebhookUrl,
         onAlert: (alert) => {
           alerts.push(alert)
           if (alerts.length > 100) alerts.shift()

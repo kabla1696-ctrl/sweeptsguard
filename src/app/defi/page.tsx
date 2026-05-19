@@ -1,0 +1,160 @@
+'use client'
+
+import { useState, useCallback, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
+import Link from 'next/link'
+
+interface DeFiPosition {
+  protocol: string
+  type: string
+  chainId: number
+  chainName: string
+  asset: string
+  balance: string
+  contractAddress: string
+}
+
+interface DeFiData {
+  address: string
+  positions: DeFiPosition[]
+  totalPositions: number
+  note?: string
+}
+
+function DeFiContent() {
+  const searchParams = useSearchParams()
+  const addressParam = searchParams.get('address')
+
+  const [address, setAddress] = useState(addressParam || '')
+  const [data, setData] = useState<DeFiData | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const fetchDeFi = useCallback(async (addr: string) => {
+    if (!addr) return
+    setLoading(true)
+    setError('')
+    setData(null)
+    try {
+      const res = await fetch(`/api/defi?address=${addr}`)
+      const result = await res.json() as DeFiData & { error?: string }
+      if (result.error) {
+        setError(result.error)
+      } else {
+        setData(result)
+      }
+    } catch {
+      setError('Failed to fetch DeFi positions')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    fetchDeFi(address)
+  }
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'lending': return '🏦'
+      case 'lp': return '💧'
+      case 'staking': return '🥩'
+      case 'yield': return '🌾'
+      default: return '📊'
+    }
+  }
+
+  return (
+    <main className="min-h-screen bg-[#0a0a0f] text-white">
+      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="text-2xl">🛡️</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
+        </Link>
+        <div className="flex gap-4">
+          <Link href="/scan" className="text-sm text-white/50 hover:text-white">Scan</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Dashboard</Link>
+        </div>
+      </nav>
+
+      <div className="max-w-3xl mx-auto px-6 py-12">
+        <h1 className="text-3xl font-bold mb-2">DeFi Positions</h1>
+        <p className="text-white/40 mb-8">Check compromised wallet for DeFi positions (Aave, Compound, Uniswap)</p>
+
+        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
+          <input
+            type="text"
+            value={address}
+            onChange={e => setAddress(e.target.value)}
+            placeholder="Enter wallet address (0x...)"
+            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
+          >
+            {loading ? 'Scanning...' : '🔍 Scan'}
+          </button>
+        </form>
+
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>
+        )}
+
+        {data && (
+          <div className="space-y-6">
+            <div className="p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+              <span className="text-white/40 text-sm">Total Positions Found</span>
+              <div className="text-3xl font-bold text-green-400">{data.totalPositions}</div>
+            </div>
+
+            {data.note && (
+              <p className="text-white/30 text-sm">{data.note}</p>
+            )}
+
+            {data.positions.length > 0 ? (
+              <div className="space-y-3">
+                {data.positions.map((pos, i) => (
+                  <div key={i} className="p-5 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-2xl">{getTypeIcon(pos.type)}</span>
+                      <div>
+                        <h3 className="font-semibold">{pos.protocol}</h3>
+                        <span className="text-white/30 text-xs">{pos.chainName} • {pos.type}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mt-3">
+                      <div className="p-2 bg-white/[0.02] rounded-lg">
+                        <span className="text-xs text-white/30">Asset</span>
+                        <p className="font-mono text-sm">{pos.asset}</p>
+                      </div>
+                      <div className="p-2 bg-white/[0.02] rounded-lg">
+                        <span className="text-xs text-white/30">Balance</span>
+                        <p className="font-mono text-sm">{parseFloat(pos.balance).toFixed(6)}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 text-white/30">
+                <p className="text-lg mb-2">No DeFi positions found</p>
+                <p className="text-sm">This wallet doesn&apos;t have positions in major protocols</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </main>
+  )
+}
+
+export default function DeFiPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">Loading...</div>}>
+      <DeFiContent />
+    </Suspense>
+  )
+}

@@ -1,6 +1,6 @@
 import { ethers } from 'ethers'
 import { CHAINS } from './chains'
-import { createTelegramAlert, type TelegramAlert } from './telegram'
+import { createAlertSystem, type AlertSystem } from './alerts'
 import { isKnownDrainer, isExchangeWallet } from './draindb'
 import { tracker } from './tracker'
 
@@ -12,6 +12,8 @@ export interface MonitorConfig {
   checkIntervalMs: number
   telegramBotToken?: string
   telegramChatId?: string
+  discordWebhookUrl?: string
+  slackWebhookUrl?: string
   enableFlashbots?: boolean
   onAlert?: (alert: MonitorAlert) => void
   onSweep?: (result: SweepResult) => void
@@ -54,7 +56,7 @@ export class WalletMonitor {
   private intervalId: ReturnType<typeof setInterval> | null = null
   private providers: Map<number, ethers.JsonRpcProvider> = new Map()
   private wallets: Map<number, ethers.Wallet> = new Map()
-  private telegram: TelegramAlert | null = null
+  private alerts: AlertSystem | null = null
   private onAlert?: (alert: MonitorAlert) => void
   private onSweep?: (result: SweepResult) => void
 
@@ -81,9 +83,14 @@ export class WalletMonitor {
       }
     }
 
-    // Initialize Telegram alerts if configured
-    if (config.telegramBotToken && config.telegramChatId) {
-      this.telegram = createTelegramAlert(config.telegramBotToken, config.telegramChatId)
+    // Initialize alert system if any channel configured
+    if (config.telegramBotToken || config.discordWebhookUrl || config.slackWebhookUrl) {
+      this.alerts = createAlertSystem({
+        telegramBotToken: config.telegramBotToken,
+        telegramChatId: config.telegramChatId,
+        discordWebhookUrl: config.discordWebhookUrl,
+        slackWebhookUrl: config.slackWebhookUrl
+      })
     }
   }
 
@@ -118,9 +125,9 @@ export class WalletMonitor {
 
           this.state.alerts.push(alert)
 
-          // Send Telegram alert
-          if (this.telegram) {
-            await this.telegram.sendIncomingTransfer(chain.name, chain.nativeCurrency, amount)
+          // Send alerts
+          if (this.alerts) {
+            await this.alerts.sendIncomingTransfer(chain.name, chain.nativeCurrency, amount)
           }
 
           // Check if from drainer
@@ -147,8 +154,8 @@ export class WalletMonitor {
                 this.state.alerts.push(drainerAlert)
                 this.onAlert?.(drainerAlert)
 
-                if (this.telegram) {
-                  await this.telegram.sendDrainerDetected(fromInfo.name, fromAddr)
+                if (this.alerts) {
+                  await this.alerts.sendDrainerDetected(fromInfo.name, fromAddr)
                 }
                 break
               }
@@ -186,8 +193,8 @@ export class WalletMonitor {
             timestamp: Date.now()
           })
 
-          if (this.telegram) {
-            await this.telegram.sendExchangeDeposit(result.exchange, '0', 'ETH', result.txHash)
+          if (this.alerts) {
+            await this.alerts.sendExchangeDeposit(result.exchange, '0', 'ETH', result.txHash)
           }
         }
       }
@@ -241,9 +248,9 @@ export class WalletMonitor {
 
       this.state.sweepResults.push(result)
 
-      if (this.telegram) {
+      if (this.alerts) {
         const explorerUrl = `${chain.explorer}/tx/${tx.hash}`
-        await this.telegram.sendSweepSuccess(chain.name, chain.nativeCurrency, ethers.formatEther(sweepAmount), tx.hash, explorerUrl)
+        await this.alerts.sendSweepSuccess(chain.name, chain.nativeCurrency, ethers.formatEther(sweepAmount), tx.hash, explorerUrl)
       }
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error'
@@ -258,8 +265,8 @@ export class WalletMonitor {
 
       this.state.sweepResults.push(result)
 
-      if (this.telegram) {
-        await this.telegram.sendSweepFailed(chain.name, chain.nativeCurrency, errorMessage)
+      if (this.alerts) {
+        await this.alerts.sendSweepFailed(chain.name, chain.nativeCurrency, errorMessage)
       }
     }
   }
