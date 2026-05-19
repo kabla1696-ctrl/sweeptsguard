@@ -34,6 +34,8 @@ const CLAIM_SIGNATURES = {
   claimWithDeadline: 'claim(address,uint256,bytes32[],uint256)',
   // Simple claim (no params)
   claimSimple: 'claim()',
+  // Claim on behalf (claimTo pattern)
+  claimOnBehalf: 'claimOnBehalf(address,address,uint256,bytes32[])',
   // Claim with signature
   claimWithSig: 'claim(address,bytes)',
   // ERC20 permit-style
@@ -225,6 +227,63 @@ export class AirdropClaimer {
       return {
         success: true,
         txHash: txHashes[1] || txHashes[0],
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Claim failed'
+      return {
+        success: false,
+        error: errorMessage,
+        chainName: chain.name,
+        tokenSymbol: 'Unknown'
+      }
+    }
+  }
+
+  // Claim airdrop FROM ANY WALLET (not compromised wallet)
+  // Use when: compromised wallet has 0 gas, but is eligible for airdrop
+  // The "fromWallet" (with gas) sends the tx, tokens go to safeWallet
+  async claimFromAnyWallet(
+    claimContract: string,
+    chainId: number,
+    eligibleAddress: string,  // compromised wallet (eligible for airdrop)
+    safeWalletAddress: string,  // where tokens should go
+    fromPrivateKey: string,  // wallet WITH gas (your normal wallet)
+    claimData: string
+  ): Promise<ClaimResult> {
+    const provider = this.providers.get(chainId)
+    const chain = CHAINS[chainId]
+
+    if (!provider || !chain) {
+      return { success: false, error: 'Chain not supported', chainName: 'Unknown', tokenSymbol: 'Unknown' }
+    }
+
+    try {
+      const fromWallet = new ethers.Wallet(fromPrivateKey, provider)
+
+      // Check gas
+      const balance = await provider.getBalance(fromWallet.address)
+      const minGas = ethers.parseEther('0.001')
+      if (balance < minGas) {
+        return {
+          success: false,
+          error: `Your wallet needs gas. Have ${ethers.formatEther(balance)} ${chain.nativeCurrency}`,
+          chainName: chain.name,
+          tokenSymbol: 'Unknown'
+        }
+      }
+
+      // Send claim tx from your wallet (with gas)
+      const tx = await fromWallet.sendTransaction({
+        to: claimContract,
+        data: claimData,
+        gasLimit: 250000n,
+      })
+
+      return {
+        success: true,
+        txHash: tx.hash,
         chainName: chain.name,
         tokenSymbol: 'Unknown'
       }

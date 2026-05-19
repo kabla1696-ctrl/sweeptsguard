@@ -3,20 +3,50 @@ import { claimer } from '@/lib/claimer'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey } = body
+  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey, mode, eligibleAddress } = body
 
-  if (!contractAddress || !chainId || !recipientAddress || !privateKey) {
+  if (!contractAddress || !chainId || !privateKey) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
   try {
+    // MODE: claimFromAnyWallet — use any wallet with gas to claim for compromised wallet
+    if (mode === 'claimFromAnyWallet' && eligibleAddress) {
+      // Encode claim data with eligibleAddress as recipient
+      let claimData: string
+      try {
+        claimData = claimer.encodeClaimData('claim', {
+          recipient: eligibleAddress,  // tokens go to eligible (compromised) address
+          amount: body.amount || '0',
+          proof: body.proof || []
+        })
+      } catch {
+        // Fallback to simple claim
+        claimData = claimer.encodeClaimData('claimSimple', {})
+      }
+
+      // Use recipientAddress as the safe wallet if provided, otherwise eligibleAddress
+      const safeWallet = recipientAddress || eligibleAddress
+
+      const result = await claimer.claimFromAnyWallet(
+        contractAddress,
+        chainId,
+        eligibleAddress,
+        safeWallet,
+        privateKey,  // this is the "from" wallet (with gas)
+        claimData
+      )
+      return NextResponse.json({ results: [result] })
+    }
+
     // Encode claim data based on method
     let claimData: string
 
     switch (claimMethod) {
       case 'claim': {
-        // Standard claim with recipient, amount, proof
-        // In production, these would come from the airdrop's merkle tree
+        if (!recipientAddress) {
+          return NextResponse.json({ error: 'Recipient address required' }, { status: 400 })
+        }
         const amount = body.amount || '0'
         const proof = body.proof || []
         claimData = claimer.encodeClaimData('claim', {

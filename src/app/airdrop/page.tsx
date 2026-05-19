@@ -27,6 +27,7 @@ export default function AirdropPage() {
   const [recipientAddress, setRecipientAddress] = useState('')
   const [privateKey, setPrivateKey] = useState('')
   const [sponsorKey, setSponsorKey] = useState('')
+  const [claimMode, setClaimMode] = useState<'direct' | 'sponsor' | 'anyWallet'>('anyWallet')
   const [claiming, setClaiming] = useState(false)
   const [results, setResults] = useState<ClaimResult[]>([])
   const [showKey, setShowKey] = useState(false)
@@ -58,23 +59,55 @@ export default function AirdropPage() {
 
   const handleClaim = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!contractAddress || !recipientAddress || !privateKey) return
+    if (!contractAddress || !privateKey) return
 
     setClaiming(true)
     setResults([])
 
     try {
-      const res = await fetch('/api/airdrop/claim', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let body: Record<string, unknown>
+
+      if (claimMode === 'anyWallet') {
+        // Claim from any wallet — no sponsor needed!
+        // privateKey = your normal wallet (with gas)
+        // recipientAddress = compromised wallet (eligible address)
+        if (!recipientAddress) return
+        body = {
+          contractAddress,
+          chainId,
+          claimMethod,
+          eligibleAddress: recipientAddress,  // compromised wallet
+          recipientAddress: recipientAddress,  // where tokens go
+          privateKey,  // your wallet with gas
+          mode: 'claimFromAnyWallet'
+        }
+      } else if (claimMode === 'sponsor') {
+        // Sponsor wallet mode
+        if (!recipientAddress || !sponsorKey) return
+        body = {
           contractAddress,
           chainId,
           claimMethod,
           recipientAddress,
           privateKey,
-          sponsorPrivateKey: sponsorKey || undefined
-        })
+          sponsorPrivateKey: sponsorKey
+        }
+      } else {
+        // Direct claim
+        if (!recipientAddress) return
+        body = {
+          contractAddress,
+          chainId,
+          claimMethod,
+          recipientAddress,
+          privateKey
+        }
+      }
+
+      const res = await fetch('/api/airdrop/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       })
       const data = await res.json()
       if (data.results) {
@@ -111,34 +144,63 @@ export default function AirdropPage() {
         <p className="text-white/40 mb-8">Claim airdrops from compromised wallet → tokens go to safe wallet</p>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-8">
-          {(['claim', 'faucets'] as const).map((tab) => (
+        <div className="flex gap-2 mb-8 flex-wrap">
+          {([
+            { id: 'anyWallet' as const, label: '🎯 Claim From Any Wallet', desc: 'No sponsor needed!' },
+            { id: 'sponsor' as const, label: '💰 With Sponsor Wallet', desc: 'Flashbots gas sponsorship' },
+            { id: 'direct' as const, label: '⚡ Direct Claim', desc: 'If wallet has gas' },
+          ]).map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                activeTab === tab
+              key={tab.id}
+              onClick={() => setClaimMode(tab.id)}
+              className={`px-4 py-3 rounded-lg text-sm font-medium transition-colors text-left ${
+                claimMode === tab.id
                   ? 'bg-green-600 text-white'
                   : 'bg-white/[0.05] text-white/50 hover:text-white'
               }`}
             >
-              {tab === 'claim' ? '🎯 Claim Airdrop' : '🚰 Faucets & Gas'}
+              <div>{tab.label}</div>
+              <div className="text-xs opacity-60">{tab.desc}</div>
             </button>
           ))}
         </div>
 
-        {/* Claim Tab */}
+        {/* Claim Modes */}
         {activeTab === 'claim' && (
           <div>
-            <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-6">
-              <h3 className="text-yellow-400 font-semibold mb-2">⚡ How It Works</h3>
-              <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
-                <li>Enter the airdrop claim contract address</li>
-                <li>Set <span className="text-green-400">recipient = your safe wallet</span></li>
-                <li>Sign with compromised wallet&apos;s private key</li>
-                <li>Tokens are claimed and sent directly to safe wallet</li>
-              </ol>
-            </div>
+            {/* Info Box based on mode */}
+            {claimMode === 'anyWallet' && (
+              <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
+                <h3 className="text-green-400 font-semibold mb-2">🎯 Claim From Any Wallet — No Sponsor Needed!</h3>
+                <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
+                  <li>Use your <span className="text-green-400">normal wallet</span> (with ETH for gas) to sign</li>
+                  <li>Enter <span className="text-yellow-400">compromised wallet address</span> (eligible for airdrop)</li>
+                  <li>Tokens claimed from eligible address → sent to your safe wallet</li>
+                  <li>Gas comes from your normal wallet — <span className="text-green-400">no sponsor wallet needed!</span></li>
+                </ol>
+              </div>
+            )}
+            {claimMode === 'sponsor' && (
+              <div className="p-5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-6">
+                <h3 className="text-yellow-400 font-semibold mb-2">💰 Sponsor Wallet Mode</h3>
+                <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
+                  <li>Compromised wallet signs the claim transaction</li>
+                  <li>Sponsor wallet pays gas (Flashbots atomic bundle)</li>
+                  <li>Both in same block — drainer can't intercept</li>
+                  <li>Tokens go directly to safe wallet</li>
+                </ol>
+              </div>
+            )}
+            {claimMode === 'direct' && (
+              <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-6">
+                <h3 className="text-blue-400 font-semibold mb-2">⚡ Direct Claim</h3>
+                <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside">
+                  <li>Compromised wallet has gas (ETH)</li>
+                  <li>Sign and send claim transaction directly</li>
+                  <li>Tokens go to safe wallet</li>
+                </ol>
+              </div>
+            )}
 
             <form onSubmit={handleClaim} className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
@@ -173,46 +235,52 @@ export default function AirdropPage() {
                 </div>
               </div>
 
+              {/* Recipient / Eligible Address */}
               <div>
                 <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  Claim Method
-                </label>
-                <select
-                  value={claimMethod}
-                  onChange={(e) => setClaimMethod(e.target.value)}
-                  className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
-                >
-                  <option value="claim">claim(recipient, amount, proof)</option>
-                  <option value="claimSimple">claim() — no params</option>
-                  <option value="claimWithDeadline">claim with deadline</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  🟢 Recipient (Safe Wallet)
+                  {claimMode === 'anyWallet'
+                    ? '🟡 Compromised Wallet Address (eligible for airdrop)'
+                    : '🟢 Recipient (Safe Wallet)'
+                  }
                 </label>
                 <input
                   type="text"
                   value={recipientAddress}
                   onChange={(e) => setRecipientAddress(e.target.value)}
-                  placeholder="Your safe wallet 0x..."
-                  className="w-full px-4 py-3 bg-green-500/5 border border-green-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  placeholder={claimMode === 'anyWallet' ? 'Compromised wallet 0x...' : 'Your safe wallet 0x...'}
+                  className={`w-full px-4 py-3 rounded-xl text-white placeholder:text-white/20 focus:outline-none text-sm font-mono ${
+                    claimMode === 'anyWallet'
+                      ? 'bg-yellow-500/5 border border-yellow-500/20 focus:border-yellow-500/40'
+                      : 'bg-green-500/5 border border-green-500/20 focus:border-green-500/40'
+                  }`}
                 />
-                <p className="text-green-400/50 text-xs mt-1">Tokens will be sent here</p>
+                <p className={`text-xs mt-1 ${claimMode === 'anyWallet' ? 'text-yellow-400/50' : 'text-green-400/50'}`}>
+                  {claimMode === 'anyWallet'
+                    ? 'Wallet eligible for airdrop (compromised)'
+                    : 'Tokens will be sent here'
+                  }
+                </p>
               </div>
 
+              {/* Private Key — label changes based on mode */}
               <div>
                 <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  🔴 Private Key (Compromised Wallet)
+                  {claimMode === 'anyWallet'
+                    ? '🟢 Your Wallet Private Key (with gas)'
+                    : '🔴 Private Key (Compromised Wallet)'
+                  }
                 </label>
                 <div className="relative">
                   <input
                     type={showKey ? 'text' : 'password'}
                     value={privateKey}
                     onChange={(e) => setPrivateKey(e.target.value)}
-                    placeholder="Private key of compromised wallet..."
-                    className="w-full px-4 py-3 pr-20 bg-red-500/5 border border-red-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/40 text-sm font-mono"
+                    placeholder={claimMode === 'anyWallet' ? 'Your normal wallet key (has ETH for gas)...' : 'Private key of compromised wallet...'}
+                    className={`w-full px-4 py-3 pr-20 rounded-xl text-white placeholder:text-white/20 focus:outline-none text-sm font-mono ${
+                      claimMode === 'anyWallet'
+                        ? 'bg-green-500/5 border border-green-500/20 focus:border-green-500/40'
+                        : 'bg-red-500/5 border border-red-500/20 focus:border-red-500/40'
+                    }`}
                   />
                   <button
                     type="button"
@@ -222,38 +290,46 @@ export default function AirdropPage() {
                     {showKey ? 'Hide' : 'Show'}
                   </button>
                 </div>
-                <p className="text-red-400/50 text-xs mt-1">Used only for signing — never stored</p>
+                <p className={`text-xs mt-1 ${claimMode === 'anyWallet' ? 'text-green-400/50' : 'text-red-400/50'}`}>
+                  {claimMode === 'anyWallet'
+                    ? 'Used for signing only — this wallet has gas'
+                    : 'Used only for signing — never stored'
+                  }
+                </p>
               </div>
 
-              <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  💰 Sponsor Wallet Private Key (for gas)
-                </label>
-                <div className="relative">
-                  <input
-                    type={showSponsorKey ? 'text' : 'password'}
-                    value={sponsorKey}
-                    onChange={(e) => setSponsorKey(e.target.value)}
-                    placeholder="Optional — wallet with ETH for gas sponsorship"
-                    className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSponsorKey(!showSponsorKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
-                  >
-                    {showSponsorKey ? 'Hide' : 'Show'}
-                  </button>
+              {/* Sponsor Wallet — only show in sponsor mode */}
+              {claimMode === 'sponsor' && (
+                <div>
+                  <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                    💰 Sponsor Wallet Private Key (for gas)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showSponsorKey ? 'text' : 'password'}
+                      value={sponsorKey}
+                      onChange={(e) => setSponsorKey(e.target.value)}
+                      placeholder="Wallet with ETH for gas sponsorship"
+                      className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSponsorKey(!showSponsorKey)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
+                    >
+                      {showSponsorKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <p className="text-yellow-400/50 text-xs mt-1">Flashbots atomic bundle — gas + claim same block</p>
                 </div>
-                <p className="text-yellow-400/50 text-xs mt-1">For wallets with 0 gas — Flashbots atomic bundle sponsorship</p>
-              </div>
+              )}
 
               <button
                 type="submit"
-                disabled={claiming || !contractAddress || !recipientAddress || !privateKey}
+                disabled={claiming || !contractAddress || !privateKey}
                 className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
               >
-                {claiming ? '⏳ Claiming...' : '🎯 Claim Airdrop → Safe Wallet'}
+                {claiming ? '⏳ Claiming...' : '🎯 Claim Airdrop'}
               </button>
             </form>
 
