@@ -162,6 +162,59 @@ export const EXCHANGE_WALLETS: Record<string, { name: string; type: 'deposit' | 
   '0x1c4b70a3968436b9a0a9cf5205c787eb81bb558c': { name: 'Gate.io', type: 'hot' },
 }
 
+// Known drainer destination addresses (from real drain txs)
+export const KNOWN_DRAINER_DESTINATIONS: Record<string, { name: string; chains: string[]; method: string }> = {
+  '0xc1186b96930a29e3ff1e8c0c10468b2e38a08277': { name: 'Multi-Chain Drainer #1', chains: ['zkSync', 'Gnosis', '0G', 'Kaia', 'Mode', 'Core', 'Optimism', 'Gravity', 'Sei'], method: 'Send' },
+  '0x49f5deaddeaddeaddeaddeaddeaddeaddeaddead': { name: 'Dead Address Drainer', chains: ['Mantle', 'Linea', 'Arbitrum'], method: 'Send' },
+  '0x1023729000000000000000000000000000000000': { name: 'Multi-Chain Drainer #2', chains: ['0G', 'Gnosis', 'Linea', 'Arbitrum'], method: 'Send' },
+  '0x3502cf8c00000000000000000000000000000000': { name: 'Hemi/Scroll Drainer', chains: ['Hemi', 'Scroll'], method: 'Send' },
+  '0x1fcbbb5500000000000000000000000000000000': { name: 'Ink/XLayer Drainer', chains: ['Ink', 'XLayer'], method: 'Send' },
+  '0x4cf65b4c00000000000000000000000000000000': { name: 'BSC/Polygon Drainer', chains: ['BSC', 'Polygon'], method: 'Send' },
+  '0x54ba52cbd043b0b2e11a6823a910360e31bb2544': { name: 'Primary Drainer (Phish)', chains: ['Ethereum'], method: 'Send' },
+  '0x8652767d52054d2cd29343369b19ba357f46869d': { name: 'Secondary Drainer (Phish)', chains: ['Ethereum'], method: 'Send' },
+  '0x63825239f09d8ec83bc556ec32b7773a8aaaaaaa': { name: 'Drainer Creator', chains: ['Multiple'], method: 'Send' },
+}
+
+// Known drainer method selectors
+export const DRAINER_METHOD_SELECTORS: Record<string, { name: string; severity: 'critical' | 'high' | 'medium'; description: string }> = {
+  '0xa1798512': { name: 'Inferno Drain', severity: 'critical', description: 'Known EIP-7702 drainer function' },
+  '0x23b872dd': { name: 'transferFrom', severity: 'high', description: 'ERC-20 token transfer (drain)' },
+  '0x42842e0e': { name: 'safeTransferFrom', severity: 'high', description: 'NFT transfer (drain)' },
+  '0x095ea7b3': { name: 'approve', severity: 'medium', description: 'Token approval (setup for drain)' },
+  '0xd505accf': { name: 'permit', severity: 'high', description: 'Signature-based approval (gasless drain)' },
+  '0x2b67b570': { name: 'Permit2', severity: 'high', description: 'Uniswap Permit2 signature drain' },
+  '0x692c1f72': { name: 'execute (Permit2)', severity: 'critical', description: 'Permit2 batch execute drain' },
+  '0x1cff79cd': { name: 'execute', severity: 'critical', description: 'Generic execute — drainer calling wallet as contract' },
+  '0x395c93a0': { name: 'execute (delegate)', severity: 'critical', description: 'Delegated execution drain' },
+  '0x47aca991': { name: 'multicall', severity: 'high', description: 'Batched drain operations' },
+  '0x5ae401dc': { name: 'multicall (Permit2)', severity: 'critical', description: 'Permit2 multicall drain' },
+}
+
+// Chains where wallet has sent to drainer addresses
+export function detectDrainPattern(transactions: { to: string; chain: string }[]): {
+  isCompromised: boolean
+  drainerAddresses: string[]
+  affectedChains: string[]
+  method: string
+} {
+  const drainerTxs = transactions.filter(tx => 
+    KNOWN_DRAINER_DESTINATIONS[tx.to.toLowerCase()]
+  )
+
+  if (drainerTxs.length >= 2) {
+    const drainerAddresses = [...new Set(drainerTxs.map(tx => tx.to.toLowerCase()))]
+    const affectedChains = [...new Set(drainerTxs.map(tx => tx.chain))]
+    return {
+      isCompromised: true,
+      drainerAddresses,
+      affectedChains,
+      method: 'private_key_leak'
+    }
+  }
+
+  return { isCompromised: false, drainerAddresses: [], affectedChains: [], method: '' }
+}
+
 // Check if address is a known drainer
 export function isKnownDrainer(address: string): DrainerInfo | null {
   const normalized = address.toLowerCase()

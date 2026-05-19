@@ -16,6 +16,7 @@ interface ScanResult {
   recentDrains: { chainId: number; chainName: string; to: string; value: string; timestamp: string; txHash: string }[]
   suspiciousApprovals: { chainId: number; chainName: string; token: string; spender: string; amount: string; isDrainer: boolean }[]
   drainerMethodCalls: { chainId: number; chainName: string; method: string; to: string; txHash: string; timestamp: string }[]
+  privateKeyCompromised?: { isCompromised: boolean; drainerAddresses: string[]; affectedChains: string[]; method: string }
   assets: {
     type: string
     symbol: string
@@ -199,6 +200,41 @@ function ScanContent() {
                 </div>
               )}
             </div>
+
+            
+            {/* Private Key Compromise Warning */}
+            {result.privateKeyCompromised && result.privateKeyCompromised.isCompromised && (
+              <div className="p-6 bg-red-600/20 border-2 border-red-500/50 rounded-xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <span className="text-3xl">🔑</span>
+                  <h2 className="text-xl font-bold text-red-400">PRIVATE KEY COMPROMISED</h2>
+                </div>
+                <p className="text-red-300 text-sm mb-3">
+                  ⚠️ Your wallet's private key has been leaked. A drainer bot has FULL CONTROL of your wallet across multiple chains.
+                </p>
+                <p className="text-red-400/80 text-xs mb-3">
+                  This is NOT just an EIP-7702 delegation — the attacker can sign transactions as YOU on ANY chain.
+                </p>
+                <div className="space-y-1">
+                  <p className="text-white/50 text-xs">Drainer addresses receiving your funds:</p>
+                  {result.privateKeyCompromised.drainerAddresses.map((addr, i) => (
+                    <code key={i} className="block text-red-300 text-xs">{addr}</code>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <p className="text-white/50 text-xs">Affected chains: {result.privateKeyCompromised.affectedChains.join(', ')}</p>
+                </div>
+                <div className="mt-4 p-3 bg-red-500/10 rounded-lg">
+                  <p className="text-red-400 text-xs font-semibold">🛡️ What to do:</p>
+                  <ul className="text-red-300/80 text-xs mt-1 space-y-1">
+                    <li>• Do NOT send any funds to this wallet — they will be stolen instantly</li>
+                    <li>• If you have assets on other chains, try to sweep them using Flashbots (private mempool)</li>
+                    <li>• Generate a NEW wallet and move all future assets there</li>
+                    <li>• This wallet is permanently compromised — there is no fix</li>
+                  </ul>
+                </div>
+              </div>
+            )}
 
             {/* Multi-Chain Delegations */}
             {result.delegations && result.delegations.length > 0 && (

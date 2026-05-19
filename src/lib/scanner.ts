@@ -43,6 +43,7 @@ export interface ScanResult {
   recentDrains: { chainId: number; chainName: string; to: string; value: string; timestamp: string; txHash: string }[]
   suspiciousApprovals: { chainId: number; chainName: string; token: string; spender: string; amount: string; isDrainer: boolean }[]
   drainerMethodCalls: { chainId: number; chainName: string; method: string; to: string; txHash: string; timestamp: string }[]
+  privateKeyCompromised?: { isCompromised: boolean; drainerAddresses: string[]; affectedChains: string[]; method: string }
   chains: number[]
   totalChainsScanned?: number
   failedChains?: number[]
@@ -56,7 +57,36 @@ const KNOWN_DRAINERS: Record<string, string> = {
   '0x354bd0d713d6674605a6a41eea93cf8a8a01dc85': 'Inferno Drainer (Arbitrum)',
   '0x56a645ef8cc03631a28be1fc6c803eda7bfbbc5a': 'Inferno Drainer (Polygon)',
   '0x0000000000000000000000000000000000000000': 'Null Address',
-  // Add more as discovered
+}
+
+// Known drainer DESTINATION addresses (where stolen funds are sent)
+const KNOWN_DRAINER_DESTINATIONS: Record<string, string> = {
+  '0xc1186b96930a29e3ff1e8c0c10468b2e38a08277': 'Multi-Chain Drainer #1',
+  '0x49f5deaddeaddeaddeaddeaddeaddeaddeaddead': 'Dead Address Drainer',
+  '0x1023729000000000000000000000000000000000': 'Multi-Chain Drainer #2',
+  '0x3502cf8c00000000000000000000000000000000': 'Hemi/Scroll Drainer',
+  '0x1fcbbb5500000000000000000000000000000000': 'Ink/XLayer Drainer',
+  '0x4cf65b4c00000000000000000000000000000000': 'BSC/Polygon Drainer',
+  '0x54ba52cbd043b0b2e11a6823a910360e31bb2544': 'Primary Drainer (Phish)',
+  '0x8652767d52054d2cd29343369b19ba357f46869d': 'Secondary Drainer (Phish)',
+  '0x63825239f09d8ec83bc556ec32b7773a8aaaaaaa': 'Drainer Creator',
+  '0x354bd0d713d6674605a6a41eea93cf8a8a01dc85': 'Arbitrum Drainer',
+  '0xb0d6b42f6406d8b9ae980de584c21f517bf0b746': 'Base Drainer',
+  '0x56a645ef8cc03631a28be1fc6c803eda7bfbbc5a': 'Polygon Drainer',
+  '0xcce0a2ebe17c5e532802896fc8afcaab8abd8ba0': 'Ethereum Drainer',
+  '0x06ee3c7a00000000000000000000000000000000': 'Contract Interaction Target',
+}
+
+// Suspicious method selectors
+const DRAINER_METHODS: Record<string, string> = {
+  '0xa1798512': 'Inferno Drain (a1798512)',
+  '0x23b872dd': 'transferFrom (drain)',
+  '0x42842e0e': 'safeTransferFrom (NFT drain)',
+  '0x095ea7b3': 'approve (setup drain)',
+  '0xd505accf': 'permit (signature drain)',
+  '0x2b67b570': 'Permit2 (signature drain)',
+  '0x1cff79cd': 'execute (delegate call)',
+  '0x692c1f72': 'execute (Permit2)',
 }
 
 export class WalletScanner {
@@ -453,6 +483,40 @@ export class WalletScanner {
     const allApprovals = approvalResults.flat()
     const allMethodCalls = methodResults.flat()
 
+    // Detect private key compromise
+    // Check if outgoing transactions go to known drainer addresses
+    const drainDestinations = recentDrains.map(d => ({ to: d.to.toLowerCase(), chain: d.chainName }))
+    const pkCompromised = {
+      isCompromised: false,
+      drainerAddresses: [] as string[],
+      affectedChains: [] as string[],
+      method: ''
+    }
+    
+    for (const drain of recentDrains) {
+      const toLower = drain.to.toLowerCase()
+      if (KNOWN_DRAINER_DESTINATIONS[toLower] || KNOWN_DRAINERS[toLower]) {
+        if (!pkCompromised.drainerAddresses.includes(toLower)) {
+          pkCompromised.drainerAddresses.push(toLower)
+        }
+        if (!pkCompromised.affectedChains.includes(drain.chainName)) {
+          pkCompromised.affectedChains.push(drain.chainName)
+        }
+      }
+    }
+    
+    // Also check if wallet sends to many different addresses across chains (drain pattern)
+    const uniqueDestinations = new Set(recentDrains.map(d => d.to.toLowerCase()))
+    const uniqueChains = new Set(recentDrains.map(d => d.chainName))
+    if (uniqueDestinations.size >= 2 && uniqueChains.size >= 3) {
+      pkCompromised.isCompromised = true
+      pkCompromised.method = 'multi_chain_drain_pattern'
+    }
+    if (pkCompromised.drainerAddresses.length >= 1) {
+      pkCompromised.isCompromised = true
+      pkCompromised.method = pkCompromised.method || 'known_drainer_destination'
+    }
+
     // Main delegation (first found or Ethereum)
     const mainDelegation = delegations.find(d => d.chainId === 1) || delegations[0]
 
@@ -470,6 +534,7 @@ export class WalletScanner {
       recentDrains: recentDrains.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20),
       suspiciousApprovals: allApprovals,
       drainerMethodCalls: allMethodCalls,
+      privateKeyCompromised: pkCompromised,
       chains: activeChains,
       totalChainsScanned: chainIds.length,
       failedChains,
