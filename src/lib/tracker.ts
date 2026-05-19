@@ -18,80 +18,154 @@ export interface TrackedTransfer {
   blockNumber: number
 }
 
-export interface FundFlow {
-  source: string
-  destination: string
-  amount: string
-  asset: string
-  hops: number
-  chainId: number
-  timestamp: number
-  isExchange: boolean
-  exchangeName?: string
-}
-
 export class TransactionTracker {
-  private providers: Map<number, ethers.JsonRpcProvider> = new Map()
-
-  constructor() {
-    for (const [id, chain] of Object.entries(CHAINS)) {
-      this.providers.set(Number(id), new ethers.JsonRpcProvider(chain.rpc))
-    }
-  }
-
   // Timeout wrapper
-  private async withTimeout<T>(promise: Promise<T>, ms: number = 8000): Promise<T> {
+  private async withTimeout<T>(promise: Promise<T>, ms: number = 10000): Promise<T> {
     return Promise.race([
       promise,
       new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms))
     ])
   }
 
-  // Track all outgoing transfers from an address
-  async trackOutflows(address: string, chainId: number, fromBlock: number = -500): Promise<TrackedTransfer[]> {
-    const provider = this.providers.get(chainId)
+  // Track outflows using Blockscout API (fast, indexed)
+  private async trackViaBlockscout(address: string, chainId: number): Promise<TrackedTransfer[]> {
+    const explorerApis: Record<number, string> = {
+      1: 'https://eth.blockscout.com/api/v2',
+      8453: 'https://base.blockscout.com/api/v2',
+      56: 'https://bsc.blockscout.com/api/v2',
+      42161: 'https://arbitrum.blockscout.com/api/v2',
+      137: 'https://polygon.blockscout.com/api/v2',
+      10: 'https://optimism.blockscout.com/api/v2',
+      43114: 'https://avalanche.blockscout.com/api/v2',
+      250: 'https://fantom.blockscout.com/api/v2',
+      81457: 'https://blast.blockscout.com/api/v2',
+      324: 'https://zksync.blockscout.com/api/v2',
+      59144: 'https://linea.blockscout.com/api/v2',
+      5000: 'https://mantle.blockscout.com/api/v2',
+      534352: 'https://scroll.blockscout.com/api/v2',
+      100: 'https://gnosis.blockscout.com/api/v2',
+      7000: 'https://zetachain.blockscout.com/api/v2',
+      80094: 'https://berachain.blockscout.com/api/v2',
+    }
+
+    const baseUrl = explorerApis[chainId]
+    if (!baseUrl) return []
+
+    const transfers: TrackedTransfer[] = []
     const chain = CHAINS[chainId]
-    if (!provider || !chain) return []
+    if (!chain) return []
+
+    try {
+      // Fetch transactions from Blockscout
+      const url = `${baseUrl}/addresses/${address}/transactions?sort=desc&limit=50`
+      const response = await this.withTimeout(fetch(url), 10000)
+
+      if (!response.ok) return []
+
+      const data = await response.json()
+      const txs = data.items || []
+
+      for (const tx of txs) {
+        // Only outgoing transactions
+        if (tx.from?.hash?.toLowerCase() !== address.toLowerCase()) continue
+
+        const to = tx.to?.hash || ''
+        const value = tx.value ? BigInt(tx.value) : 0n
+        const timestamp = tx.timestamp ? new Date(tx.timestamp).getTime() : Date.now()
+
+        const exchangeInfo = isExchangeWallet(to)
+        const drainerInfo = isKnownDrainer(to)
+
+        // Native transfer
+        if (value > 0n) {
+          transfers.push({
+            hash: tx.hash,
+            from: address,
+            to,
+            value: ethers.formatEther(value),
+            asset: chain.nativeCurrency,
+            chainId,
+            chainName: chain.name,
+            timestamp,
+            isExchangeDeposit: !!exchangeInfo,
+            exchangeName: exchangeInfo?.name,
+            isDrainerTransfer: !!drainerInfo,
+            drainerName: drainerInfo?.name,
+            blockNumber: tx.block_number || 0
+          })
+        }
+
+        // ERC-20 token transfers
+        if (tx.token_transfers && tx.token_transfers.length > 0) {
+          for (const tt of tx.token_transfers) {
+            if (tt.from?.hash?.toLowerCase() !== address.toLowerCase()) continue
+
+            const tokenTo = tt.to?.hash || ''
+            const tokenValue = tt.total?.value ? BigInt(tt.total.value) : 0n
+            const tokenDecimals = tt.total?.decimals || 18
+            const tokenSymbol = tt.total?.symbol || 'UNKNOWN'
+
+            const tokenExchangeInfo = isExchangeWallet(tokenTo)
+            const tokenDrainerInfo = isKnownDrainer(tokenTo)
+
+            transfers.push({
+              hash: tx.hash,
+              from: address,
+              to: tokenTo,
+              value: ethers.formatUnits(tokenValue, tokenDecimals),
+              asset: tokenSymbol,
+              chainId,
+              chainName: chain.name,
+              timestamp,
+              isExchangeDeposit: !!tokenExchangeInfo,
+              exchangeName: tokenExchangeInfo?.name,
+              isDrainerTransfer: !!tokenDrainerInfo,
+              drainerName: tokenDrainerInfo?.name,
+              blockNumber: tx.block_number || 0
+            })
+          }
+        }
+      }
+    } catch {
+      // Skip errors
+    }
+
+    return transfers
+  }
+
+  // Track outflows using RPC getLogs (fallback for chains without Blockscout)
+  private async trackViaRPC(address: string, chainId: number): Promise<TrackedTransfer[]> {
+    const chain = CHAINS[chainId]
+    if (!chain) return []
 
     const transfers: TrackedTransfer[] = []
 
     try {
+      const provider = new ethers.JsonRpcProvider(chain.rpc)
+
       // Get current block with timeout
       const latestBlock = await this.withTimeout(provider.getBlockNumber(), 8000).catch(() => 0)
       if (!latestBlock) return []
 
-      const startBlock = Math.max(0, latestBlock + fromBlock)
+      // Scan last 10000 blocks (covers weeks on most chains)
+      const startBlock = Math.max(0, latestBlock - 10000)
 
-      // Track native transfers (ETH) + ERC-20 transfers in one batch
-      const [nativeLogs, erc20Logs] = await Promise.all([
-        this.withTimeout(provider.getLogs({
-          fromBlock: startBlock,
-          toBlock: latestBlock,
-          topics: [
-            ethers.id('Transfer(address,address,uint256)'),
-            ethers.zeroPadValue(address, 32)
-          ]
-        }), 10000).catch(() => []),
-        this.withTimeout(provider.getLogs({
-          fromBlock: startBlock,
-          toBlock: latestBlock,
-          topics: [
-            ethers.id('Transfer(address,address,uint256)'),
-            null,
-            ethers.zeroPadValue(address, 32)
-          ]
-        }), 10000).catch(() => [])
-      ])
+      // Native outflows
+      const nativeLogs = await this.withTimeout(provider.getLogs({
+        fromBlock: startBlock,
+        toBlock: latestBlock,
+        topics: [
+          ethers.id('Transfer(address,address,uint256)'),
+          ethers.zeroPadValue(address, 32)
+        ]
+      }), 10000).catch(() => [])
 
-      // Batch fetch block timestamps (max 20 unique blocks)
+      // Batch fetch block timestamps (max 20)
       const uniqueBlocks = new Set<number>()
-      for (const log of [...nativeLogs, ...erc20Logs]) {
-        uniqueBlocks.add(log.blockNumber)
-      }
-      const blockNumbers = [...uniqueBlocks].slice(0, 20)
+      for (const log of nativeLogs) uniqueBlocks.add(log.blockNumber)
       const blockTimestamps = new Map<number, number>()
       await Promise.all(
-        blockNumbers.map(async (bn) => {
+        [...uniqueBlocks].slice(0, 20).map(async (bn) => {
           try {
             const block = await this.withTimeout(provider.getBlock(bn), 5000)
             if (block) blockTimestamps.set(bn, block.timestamp * 1000)
@@ -99,7 +173,6 @@ export class TransactionTracker {
         })
       )
 
-      // Process native outflows
       for (const log of nativeLogs) {
         const to = '0x' + log.topics[2].slice(26)
         const value = BigInt(log.data)
@@ -122,50 +195,6 @@ export class TransactionTracker {
           blockNumber: log.blockNumber
         })
       }
-
-      // Process ERC-20 inflows (max 30 logs)
-      const erc20Batch = erc20Logs.slice(0, 30)
-      for (const log of erc20Batch) {
-        const from = '0x' + log.topics[1].slice(26)
-        const to = '0x' + log.topics[2].slice(26)
-        const value = BigInt(log.data)
-
-        // Skip if this is not an outflow from address
-        if (from.toLowerCase() !== address.toLowerCase()) continue
-
-        let symbol = 'UNKNOWN'
-        let decimals = 18
-        try {
-          const iface = new ethers.Interface(['function symbol() view returns (string)', 'function decimals() view returns (uint8)'])
-          const symbolData = iface.encodeFunctionData('symbol')
-          const decimalsData = iface.encodeFunctionData('decimals')
-          const [symbolResult, decimalsResult] = await Promise.all([
-            this.withTimeout(provider.call({ to: log.address, data: symbolData }), 3000).catch(() => '0x'),
-            this.withTimeout(provider.call({ to: log.address, data: decimalsData }), 3000).catch(() => '0x')
-          ])
-          try { symbol = iface.decodeFunctionResult('symbol', symbolResult)[0] as string } catch {}
-          try { decimals = Number(iface.decodeFunctionResult('decimals', decimalsResult)[0]) } catch {}
-        } catch {}
-
-        const exchangeInfo = isExchangeWallet(to)
-        const drainerInfo = isKnownDrainer(to)
-
-        transfers.push({
-          hash: log.transactionHash,
-          from,
-          to,
-          value: ethers.formatUnits(value, decimals),
-          asset: symbol,
-          chainId,
-          chainName: chain.name,
-          timestamp: blockTimestamps.get(log.blockNumber) || Date.now(),
-          isExchangeDeposit: !!exchangeInfo,
-          exchangeName: exchangeInfo?.name,
-          isDrainerTransfer: !!drainerInfo,
-          drainerName: drainerInfo?.name,
-          blockNumber: log.blockNumber
-        })
-      }
     } catch {
       // Skip errors
     }
@@ -173,79 +202,55 @@ export class TransactionTracker {
     return transfers
   }
 
-  // Track funds across multiple chains
+  // Track all chains (Blockscout API first, RPC fallback)
   async trackAllChains(address: string, chainIds: number[] = [1, 8453, 56]): Promise<TrackedTransfer[]> {
     const allTransfers: TrackedTransfer[] = []
 
-    // Parallel scan with 45s overall timeout
+    // Scan all chains in parallel with 40s overall timeout
     const scanPromise = Promise.all(
-      chainIds.map(chainId => this.trackOutflows(address, chainId))
+      chainIds.map(async (chainId) => {
+        try {
+          // Try Blockscout API first (fast, indexed)
+          const blockscoutResults = await this.trackViaBlockscout(address, chainId)
+          if (blockscoutResults.length > 0) return blockscoutResults
+
+          // Fallback to RPC for chains without Blockscout
+          return await this.trackViaRPC(address, chainId)
+        } catch {
+          return []
+        }
+      })
     )
 
     const results = await Promise.race([
       scanPromise,
-      new Promise<TrackedTransfer[][]>((resolve) => setTimeout(() => resolve([]), 45000))
+      new Promise<TrackedTransfer[][]>((resolve) => setTimeout(() => resolve([]), 40000))
     ])
 
     results.forEach(transfers => allTransfers.push(...transfers))
 
-    return allTransfers.sort((a, b) => b.timestamp - a.timestamp)
-  }
+    // Deduplicate by tx hash + chain
+    const seen = new Set<string>()
+    const unique = allTransfers.filter(t => {
+      const key = `${t.chainId}:${t.hash}:${t.to}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
 
-  // Follow fund flow (track where stolen funds went)
-  async followFunds(address: string, chainId: number, maxHops: number = 5): Promise<FundFlow[]> {
-    const flows: FundFlow[] = []
-    const visited = new Set<string>()
-    const queue: { address: string; depth: number }[] = [{ address, depth: 0 }]
-
-    while (queue.length > 0) {
-      const current = queue.shift()!
-      if (current.depth >= maxHops) continue
-      if (visited.has(current.address.toLowerCase())) continue
-
-      visited.add(current.address.toLowerCase())
-
-      const transfers = await this.trackOutflows(current.address, chainId, -5000)
-
-      for (const transfer of transfers) {
-        flows.push({
-          source: transfer.from,
-          destination: transfer.to,
-          amount: transfer.value,
-          asset: transfer.asset,
-          hops: current.depth + 1,
-          chainId,
-          timestamp: transfer.timestamp,
-          isExchange: transfer.isExchangeDeposit,
-          exchangeName: transfer.exchangeName
-        })
-
-        // Continue following if not an exchange
-        if (!transfer.isExchangeDeposit && current.depth < maxHops - 1) {
-          queue.push({ address: transfer.to, depth: current.depth + 1 })
-        }
-      }
-    }
-
-    return flows
-  }
-
-  // Check if funds reached an exchange
-  async checkExchangeDeposit(address: string, chainId: number): Promise<{ deposited: boolean; exchange?: string; txHash?: string }> {
-    const transfers = await this.trackOutflows(address, chainId, -10000)
-
-    for (const transfer of transfers) {
-      if (transfer.isExchangeDeposit) {
-        return {
-          deposited: true,
-          exchange: transfer.exchangeName,
-          txHash: transfer.hash
-        }
-      }
-    }
-
-    return { deposited: false }
+    return unique.sort((a, b) => b.timestamp - a.timestamp)
   }
 }
 
 export const tracker = new TransactionTracker()
+
+// Check if funds reached an exchange
+export async function checkExchangeDeposit(address: string, chainId: number): Promise<{ deposited: boolean; exchange?: string; txHash?: string }> {
+  const transfers = await tracker.trackAllChains(address, [chainId])
+  for (const transfer of transfers) {
+    if (transfer.isExchangeDeposit) {
+      return { deposited: true, exchange: transfer.exchangeName, txHash: transfer.hash }
+    }
+  }
+  return { deposited: false }
+}

@@ -2,7 +2,7 @@ import { ethers } from 'ethers'
 import { CHAINS } from './chains'
 import { createAlertSystem, type AlertSystem } from './alerts'
 import { isKnownDrainer, isExchangeWallet } from './draindb'
-import { tracker } from './tracker'
+import { tracker, checkExchangeDeposit } from './tracker'
 
 export interface MonitorConfig {
   address: string
@@ -183,7 +183,7 @@ export class WalletMonitor {
   // Check if stolen funds reached an exchange
   async checkExchangeDeposits(): Promise<void> {
     try {
-      const result = await tracker.checkExchangeDeposit(this.config.address, 1)
+      const result = await checkExchangeDeposit(this.config.address, 1)
       if (result.deposited && result.exchange && result.txHash) {
         const existing = this.state.exchangeDeposits.find(d => d.txHash === result.txHash)
         if (!existing) {
