@@ -12,6 +12,12 @@ module.exports = {
     }
   },
   networks: {
+    // Sepolia Testnet
+    sepolia: {
+      url: process.env.SEPOLIA_RPC || "https://rpc.sepolia.org",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 11155111
+    },
     // Ethereum
     ethereum: {
       url: process.env.ETH_RPC || "https://eth.drpc.org",

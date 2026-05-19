@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fake Airdrop - Test Claim</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 500px;
+      width: 100%;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+
+    .logo {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+
+    .title {
+      font-size: 28px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #10b981, #8b5cf6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .subtitle {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+    }
+
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .input-group {
+      margin-bottom: 16px;
+    }
+
+    .input-label {
+      display: block;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: white;
+      font-size: 14px;
+      font-family: monospace;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #10b981;
+    }
+
+    input::placeholder {
+      color: rgba(255, 255, 255, 0.3);
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-claim {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: white;
+    }
+
+    .btn-claim:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-claim:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-connect {
+      background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+      color: white;
+      margin-bottom: 12px;
+    }
+
+    .btn-connect:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .status.success {
+      display: block;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      color: #10b981;
+    }
+
+    .status.error {
+      display: block;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #ef4444;
+    }
+
+    .status.loading {
+      display: block;
+      background: rgba(59, 130, 246, 0.1);
+      border: 1px solid rgba(59, 130, 246, 0.2);
+      color: #3b82f6;
+    }
+
+    .token-info {
+      display: flex;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .token-info:last-child {
+      border-bottom: none;
+    }
+
+    .token-label {
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 13px;
+    }
+
+    .token-value {
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 16px;
+      font-size: 12px;
+      color: #f59e0b;
+      line-height: 1.5;
+    }
+
+    .network-badge {
+      display: inline-block;
+      padding: 4px 8px;
+      background: rgba(139, 92, 246, 0.2);
+      border-radius: 4px;
+      font-size: 11px;
+      color: #8b5cf6;
+      margin-bottom: 16px;
+    }
+
+    .countdown {
+      font-size: 48px;
+      font-weight: 700;
+      text-align: center;
+      margin: 20px 0;
+      color: #10b981;
+    }
+
+    .countdown-label {
+      text-align: center;
+      color: rgba(255, 255, 255, 0.6);
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">🎁</div>
+      <h1 class="title">SweepGuard Test Airdrop</h1>
+      <p class="subtitle">Test the claim functionality with fake tokens</p>
+      <div class="network-badge">Sepolia Testnet</div>
+    </div>
+
+    <!-- Token Info -->
+    <div class="card">
+      <div class="card-title">📊 Token Info</div>
+      <div class="token-info">
+        <span class="token-label">Token</span>
+        <span class="token-value">SweepGuard Test Token (SGTT)</span>
+      </div>
+      <div class="token-info">
+        <span class="token-label">Claim Amount</span>
+        <span class="token-value">100 SGTT</span>
+      </div>
+      <div class="token-info">
+        <span class="token-label">Network</span>
+        <span class="token-value">Sepolia (11155111)</span>
+      </div>
+      <div class="token-info">
+        <span class="token-label">Contract</span>
+        <span class="token-value" style="font-size: 11px;">0x... (will be set after deploy)</span>
+      </div>
+    </div>
+
+    <!-- Claim Section -->
+    <div class="card">
+      <div class="card-title">🎯 Claim Tokens</div>
+      
+      <button class="btn btn-connect" id="connectBtn" onclick="connectWallet()">
+        🔗 Connect MetaMask
+      </button>
+
+      <div class="input-group">
+        <label class="input-label">Your Wallet Address</label>
+        <input type="text" id="walletAddress" placeholder="0x... (auto-filled after connect)" readonly>
+      </div>
+
+      <button class="btn btn-claim" id="claimBtn" onclick="claimTokens()" disabled>
+        🎁 Claim 100 SGTT Tokens
+      </button>
+
+      <div class="status" id="status"></div>
+
+      <div class="warning">
+        ⚠️ <strong>This is a test page!</strong><br>
+        - Uses Sepolia testnet (no real value)<br>
+        - For testing SweepGuard extension<br>
+        - Get testnet ETH from faucets first
+      </div>
+    </div>
+
+    <!-- Faucet Links -->
+    <div class="card">
+      <div class="card-title">🚰 Get Testnet ETH</div>
+      <p style="font-size: 13px; color: rgba(255,255,255,0.6); margin-bottom: 12px;">
+        You need Sepolia ETH to pay for gas. Get free testnet ETH from these faucets:
+      </p>
+      <a href="https://sepoliafaucet.com/" target="_blank" style="display: block; padding: 8px 0; color: #10b981; text-decoration: none; font-size: 13px;">
+        🔗 Sepolia Faucet (Alchemy)
+      </a>
+      <a href="https://faucets.chain.link/sepolia" target="_blank" style="display: block; padding: 8px 0; color: #10b981; text-decoration: none; font-size: 13px;">
+        🔗 Chainlink Faucet
+      </a>
+      <a href="https://www.alchemy.com/faucets/ethereum-sepolia" target="_blank" style="display: block; padding: 8px 0; color: #10b981; text-decoration: none; font-size: 13px;">
+        🔗 Alchemy Faucet
+      </a>
+    </div>
+
+    <!-- Instructions -->
+    <div class="card">
+      <div class="card-title">📖 How to Test</div>
+      <ol style="font-size: 13px; color: rgba(255,255,255,0.7); line-height: 1.8; padding-left: 20px;">
+        <li>Connect MetaMask (switch to Sepolia)</li>
+        <li>Get testnet ETH from faucets</li>
+        <li>Click "Claim 100 SGTT Tokens"</li>
+        <li>Approve transaction in MetaMask</li>
+        <li>Check your wallet for SGTT tokens!</li>
+      </ol>
+    </div>
+  </div>
+
+  <script>
+    let provider = null;
+    let signer = null;
+    let userAddress = null;
+
+    // Contract addresses (will be filled after deployment)
+    const TOKEN_ADDRESS = "0x..."; // Will be set
+    const AIRDROP_ADDRESS = "0x..."; // Will be set
+
+    // Simple ABI for testing
+    const AIRDROP_ABI = [
+      "function claimSimple()",
+      "function claimed(address) view returns (bool)",
+      "function balance() view returns (uint256)"
+    ];
+
+    const TOKEN_ABI = [
+      "function balanceOf(address) view returns (uint256)",
+      "function symbol() view returns (string)"
+    ];
+
+    async function connectWallet() {
+      if (typeof window.ethereum === 'undefined') {
+        showStatus('error', '❌ MetaMask not found! Install MetaMask first.');
+        return;
+      }
+
+      try {
+        // Request account access
+        const accounts = await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
+        });
+
+        // Check if on Sepolia
+        const chainId = await window.ethereum.request({ 
+          method: 'eth_chainId' 
+        });
+
+        if (chainId !== '0xaa36a7') { // Sepolia chain ID
+          try {
+            await window.ethereum.request({
+              method: 'wallet_switchEthereumChain',
+              params: [{ chainId: '0xaa36a7' }], // Sepolia
+            });
+          } catch (switchError) {
+            showStatus('error', '❌ Please switch to Sepolia network in MetaMask');
+            return;
+          }
+        }
+
+        userAddress = accounts[0];
+        document.getElementById('walletAddress').value = userAddress;
+        document.getElementById('connectBtn').textContent = '✅ Connected: ' + userAddress.slice(0, 6) + '...' + userAddress.slice(-4);
+        document.getElementById('claimBtn').disabled = false;
+
+        showStatus('success', '✅ Wallet connected! Ready to claim.');
+
+        // Check if already claimed
+        await checkClaimStatus();
+
+      } catch (error) {
+        showStatus('error', '❌ Connection failed: ' + error.message);
+      }
+    }
+
+    async function checkClaimStatus() {
+      // This would check if already claimed from the contract
+      // For now, just show as not claimed
+      showStatus('success', '✅ Ready to claim! Click the button above.');
+    }
+
+    async function claimTokens() {
+      if (!userAddress) {
+        showStatus('error', '❌ Please connect wallet first');
+        return;
+      }
+
+      const claimBtn = document.getElementById('claimBtn');
+      claimBtn.disabled = true;
+      claimBtn.innerHTML = '<span class="loading"></span> Claiming...';
+      showStatus('loading', '⏳ Please approve transaction in MetaMask...');
+
+      try {
+        // Simulate claim (in real scenario, this would call the contract)
+        // For testing, we'll just show success after a delay
+        
+        // In real implementation:
+        // const contract = new ethers.Contract(AIRDROP_ADDRESS, AIRDROP_ABI, signer);
+        // const tx = await contract.claimSimple();
+        // await tx.wait();
+
+        // Simulate transaction
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        showStatus('success', 
+          '🎉 Claim successful!<br>' +
+          '• 100 SGTT tokens sent to: ' + userAddress.slice(0, 10) + '...<br>' +
+          '• Check your wallet for SGTT tokens'
+        );
+
+        claimBtn.innerHTML = '✅ Claimed!';
+        
+      } catch (error) {
+        showStatus('error', '❌ Claim failed: ' + error.message);
+        claimBtn.disabled = false;
+        claimBtn.innerHTML = '🎁 Claim 100 SGTT Tokens';
+      }
+    }
+
+    function showStatus(type, message) {
+      const status = document.getElementById('status');
+      status.className = 'status ' + type;
+      status.innerHTML = message;
+    }
+
+    // Listen for account changes
+    if (window.ethereum) {
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length > 0) {
+          userAddress = accounts[0];
+          document.getElementById('walletAddress').value = userAddress;
+        } else {
+          userAddress = null;
+          document.getElementById('walletAddress').value = '';
+          document.getElementById('claimBtn').disabled = true;
+        }
+      });
+
+      window.ethereum.on('chainChanged', () => {
+        window.location.reload();
+      });
+    }
+  </script>
+</body>
+</html>
