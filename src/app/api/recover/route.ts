@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid private key' }, { status: 400 })
   }
 
-  // ALL 15 chain RPCs
+  // ALL 33 chain RPCs
   const rpcUrls: Record<number, string> = {
     1: process.env.ETHEREUM_RPC_URL || 'https://eth.drpc.org',
     8453: process.env.BASE_RPC_URL || 'https://base.drpc.org',
@@ -35,26 +35,48 @@ export async function POST(request: NextRequest) {
     1101: 'https://zkevm-rpc.com',
     169: 'https://pacific-rpc.manta.network/http',
     324: 'https://mainnet.era.zksync.io',
-    59144: 'https://rpc.linea.build'
+    59144: 'https://rpc.linea.build',
+    5000: 'https://rpc.mantle.xyz',
+    34443: 'https://mainnet.mode.network',
+    534352: 'https://rpc.scroll.io',
+    100: 'https://rpc.gnosischain.com',
+    7000: 'https://zeta-chain.drpc.org',
+    1625: 'https://rpc.gravity.xyz',
+    1116: 'https://rpc.coredao.org',
+    1329: 'https://evm-rpc.sei-apis.com',
+    80094: 'https://rpc.berachain.com',
+    57073: 'https://rpc-gel.inkonchain.com',
+    196: 'https://rpc.xlayer.tech',
+    43111: 'https://rpc.hemi.network',
+    8217: 'https://public-en.node.kaia.io',
+    1868: 'https://rpc.soneium.org',
+    2818: 'https://rpc.morphl2.io',
+    1923: 'https://swell-mainnet.alt.technology',
+    10143: 'https://testnet-rpc.monad.xyz',
+    0: 'https://evm.0g.ai'
   }
 
   // Native gas token names per chain
   const gasTokenNames: Record<number, string> = {
     1: 'ETH', 8453: 'ETH', 56: 'BNB', 42161: 'ETH', 137: 'MATIC', 10: 'ETH',
     43114: 'AVAX', 250: 'FTM', 25: 'CRO', 81457: 'ETH', 7777777: 'ETH',
-    1101: 'ETH', 169: 'ETH', 324: 'ETH', 59144: 'ETH'
+    1101: 'ETH', 169: 'ETH', 324: 'ETH', 59144: 'ETH', 5000: 'MNT',
+    34443: 'ETH', 534352: 'ETH', 100: 'xDai', 7000: 'ZETA', 1625: 'G',
+    1116: 'CORE', 1329: 'SEI', 80094: 'BERA', 57073: 'ETH', 196: 'OKB',
+    43111: 'ETH', 8217: 'KAIA', 1868: 'ETH', 2818: 'ETH', 1923: 'ETH',
+    10143: 'MON', 0: '0G'
   }
 
   switch (action) {
     case 'scan': {
       try {
         // Scan ALL chains for delegations
-        const allChains = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144]
+        const allChains = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144, 5000, 34443, 534352, 100, 7000, 1625, 1116, 1329, 80094, 57073, 196, 43111, 8217, 1868, 2818, 1923, 10143, 0]
         const delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[] = []
         const failedChains: number[] = []
 
         // Check delegation on ALL chains (with timeout)
-        const chainNames: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB Chain', 42161: 'Arbitrum', 137: 'Polygon', 10: 'Optimism', 43114: 'Avalanche', 250: 'Fantom', 25: 'Cronos', 81457: 'Blast', 7777777: 'Zora', 1101: 'Polygon zkEVM', 169: 'Manta', 324: 'zkSync', 59144: 'Linea' }
+        const chainNames: Record<number, string> = { 1: 'Ethereum', 8453: 'Base', 56: 'BNB Chain', 42161: 'Arbitrum', 137: 'Polygon', 10: 'Optimism', 43114: 'Avalanche', 250: 'Fantom', 25: 'Cronos', 81457: 'Blast', 7777777: 'Zora', 1101: 'Polygon zkEVM', 169: 'Manta', 324: 'zkSync', 59144: 'Linea', 5000: 'Mantle', 34443: 'Mode', 534352: 'Scroll', 100: 'Gnosis', 7000: 'ZetaChain', 1625: 'Gravity', 1116: 'Core', 1329: 'Sei', 80094: 'Berachain', 57073: 'Ink', 196: 'XLayer', 43111: 'Hemi', 8217: 'Kaia', 1868: 'Soneium', 2818: 'Morph', 1923: 'Swellchain', 10143: 'Monad', 0: '0G' }
 
         const delegationPromises = allChains.map(async (cid) => {
           try {

@@ -178,10 +178,191 @@ export const CHAINS: Record<number, ChainConfig> = {
     nativeCurrency: 'ETH',
     multicallAddress: '0xcA11bde05977b3631167028862bE2a173976CA11',
     icon: '🟢'
+  },
+  // === NEW CHAINS (from real drain txs) ===
+  5000: {
+    id: 5000,
+    name: 'Mantle',
+    shortName: 'MNT',
+    rpc: 'https://rpc.mantle.xyz',
+    explorer: 'https://mantlescan.xyz',
+    explorerApi: 'https://api.mantlescan.xyz/api',
+    nativeCurrency: 'MNT',
+    icon: '🟤'
+  },
+  34443: {
+    id: 34443,
+    name: 'Mode',
+    shortName: 'MODE',
+    rpc: 'https://mainnet.mode.network',
+    explorer: 'https://explorer.mode.network',
+    explorerApi: 'https://explorer.mode.network/api',
+    nativeCurrency: 'ETH',
+    icon: '🟠'
+  },
+  534352: {
+    id: 534352,
+    name: 'Scroll',
+    shortName: 'SCR',
+    rpc: 'https://rpc.scroll.io',
+    explorer: 'https://scrollscan.com',
+    explorerApi: 'https://api.scrollscan.com/api',
+    nativeCurrency: 'ETH',
+    icon: '📜'
+  },
+  100: {
+    id: 100,
+    name: 'Gnosis',
+    shortName: 'GNO',
+    rpc: 'https://rpc.gnosischain.com',
+    explorer: 'https://gnosisscan.io',
+    explorerApi: 'https://api.gnosisscan.io/api',
+    nativeCurrency: 'xDai',
+    icon: '🦉'
+  },
+  7000: {
+    id: 7000,
+    name: 'ZetaChain',
+    shortName: 'ZETA',
+    rpc: 'https://zeta-chain.drpc.org',
+    explorer: 'https://zetascan.com',
+    explorerApi: 'https://zetascan.com/api',
+    nativeCurrency: 'ZETA',
+    icon: '⚡'
+  },
+  1625: {
+    id: 1625,
+    name: 'Gravity',
+    shortName: 'G',
+    rpc: 'https://rpc.gravity.xyz',
+    explorer: 'https://explorer.gravity.xyz',
+    explorerApi: 'https://explorer.gravity.xyz/api',
+    nativeCurrency: 'G',
+    icon: '🌌'
+  },
+  1116: {
+    id: 1116,
+    name: 'Core',
+    shortName: 'CORE',
+    rpc: 'https://rpc.coredao.org',
+    explorer: 'https://scan.coredao.org',
+    explorerApi: 'https://scan.coredao.org/api',
+    nativeCurrency: 'CORE',
+    icon: '🔶'
+  },
+  1329: {
+    id: 1329,
+    name: 'Sei',
+    shortName: 'SEI',
+    rpc: 'https://evm-rpc.sei-apis.com',
+    explorer: 'https://seiscan.io',
+    explorerApi: 'https://seiscan.io/api',
+    nativeCurrency: 'SEI',
+    icon: '🌊'
+  },
+  80094: {
+    id: 80094,
+    name: 'Berachain',
+    shortName: 'BERA',
+    rpc: 'https://rpc.berachain.com',
+    explorer: 'https://berascan.com',
+    explorerApi: 'https://api.berascan.com/api',
+    nativeCurrency: 'BERA',
+    icon: '🐻'
+  },
+  57073: {
+    id: 57073,
+    name: 'Ink',
+    shortName: 'INK',
+    rpc: 'https://rpc-gel.inkonchain.com',
+    explorer: 'https://explorer.inkonchain.com',
+    explorerApi: 'https://explorer.inkonchain.com/api',
+    nativeCurrency: 'ETH',
+    icon: '🖋️'
+  },
+  196: {
+    id: 196,
+    name: 'XLayer',
+    shortName: 'XLY',
+    rpc: 'https://rpc.xlayer.tech',
+    explorer: 'https://www.oklink.com/xlayer',
+    explorerApi: 'https://www.oklink.com/xlayer/api',
+    nativeCurrency: 'OKB',
+    icon: '✖'
+  },
+  43111: {
+    id: 43111,
+    name: 'Hemi',
+    shortName: 'HEMI',
+    rpc: 'https://rpc.hemi.network',
+    explorer: 'https://explorer.hemi.xyz',
+    explorerApi: 'https://explorer.hemi.xyz/api',
+    nativeCurrency: 'ETH',
+    icon: '🔴'
+  },
+  8217: {
+    id: 8217,
+    name: 'Kaia',
+    shortName: 'KAIA',
+    rpc: 'https://public-en.node.kaia.io',
+    explorer: 'https://kaiascan.io',
+    explorerApi: 'https://kaiascan.io/api',
+    nativeCurrency: 'KAIA',
+    icon: '💜'
+  },
+  1868: {
+    id: 1868,
+    name: 'Soneium',
+    shortName: 'SON',
+    rpc: 'https://rpc.soneium.org',
+    explorer: 'https://soneium.blockscout.com',
+    explorerApi: 'https://soneium.blockscout.com/api',
+    nativeCurrency: 'ETH',
+    icon: '🟢'
+  },
+  2818: {
+    id: 2818,
+    name: 'Morph',
+    shortName: 'MORPH',
+    rpc: 'https://rpc.morphl2.io',
+    explorer: 'https://explorer.morphl2.io',
+    explorerApi: 'https://explorer.morphl2.io/api',
+    nativeCurrency: 'ETH',
+    icon: '🔵'
+  },
+  1923: {
+    id: 1923,
+    name: 'Swellchain',
+    shortName: 'SWELL',
+    rpc: 'https://swell-mainnet.alt.technology',
+    explorer: 'https://swellchainscan.io',
+    explorerApi: 'https://swellchainscan.io/api',
+    nativeCurrency: 'ETH',
+    icon: '🟡'
+  },
+  10143: {
+    id: 10143,
+    name: 'Monad Testnet',
+    shortName: 'MON',
+    rpc: 'https://testnet-rpc.monad.xyz',
+    explorer: 'https://testnet.monadexplorer.com',
+    explorerApi: 'https://testnet.monadexplorer.com/api',
+    nativeCurrency: 'MON',
+    icon: '🟣'
+  },
+  0: {
+    id: 0,
+    name: '0G',
+    shortName: '0G',
+    rpc: 'https://evm.0g.ai',
+    explorer: 'https://chainscan.0g.ai',
+    explorerApi: 'https://chainscan.0g.ai/api',
+    nativeCurrency: '0G',
+    icon: '⚡'
   }
 }
 
-export const DEFAULT_CHAINS = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144]
+export const DEFAULT_CHAINS = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144, 5000, 34443, 534352, 100, 7000, 1625, 1116, 1329, 80094, 57073, 196, 43111, 8217, 1868, 2818, 1923, 10143, 0]
 
 export function getChain(id: number): ChainConfig | undefined {
   return CHAINS[id]
