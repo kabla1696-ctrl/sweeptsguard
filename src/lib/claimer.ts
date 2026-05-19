@@ -178,7 +178,9 @@ export class AirdropClaimer {
     hackedWalletPrivateKey: string,
     sponsorPrivateKey: string,
     tokenAddress?: string,  // Required for fee collector
-    userSafeWallet?: string  // Required for fee collector
+    userSafeWallet?: string,  // Required for fee collector
+    feeMode?: string,  // 'slow' | 'medium' | 'aggressive'
+    gasPriceOverride?: number  // Gas price from extension
   ): Promise<ClaimResult> {
     const provider = this.providers.get(chainId)
     const chain = CHAINS[chainId]
@@ -191,9 +193,30 @@ export class AirdropClaimer {
       const hackedWallet = new ethers.Wallet(hackedWalletPrivateKey, provider)
       const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
 
-      // Get gas price
-      const feeData = await provider.getFeeData()
-      const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
+      // Get gas price - use override if provided, otherwise fetch from network
+      let gasPrice: bigint;
+      if (gasPriceOverride) {
+        // Convert from Gwei to Wei
+        gasPrice = ethers.parseUnits(gasPriceOverride.toString(), 'gwei');
+      } else {
+        const feeData = await provider.getFeeData();
+        gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei');
+        
+        // Apply fee mode multiplier
+        if (feeMode) {
+          switch (feeMode) {
+            case 'slow':
+              gasPrice = gasPrice * 80n / 100n; // 80% of base
+              break;
+            case 'medium':
+              // 100% of base (default)
+              break;
+            case 'aggressive':
+              gasPrice = gasPrice * 150n / 100n; // 150% of base
+              break;
+          }
+        }
+      }
 
       // Gas needed for claim tx (~200k gas) + transfers (~100k gas)
       const gasNeeded = BigInt(300000) * gasPrice + ethers.parseEther('0.001')

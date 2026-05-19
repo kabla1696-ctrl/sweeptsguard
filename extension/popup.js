@@ -7,10 +7,35 @@ const FEE_PERCENT = 20;
 
 // State
 let selectedChain = 1;
+let selectedFeeMode = 'medium';
+let gasPrices = {};
 let wallets = {
   hackedKey: '',
   safeWallet: '',
   sponsorKey: ''
+};
+
+// Gas fee multipliers
+const FEE_MULTIPLIERS = {
+  slow: 0.8,      // 80% of base
+  medium: 1.0,    // 100% of base
+  aggressive: 1.5 // 150% of base
+};
+
+// Chain-specific gas settings
+const CHAIN_GAS = {
+  1: { name: 'Ethereum', symbol: 'ETH', avgGas: 30, unit: 'Gwei' },
+  8453: { name: 'Base', symbol: 'ETH', avgGas: 0.001, unit: 'Gwei' },
+  56: { name: 'BSC', symbol: 'BNB', avgGas: 3, unit: 'Gwei' },
+  42161: { name: 'Arbitrum', symbol: 'ETH', avgGas: 0.1, unit: 'Gwei' },
+  137: { name: 'Polygon', symbol: 'MATIC', avgGas: 50, unit: 'Gwei' },
+  10: { name: 'Optimism', symbol: 'ETH', avgGas: 0.01, unit: 'Gwei' },
+  43114: { name: 'Avalanche', symbol: 'AVAX', avgGas: 25, unit: 'nAVAX' },
+  250: { name: 'Fantom', symbol: 'FTM', avgGas: 100, unit: 'Gwei' },
+  81457: { name: 'Blast', symbol: 'ETH', avgGas: 0.001, unit: 'Gwei' },
+  324: { name: 'zkSync', symbol: 'ETH', avgGas: 0.1, unit: 'Gwei' },
+  59144: { name: 'Linea', symbol: 'ETH', avgGas: 0.1, unit: 'Gwei' },
+  25: { name: 'Cronos', symbol: 'CRO', avgGas: 5000, unit: 'Gwei' }
 };
 
 // Initialize
@@ -18,8 +43,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadSavedData();
   setupTabs();
   setupChainGrid();
+  setupFeeModeGrid();
   setupButtons();
   setupToggles();
+  await fetchGasPrices(selectedChain);
 });
 
 // Load saved wallet data from storage
@@ -57,8 +84,105 @@ function setupChainGrid() {
       document.querySelectorAll('.chain-btn').forEach(b => b.classList.remove('selected'));
       btn.classList.add('selected');
       selectedChain = parseInt(btn.dataset.chain);
+      fetchGasPrices(selectedChain);
     });
   });
+}
+
+// Fee mode grid selection
+function setupFeeModeGrid() {
+  document.querySelectorAll('.fee-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fee-mode-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      selectedFeeMode = btn.dataset.mode;
+      updateFeeDisplay();
+    });
+  });
+}
+
+// Fetch gas prices from API
+async function fetchGasPrices(chainId) {
+  try {
+    const response = await fetch(`${API_BASE}/api/gas?chainId=${chainId}`);
+    const data = await response.json();
+    
+    if (data.gasPrices) {
+      gasPrices = data.gasPrices;
+      updateFeeDisplay();
+    } else {
+      // Use chain defaults
+      const chain = CHAIN_GAS[chainId];
+      if (chain) {
+        gasPrices = {
+          slow: chain.avgGas * 0.8,
+          medium: chain.avgGas,
+          aggressive: chain.avgGas * 1.5
+        };
+        updateFeeDisplay();
+      }
+    }
+  } catch (e) {
+    console.log('Using default gas prices');
+    // Use chain defaults
+    const chain = CHAIN_GAS[chainId];
+    if (chain) {
+      gasPrices = {
+        slow: chain.avgGas * 0.8,
+        medium: chain.avgGas,
+        aggressive: chain.avgGas * 1.5
+      };
+      updateFeeDisplay();
+    }
+  }
+}
+
+// Update fee display
+function updateFeeDisplay() {
+  const chain = CHAIN_GAS[selectedChain];
+  if (!chain) return;
+
+  const slowPrice = gasPrices.slow || chain.avgGas * 0.8;
+  const mediumPrice = gasPrices.medium || chain.avgGas;
+  const aggressivePrice = gasPrices.aggressive || chain.avgGas * 1.5;
+
+  // Update price displays
+  document.getElementById('feeSlow').textContent = `${slowPrice.toFixed(4)} ${chain.unit}`;
+  document.getElementById('feeMedium').textContent = `${mediumPrice.toFixed(4)} ${chain.unit}`;
+  document.getElementById('feeAggressive').textContent = `${aggressivePrice.toFixed(4)} ${chain.unit}`;
+
+  // Calculate estimated cost (200k gas limit)
+  const gasLimit = 200000;
+  let selectedPrice;
+  
+  switch (selectedFeeMode) {
+    case 'slow':
+      selectedPrice = slowPrice;
+      break;
+    case 'medium':
+      selectedPrice = mediumPrice;
+      break;
+    case 'aggressive':
+      selectedPrice = aggressivePrice;
+      break;
+    default:
+      selectedPrice = mediumPrice;
+  }
+
+  // Convert to ETH/native currency
+  let costInEth;
+  if (chain.unit === 'Gwei') {
+    costInEth = (selectedPrice * gasLimit) / 1e9;
+  } else if (chain.unit === 'nAVAX') {
+    costInEth = (selectedPrice * gasLimit) / 1e9;
+  } else {
+    costInEth = (selectedPrice * gasLimit) / 1e18;
+  }
+
+  // Update info displays
+  document.getElementById('estimatedCost').textContent = `~${costInEth.toFixed(6)} ${chain.symbol}`;
+  document.getElementById('baseFee').textContent = `${(selectedPrice * 0.7).toFixed(4)} ${chain.unit}`;
+  document.getElementById('priorityFee').textContent = `${(selectedPrice * 0.3).toFixed(4)} ${chain.unit}`;
 }
 
 // Button handlers
@@ -129,7 +253,9 @@ async function handleClaim() {
           privateKey: sponsorKey,
           tokenAddress: claimInfo.token,
           useFeeCollector: true,
-          mode: 'claimFromAnyWallet'
+          mode: 'claimFromAnyWallet',
+          feeMode: selectedFeeMode,
+          gasPrice: gasPrices[selectedFeeMode] || gasPrices.medium
         })
       });
       
@@ -205,7 +331,9 @@ async function handleTransfer() {
         sponsorPrivateKey: sponsorKey,
         chainId: selectedChain,
         tokenAddress: tokenAddress || undefined,
-        amount: amount || 'all'
+        amount: amount || 'all',
+        feeMode: selectedFeeMode,
+        gasPrice: gasPrices[selectedFeeMode] || gasPrices.medium
       })
     });
     
@@ -254,7 +382,9 @@ async function handleNFT() {
         sponsorPrivateKey: sponsorKey,
         chainId: selectedChain,
         nftContract: nftContract,
-        isNFT: true
+        isNFT: true,
+        feeMode: selectedFeeMode,
+        gasPrice: gasPrices[selectedFeeMode] || gasPrices.medium
       })
     });
     

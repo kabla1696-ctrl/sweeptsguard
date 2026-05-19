@@ -3,7 +3,7 @@ import { claimer, PLATFORM_FEE_WALLET, PLATFORM_FEE_PERCENT } from '@/lib/claime
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
-  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey, mode, eligibleAddress, tokenAddress, useFeeCollector } = body
+  const { contractAddress, chainId, claimMethod, recipientAddress, privateKey, sponsorPrivateKey, mode, eligibleAddress, tokenAddress, useFeeCollector, feeMode, gasPrice } = body
 
   if (!contractAddress || !chainId || !privateKey) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -114,7 +114,9 @@ export async function POST(request: NextRequest) {
         privateKey,
         sponsorPrivateKey,
         tokenAddress,  // For fee collector
-        recipientAddress  // User's safe wallet
+        recipientAddress,  // User's safe wallet
+        feeMode,  // Fee mode from extension
+        gasPrice  // Gas price from extension
       )
       return NextResponse.json({ results: [result] })
     }

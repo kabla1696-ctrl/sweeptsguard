@@ -11,7 +11,20 @@ export async function GET(request: NextRequest) {
       if (!gasPrice) {
         return NextResponse.json({ error: 'Chain not supported' }, { status: 400 })
       }
-      return NextResponse.json(gasPrice)
+      
+      // Return in extension format
+      return NextResponse.json({
+        chainId: gasPrice.chainId,
+        chainName: gasPrice.chainName,
+        gasPrices: {
+          slow: parseFloat(gasPrice.low),
+          medium: parseFloat(gasPrice.average),
+          aggressive: parseFloat(gasPrice.high)
+        },
+        unit: gasPrice.unit,
+        baseFee: gasPrice.baseFee,
+        lastUpdated: gasPrice.lastUpdated
+      })
     }
 
     const allPrices = await gasTracker.getAllGasPrices()

@@ -346,6 +346,83 @@
       margin-bottom: 2px;
     }
 
+    /* Fee Mode Grid */
+    .fee-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .fee-mode-btn {
+      padding: 10px 6px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .fee-mode-btn:hover {
+      border-color: var(--warning);
+      color: var(--warning);
+    }
+
+    .fee-mode-btn.selected {
+      background: rgba(245, 158, 11, 0.1);
+      border-color: var(--warning);
+      color: var(--warning);
+    }
+
+    .fee-mode-icon {
+      font-size: 18px;
+    }
+
+    .fee-mode-label {
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .fee-mode-time {
+      font-size: 9px;
+      color: var(--text-dim);
+    }
+
+    .fee-mode-price {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .fee-info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .fee-info-row:last-child {
+      border-bottom: none;
+    }
+
+    .fee-info-label {
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .fee-info-value {
+      font-size: 12px;
+      font-weight: 600;
+      font-family: monospace;
+    }
+
     /* Fee Display */
     .fee-display {
       background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(16, 185, 129, 0.1));
@@ -680,6 +757,49 @@
             <span class="chain-icon">🔷</span>
             Cronos
           </button>
+        </div>
+      </div>
+
+      <!-- Network Fee -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background: rgba(245, 158, 11, 0.1);">⛽</div>
+          <div>
+            <div class="card-title">Network Fee</div>
+            <div class="card-subtitle">Select gas priority</div>
+          </div>
+        </div>
+        <div class="fee-mode-grid">
+          <button class="fee-mode-btn" data-mode="slow">
+            <span class="fee-mode-icon">🐢</span>
+            <span class="fee-mode-label">Slow</span>
+            <span class="fee-mode-time">~5 min</span>
+            <span class="fee-mode-price" id="feeSlow">-</span>
+          </button>
+          <button class="fee-mode-btn selected" data-mode="medium">
+            <span class="fee-mode-icon">🚗</span>
+            <span class="fee-mode-label">Medium</span>
+            <span class="fee-mode-time">~2 min</span>
+            <span class="fee-mode-price" id="feeMedium">-</span>
+          </button>
+          <button class="fee-mode-btn" data-mode="aggressive">
+            <span class="fee-mode-icon">🚀</span>
+            <span class="fee-mode-label">Aggressive</span>
+            <span class="fee-mode-time">~30 sec</span>
+            <span class="fee-mode-price" id="feeAggressive">-</span>
+          </button>
+        </div>
+        <div class="fee-info-row">
+          <span class="fee-info-label">Estimated Cost:</span>
+          <span class="fee-info-value" id="estimatedCost">-</span>
+        </div>
+        <div class="fee-info-row">
+          <span class="fee-info-label">Base Fee:</span>
+          <span class="fee-info-value" id="baseFee">-</span>
+        </div>
+        <div class="fee-info-row">
+          <span class="fee-info-label">Priority Fee:</span>
+          <span class="fee-info-value" id="priorityFee">-</span>
         </div>
       </div>
 
