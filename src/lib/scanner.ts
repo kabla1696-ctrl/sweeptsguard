@@ -41,6 +41,8 @@ export interface ScanResult {
   delegation: DelegationInfo
   delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[]
   recentDrains: { chainId: number; chainName: string; to: string; value: string; timestamp: string; txHash: string }[]
+  suspiciousApprovals: { chainId: number; chainName: string; token: string; spender: string; amount: string; isDrainer: boolean }[]
+  drainerMethodCalls: { chainId: number; chainName: string; method: string; to: string; txHash: string; timestamp: string }[]
   chains: number[]
   lastActivity: string | null
 }
@@ -106,7 +108,9 @@ export class WalletScanner {
       const balance = await provider.getBalance(address)
       const chain = CHAINS[chainId]
 
-      if (balance === BigInt(0)) return null
+      // Filter out dust (less than 0.00001 ETH equivalent)
+      const DUST_THRESHOLD = BigInt('10000000000000') // 0.00001 ETH in wei
+      if (balance <= DUST_THRESHOLD) return null
 
       return {
         type: 'native',
@@ -158,7 +162,9 @@ export class WalletScanner {
             contract.symbol().catch(() => 'UNKNOWN')
           ])
 
-          if (balance > BigInt(0)) {
+          // Filter out dust tokens (less than 0.00001 of token)
+          const dustThreshold = BigInt(10) ** BigInt(Math.max(decimals - 5, 0))
+          if (balance > dustThreshold) {
             assets.push({
               type: 'erc20',
               symbol,
@@ -176,6 +182,117 @@ export class WalletScanner {
       }
 
       return assets
+    } catch {
+      return []
+    }
+  }
+
+  // Check for suspicious approvals (approve/transferFrom drainer pattern)
+  async checkSuspiciousApprovals(address: string, chainId: number): Promise<{ token: string; spender: string; amount: string; isDrainer: boolean }[]> {
+    try {
+      const provider = this.getProvider(chainId)
+      const currentBlock = await provider.getBlockNumber()
+      const fromBlock = Math.max(0, currentBlock - 100000)
+
+      // Get Approval events
+      const approvalFilter = {
+        fromBlock,
+        toBlock: 'latest',
+        topics: [
+          ethers.id('Approval(address,address,uint256)'),
+          ethers.zeroPadValue(address, 32)
+        ]
+      }
+
+      const logs = await provider.getLogs(approvalFilter).catch(() => [])
+      const suspicious: { token: string; spender: string; amount: string; isDrainer: boolean }[] = []
+
+      for (const log of logs.slice(-50)) {
+        try {
+          const iface = new ethers.Interface(['event Approval(address indexed owner, address indexed spender, uint256 value)'])
+          const parsed = iface.parseLog({ topics: log.topics as string[], data: log.data })
+          if (parsed) {
+            const spender = parsed.args.spender.toLowerCase()
+            const amount = parsed.args.value.toString()
+            // Check if approval is to a known drainer or is max approval
+            const isMaxApproval = amount === '115792089237316195423570985008687907853269984665640564039457584007913129639935'
+            const isDrainer = KNOWN_DRAINERS[spender] !== undefined || isMaxApproval
+
+            if (isDrainer || isMaxApproval) {
+              suspicious.push({
+                token: log.address,
+                spender: parsed.args.spender,
+                amount,
+                isDrainer
+              })
+            }
+          }
+        } catch {}
+      }
+
+      return suspicious
+    } catch {
+      return []
+    }
+  }
+
+  // Check for known drainer method calls (0xa1798512, etc.)
+  async checkDrainerMethodCalls(address: string, chainId: number): Promise<{ method: string; to: string; txHash: string; timestamp: string }[]> {
+    try {
+      const provider = this.getProvider(chainId)
+      const currentBlock = await provider.getBlockNumber()
+      const fromBlock = Math.max(0, currentBlock - 50000)
+
+      // Known drainer method selectors
+      const DRAINER_METHODS: Record<string, string> = {
+        '0xa1798512': 'Inferno Drain (a1798512)',
+        '0x23b872dd': 'transferFrom (drain)',
+        '0x42842e0e': 'safeTransferFrom (NFT drain)',
+        '0x095ea7b3': 'approve (setup drain)',
+        '0xd505accf': 'permit (signature drain)',
+        '0x2b67b570': 'Permit2 (signature drain)',
+      }
+
+      // Get all outgoing transactions
+      const txFilter = {
+        fromBlock,
+        toBlock: 'latest',
+        topics: [
+          null, // any tx hash
+          null, // from (any)
+          ethers.zeroPadValue(address, 32) // to = our address (could be delegated)
+        ]
+      }
+
+      const logs = await provider.getLogs(txFilter).catch(() => [])
+      const drainerCalls: { method: string; to: string; txHash: string; timestamp: string }[] = []
+
+      // Check recent blocks for suspicious method calls
+      for (let blockNum = currentBlock; blockNum > Math.max(0, currentBlock - 1000); blockNum--) {
+        try {
+          const block = await provider.getBlock(blockNum, true)
+          if (block && block.transactions) {
+            for (const txHash of block.transactions) {
+              try {
+                const tx = await provider.getTransaction(txHash)
+                if (tx && tx.from && tx.from.toLowerCase() === address.toLowerCase()) {
+                  const methodSig = tx.data.slice(0, 10)
+                  if (DRAINER_METHODS[methodSig]) {
+                    drainerCalls.push({
+                      method: DRAINER_METHODS[methodSig],
+                      to: tx.to || 'contract creation',
+                      txHash: tx.hash,
+                      timestamp: new Date(Number(block.timestamp) * 1000).toISOString()
+                    })
+                  }
+                }
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+
+      return drainerCalls.slice(0, 20)
     } catch {
       return []
     }
@@ -264,12 +381,31 @@ export class WalletScanner {
       }
     })
 
-    const [results] = await Promise.all([
+    // Check for suspicious approvals
+    const approvalPromises = chainIds.map(async (chainId) => {
+      const chain = CHAINS[chainId]
+      const approvals = await this.checkSuspiciousApprovals(address, chainId)
+      return approvals.map(a => ({ ...a, chainId, chainName: chain.name }))
+    })
+
+    // Check for drainer method calls
+    const methodPromises = chainIds.map(async (chainId) => {
+      const chain = CHAINS[chainId]
+      const calls = await this.checkDrainerMethodCalls(address, chainId)
+      return calls.map(c => ({ ...c, chainId, chainName: chain.name }))
+    })
+
+    const [results, approvalResults, methodResults] = await Promise.all([
       Promise.all(scanPromises),
       Promise.all(delegationPromises),
-      Promise.all(drainPromises)
+      Promise.all(drainPromises),
+      Promise.all(approvalPromises),
+      Promise.all(methodPromises)
     ])
     results.forEach(assets => allAssets.push(...assets))
+
+    const allApprovals = approvalResults.flat()
+    const allMethodCalls = methodResults.flat()
 
     // Main delegation (first found or Ethereum)
     const mainDelegation = delegations.find(d => d.chainId === 1) || delegations[0]
@@ -286,6 +422,8 @@ export class WalletScanner {
       } : { hasDelegation: false, delegatedTo: null, isDrainer: false },
       delegations,
       recentDrains: recentDrains.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 20),
+      suspiciousApprovals: allApprovals,
+      drainerMethodCalls: allMethodCalls,
       chains: activeChains,
       lastActivity: recentDrains.length > 0 ? recentDrains[0].timestamp : null
     }

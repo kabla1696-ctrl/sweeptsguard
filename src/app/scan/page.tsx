@@ -14,6 +14,8 @@ interface ScanResult {
   }
   delegations: { chainId: number; chainName: string; delegatedTo: string; isDrainer: boolean; drainerName?: string }[]
   recentDrains: { chainId: number; chainName: string; to: string; value: string; timestamp: string; txHash: string }[]
+  suspiciousApprovals: { chainId: number; chainName: string; token: string; spender: string; amount: string; isDrainer: boolean }[]
+  drainerMethodCalls: { chainId: number; chainName: string; method: string; to: string; txHash: string; timestamp: string }[]
   assets: {
     type: string
     symbol: string
@@ -203,6 +205,70 @@ function ScanContent() {
                           )}
                         </div>
                         <code className="text-white/50 text-xs">{d.delegatedTo.slice(0, 10)}...{d.delegatedTo.slice(-8)}</code>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Drainer Method Calls (NEW) */}
+            {result.drainerMethodCalls && result.drainerMethodCalls.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold mb-4">
+                  🔴 Drainer Method Calls Detected ({result.drainerMethodCalls.length})
+                </h2>
+                <div className="space-y-2">
+                  {result.drainerMethodCalls.map((call, i) => (
+                    <div key={i} className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-red-400 font-semibold text-sm">{call.method}</span>
+                          <span className="text-white/30 text-xs ml-2">{call.chainName}</span>
+                          <p className="text-white/40 text-xs mt-1">
+                            To: <code className="text-white/60">{call.to.slice(0, 10)}...{call.to.slice(-8)}</code>
+                          </p>
+                          <p className="text-white/30 text-xs">
+                            {new Date(call.timestamp).toLocaleString()}
+                          </p>
+                        </div>
+                        <a
+                          href={`https://etherscan.io/tx/${call.txHash}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-red-400 text-xs hover:underline"
+                        >
+                          View TX →
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Suspicious Approvals (NEW) */}
+            {result.suspiciousApprovals && result.suspiciousApprovals.length > 0 && (
+              <div>
+                <h2 className="text-lg font-semibold mb-4">
+                  ⚠️ Suspicious Approvals ({result.suspiciousApprovals.length})
+                </h2>
+                <div className="space-y-2">
+                  {result.suspiciousApprovals.map((approval, i) => (
+                    <div key={i} className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <span className="text-orange-400 font-semibold text-sm">
+                            {approval.isDrainer ? '🚨 DRAINER APPROVAL' : '⚠️ Max Approval'}
+                          </span>
+                          <span className="text-white/30 text-xs ml-2">{approval.chainName}</span>
+                          <p className="text-white/40 text-xs mt-1">
+                            Token: <code className="text-white/60">{approval.token.slice(0, 10)}...{approval.token.slice(-8)}</code>
+                          </p>
+                          <p className="text-white/40 text-xs">
+                            Spender: <code className="text-white/60">{approval.spender.slice(0, 10)}...{approval.spender.slice(-8)}</code>
+                          </p>
+                        </div>
                       </div>
                     </div>
                   ))}
