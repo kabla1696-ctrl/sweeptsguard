@@ -95,6 +95,44 @@ function RecoverContent() {
     }
   }
 
+  const executeRevoke = async () => {
+    if (!privateKey) {
+      setError('Private key required')
+      return
+    }
+
+    setRecovery({ step: 'executing', message: 'Revoking EIP-7702 delegation...' })
+
+    try {
+      const res = await fetch('/api/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'revoke',
+          privateKey,
+          safeAddress: safeAddress || '0x0000000000000000000000000000000000000000',
+          chainId: 1
+        })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setRecovery({
+          step: 'done',
+          message: data.message || 'Delegation revoked successfully!',
+          txHashes: data.txHashes
+        })
+      } else {
+        setRecovery({
+          step: 'error',
+          message: data.error || 'Revoke failed'
+        })
+      }
+    } catch {
+      setRecovery({ step: 'error', message: 'Revoke request failed' })
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     scanWallet()
@@ -228,15 +266,22 @@ function RecoverContent() {
               </div>
             ))}
 
-            {assets.tokens.length === 0 && parseFloat(assets.ethFormatted) === 0 && (
+            {assets.tokens.length === 0 && parseFloat(assets.ethFormatted) === 0 && !assets.hasDelegation && (
               <div className="text-center py-8 text-white/30">
                 No recoverable assets found
+              </div>
+            )}
+
+            {assets.tokens.length === 0 && parseFloat(assets.ethFormatted) === 0 && assets.hasDelegation && (
+              <div className="text-center py-4">
+                <p className="text-white/30 mb-2">No recoverable assets — but delegation is active!</p>
+                <p className="text-yellow-400/60 text-xs">Revoke delegation to prevent future draining</p>
               </div>
             )}
           </div>
         )}
 
-        {/* Recovery Button */}
+        {/* Recovery Button — has assets */}
         {recovery?.step === 'confirm' && assets && (parseFloat(assets.ethFormatted) > 0 || assets.tokens.length > 0) && (
           <div className="space-y-4">
             <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
@@ -253,6 +298,27 @@ function RecoverContent() {
               className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50"
             >
               💰 Recover Funds Now
+            </button>
+          </div>
+        )}
+
+        {/* Revoke Only — no assets but delegation active */}
+        {recovery?.step === 'confirm' && assets && parseFloat(assets.ethFormatted) === 0 && assets.tokens.length === 0 && assets.hasDelegation && (
+          <div className="space-y-4">
+            <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
+              <h3 className="text-orange-400 font-semibold mb-2">🛡️ Revoke Delegation Only</h3>
+              <p className="text-white/40 text-sm">
+                No funds to recover, but delegation is active. Revoking prevents the drainer from
+                stealing future deposits to this wallet.
+              </p>
+            </div>
+
+            <button
+              onClick={executeRevoke}
+              disabled={!safeAddress}
+              className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 rounded-xl font-semibold text-lg disabled:opacity-50"
+            >
+              🚫 Revoke Delegation Now
             </button>
           </div>
         )}

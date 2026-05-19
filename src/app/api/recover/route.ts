@@ -80,6 +80,59 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    case 'revoke': {
+      try {
+        const targetChain = chainId || 1
+        const rpcUrl = rpcUrls[targetChain] || rpcUrls[1]
+        const provider = new ethers.JsonRpcProvider(rpcUrl)
+        const wallet = new ethers.Wallet(privateKey, provider)
+
+        // Check delegation
+        const code = await provider.getCode(walletAddress)
+        const hasDelegation = code.startsWith('0xef0100')
+
+        if (!hasDelegation) {
+          return NextResponse.json({ success: false, error: 'No active delegation found' })
+        }
+
+        // Get nonce and gas
+        const nonce = await provider.getTransactionCount(walletAddress)
+        const feeData = await provider.getFeeData()
+        const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(0)
+
+        // Check if wallet has enough ETH for gas
+        const balance = await provider.getBalance(walletAddress)
+        const gasNeeded = BigInt(21000) * gasPrice
+
+        if (balance < gasNeeded) {
+          // Need to fund gas first via Flashbots
+          // For now, return error
+          return NextResponse.json({
+            success: false,
+            error: `Insufficient gas. Need ${ethers.formatEther(gasNeeded)} ETH for gas, but wallet has ${ethers.formatEther(balance)} ETH. Fund the wallet with gas first.`
+          })
+        }
+
+        // Send revoke transaction (self-transfer clears delegation)
+        const tx = await wallet.sendTransaction({
+          to: walletAddress,
+          value: 0n,
+          gasLimit: 21000n,
+          gasPrice,
+          nonce
+        })
+
+        return NextResponse.json({
+          success: true,
+          message: `Delegation revoke tx sent! Hash: ${tx.hash}`,
+          txHashes: [tx.hash]
+        })
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Revoke failed'
+        return NextResponse.json({ error: errorMessage }, { status: 500 })
+      }
+    }
+
     default:
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   }
