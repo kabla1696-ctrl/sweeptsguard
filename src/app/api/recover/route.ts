@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation } from '@/lib/fundRecovery'
+import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, executeFullRecoveryAndRevoke } from '@/lib/fundRecovery'
 import { ethers } from 'ethers'
 
 export async function POST(request: NextRequest) {
@@ -217,6 +217,31 @@ export async function POST(request: NextRequest) {
         })
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Revoke failed'
+        return NextResponse.json({ error: errorMessage }, { status: 500 })
+      }
+    }
+
+    case 'recover-and-revoke': {
+      if (!safeAddress) {
+        return NextResponse.json({ error: 'Safe address required' }, { status: 400 })
+      }
+      if (!sponsorPrivateKey) {
+        return NextResponse.json({ error: 'Sponsor private key required for gas' }, { status: 400 })
+      }
+
+      try {
+        const targetChain = chainId || 1
+        const rpcUrl = rpcUrls[targetChain] || rpcUrls[1]
+        const result = await executeFullRecoveryAndRevoke(
+          privateKey,
+          sponsorPrivateKey,
+          safeAddress,
+          targetChain,
+          rpcUrl
+        )
+        return NextResponse.json(result)
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'Recovery failed'
         return NextResponse.json({ error: errorMessage }, { status: 500 })
       }
     }

