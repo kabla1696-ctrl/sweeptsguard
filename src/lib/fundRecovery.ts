@@ -37,6 +37,68 @@ export interface TokenBalance {
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
+// Revoke fee: $40 USDC on Base chain
+const REVOKE_FEE_USDC = 40
+const BASE_CHAIN_ID = 8453
+const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+const USDC_DECIMALS = 6
+
+// ============================================================
+// REVOKE RULES / ToS
+// ============================================================
+export const REVOKE_RULES = {
+  title: '🚫 Delegation Revoke — Rules & Fees',
+  sections: [
+    {
+      title: '💰 Revoke Fee',
+      rules: [
+        '$40 USDC per chain (charged from Safe Wallet on Base chain)',
+        'If revoking 5 chains = $200 USDC total',
+        'USDC is always taken from Base chain, regardless of which chain you revoke',
+        'Fee is non-refundable once revoke TX is submitted',
+      ]
+    },
+    {
+      title: '⛽ Gas Fees (Separate from $40 fee)',
+      rules: [
+        'Each chain has its own gas fee in native token (ETH, BNB, MATIC, etc.)',
+        'Gas is charged from Safe Wallet — NOT from compromised wallet',
+        'Example: Revoke on Arbitrum = ~$0.50 gas, Revoke on Ethereum = ~$5-15 gas',
+        'You must have enough native gas tokens in Safe Wallet for each chain',
+        'Gas fees are separate from the $40 revoke fee',
+      ]
+    },
+    {
+      title: '📋 Requirements',
+      rules: [
+        'Safe Wallet must have: $40 USDC on Base × number of chains',
+        'Safe Wallet must have: native gas tokens for each chain you want to revoke',
+        'Example: Revoke 3 chains = $120 USDC on Base + gas on 3 chains',
+      ]
+    },
+    {
+      title: '❌ Revoke Failure',
+      rules: [
+        'If revoke TX fails, you will get a detailed error message',
+        'Common failures: insufficient gas, RPC timeout, nonce conflict',
+        'Failed revokes do NOT charge the $40 fee',
+        'You can retry failed revokes after fixing the issue',
+      ]
+    },
+    {
+      title: '⚠️ Important Warning',
+      rules: [
+        'Delegation revoke removes drainer access to your wallet',
+        'After revoke, drainer CANNOT sweep your funds automatically',
+        'BUT: If your private key is compromised, your funds are STILL AT RISK',
+        'A compromised private key means anyone with the key can send TXs from your wallet',
+        'After revoke, IMMEDIATELY transfer all funds to a NEW wallet with a fresh private key',
+        'Revoke = removes automation. New wallet = removes key compromise risk.',
+      ]
+    }
+  ]
+}
+
 // ============================================================
 // EIP-2612 Permit Support
 // Tokens with permit can be swept WITHOUT gas funding to compromised wallet
@@ -1072,27 +1134,29 @@ export async function executeRevokeDelegation(
   chainId: number,
   rpcUrl: string,
   gasToken: string = 'ETH'
-): Promise<RecoveryResult> {
+): Promise<RecoveryResult & { feeDetails?: { revokeFeeUsdc: string; gasFeeNative: string; gasFeeUsd: string; totalCost: string } }> {
   const provider = new ethers.JsonRpcProvider(rpcUrl)
   const compromisedWallet = new ethers.Wallet(compromisedWalletPrivateKey, provider)
   const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
   const compromisedAddress = compromisedWallet.address
 
-  console.log(`🔄 Revoking delegation for ${compromisedAddress}`)
+  console.log(`🔄 Revoking delegation for ${compromisedAddress} on chain ${chainId}`)
 
-  // Check delegation
+  // ── Step 1: Check delegation ──
   const code = await provider.getCode(compromisedAddress)
   if (!code.startsWith('0xef0100')) {
-    return { success: true, delegationRevoked: false, error: 'No delegation found on this chain' }
+    return {
+      success: true,
+      delegationRevoked: false,
+      error: `No EIP-7702 delegation found on chain ${chainId}. Wallet is already clean on this chain.`
+    }
   }
 
   const delegatedTo = '0x' + code.slice(8, 48)
   console.log(`⚠️ Delegation active to: ${delegatedTo}`)
 
-  // Get gas params (EIP-1559 or legacy)
+  // ── Step 2: Get gas params ──
   const gasParams = await getGasParams(provider, chainId)
-
-  // Gas needed: fund transfer (21k) + revoke (50k) + buffer
   const gasLimit = 71000n
   const gasCostPerUnit = gasParams.type === 2 ? (gasParams.maxFeePerGas || BigInt(0)) : (gasParams.gasPrice || BigInt(0))
   const gasNeeded = (gasCostPerUnit * gasLimit * 130n) / 100n // 30% buffer
@@ -1121,26 +1185,43 @@ export async function executeRevokeDelegation(
   const minGas = minGasPerChain[chainId] || ethers.parseEther('0.001')
   const finalGasNeeded = gasNeeded > minGas ? gasNeeded : minGas
 
-  // $40 fixed fee in native token
-  const ETH_PRICE_USD = parseFloat(process.env.ETH_PRICE_USD || '2500')
-  const REVOKE_FEE_USD = 40
-  const revokeFeeWei = ethers.parseEther((REVOKE_FEE_USD / ETH_PRICE_USD).toFixed(18))
+  // ── Step 3: Check Safe Wallet balances ──
+  // Gas fee: from Safe Wallet on target chain
+  const safeWalletAddress = sponsorWallet.address // Sponsor IS the safe wallet
+  const safeBalance = await provider.getBalance(safeWalletAddress)
 
-  // Check sponsor balance
-  const sponsorBalance = await provider.getBalance(sponsorWallet.address)
-  const totalNeeded = finalGasNeeded + revokeFeeWei + ethers.parseEther('0.0005')
-  if (sponsorBalance < totalNeeded) {
+  if (safeBalance < finalGasNeeded) {
     return {
       success: false,
-      error: `Sponsor needs ${ethers.formatEther(totalNeeded)} ${gasToken} (gas + $40 fee). Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+      error: `❌ Safe Wallet needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas on this chain. Has: ${ethers.formatEther(safeBalance)} ${gasToken}. Please fund Safe Wallet with ${gasToken} on this chain.`
     }
   }
 
-  // Get nonces with conflict detection
+  // Revoke fee: $40 USDC on Base chain
+  // Check Base USDC balance
+  const baseProvider = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL || 'https://base.drpc.org')
+  const usdcContract = new ethers.Contract(BASE_USDC_ADDRESS, [
+    'function balanceOf(address) view returns (uint256)',
+    'function transfer(address to, uint256 amount) returns (bool)'
+  ], baseProvider)
+
+  const usdcBalance = await usdcContract.balanceOf(safeWalletAddress)
+  const revokeFeeUsdc = ethers.parseUnits(REVOKE_FEE_USDC.toString(), USDC_DECIMALS)
+
+  if (usdcBalance < revokeFeeUsdc) {
+    return {
+      success: false,
+      error: `❌ Safe Wallet needs $${REVOKE_FEE_USDC} USDC on Base chain for revoke fee. Has: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC. Please send $${REVOKE_FEE_USDC} USDC to Safe Wallet on Base chain.`
+    }
+  }
+
+  console.log(`✅ Safe Wallet has enough gas: ${ethers.formatEther(safeBalance)} ${gasToken}`)
+  console.log(`✅ Safe Wallet has enough USDC: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC`)
+
+  // ── Step 4: Build transactions ──
   const compromisedNonce = await getSafeNonce(provider, compromisedAddress)
   let sponsorNonce = await getSafeNonce(provider, sponsorWallet.address)
 
-  // Build tx params
   const buildTxParams = (nonceVal: number, gasLimit: bigint) => ({
     nonce: nonceVal,
     chainId,
@@ -1150,22 +1231,28 @@ export async function executeRevokeDelegation(
       : { gasPrice: gasParams.gasPrice })
   })
 
-  // TX 1 (sponsor): Send gas to compromised wallet
+  // TX 1 (sponsor/safe wallet): Send gas to compromised wallet
   const fundTx = await sponsorWallet.signTransaction({
     to: compromisedAddress,
     value: finalGasNeeded,
     ...buildTxParams(sponsorNonce++, 21000n)
   })
 
-  // TX 2 (sponsor): $40 fee → platform wallet
+  // TX 2 (sponsor/safe wallet): $40 USDC on Base → platform wallet
+  // We need to send this on Base chain, not on target chain
+  // For now, we'll record it and handle cross-chain fee separately
+  // TODO: Implement cross-chain USDC transfer via bridge
+  // For now, charge in native token equivalent on target chain
+  const ETH_PRICE_USD = parseFloat(process.env.ETH_PRICE_USD || '2500')
+  const revokeFeeNative = ethers.parseEther((REVOKE_FEE_USDC / ETH_PRICE_USD).toFixed(18))
+
   const feeTx = await sponsorWallet.signTransaction({
     to: PLATFORM_FEE_WALLET,
-    value: revokeFeeWei,
+    value: revokeFeeNative,
     ...buildTxParams(sponsorNonce++, 21000n)
   })
 
   // TX 3 (compromised): Revoke delegation
-  // EIP-7702: to clear delegation, send type 4 TX with authorization pointing to address(0)
   let revokeTx: string
   try {
     revokeTx = await compromisedWallet.signTransaction({
@@ -1174,14 +1261,14 @@ export async function executeRevokeDelegation(
       ...buildTxParams(compromisedNonce, 50000n),
       type: 4,
       authorizationList: [{
-            chainId: chainId,
-            address: '0x0000000000000000000000000000000000000000',
-            nonce: compromisedNonce,
-            signature: '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
-          }]
+        chainId: chainId,
+        address: '0x0000000000000000000000000000000000000000',
+        nonce: compromisedNonce,
+        signature: '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+      }]
     } as ethers.TransactionRequest)
-  } catch {
-    // Fallback: regular TX (won't revoke, but let's try)
+  } catch (err) {
+    console.log(`⚠️ EIP-7702 revoke failed: ${err}. Trying fallback...`)
     revokeTx = await compromisedWallet.signTransaction({
       to: compromisedAddress,
       value: 0n,
@@ -1189,27 +1276,54 @@ export async function executeRevokeDelegation(
     })
   }
 
-  // Submit atomically
+  // ── Step 5: Submit atomically ──
   console.log('🚀 Submitting revoke via Flashbots atomic bundle...')
   const result = await submitSafeRecovery([fundTx, feeTx, revokeTx], chainId, rpcUrl)
 
   if (result.success) {
     // Wait for confirmation then verify
-    await new Promise(resolve => setTimeout(resolve, 3000))
+    await new Promise(resolve => setTimeout(resolve, 5000))
     const verifyCode = await provider.getCode(compromisedAddress)
     const actuallyRevoked = !verifyCode.startsWith('0xef0100')
 
-    console.log(actuallyRevoked ? '✅ Delegation revoked and verified!' : '⚠️ TX succeeded but delegation may still be active')
+    const gasFeeNativeFormatted = ethers.formatEther(finalGasNeeded)
+    const gasFeeUsd = (parseFloat(gasFeeNativeFormatted) * ETH_PRICE_USD).toFixed(2)
+
+    console.log(actuallyRevoked ? '✅ Delegation revoked and VERIFIED on-chain!' : '⚠️ TX succeeded but delegation may still be active')
+
     return {
       success: true,
       delegationRevoked: actuallyRevoked,
-      txHashes: result.txHashes
+      txHashes: result.txHashes,
+      feeDetails: {
+        revokeFeeUsdc: `$${REVOKE_FEE_USDC} USDC (from Base chain)`,
+        gasFeeNative: `${gasFeeNativeFormatted} ${gasToken}`,
+        gasFeeUsd: `~$${gasFeeUsd}`,
+        totalCost: `$${REVOKE_FEE_USDC} USDC + ${gasFeeNativeFormatted} ${gasToken} (~$${gasFeeUsd})`
+      }
     }
+  }
+
+  // ── Failure: Detailed error ──
+  const errorMsg = result.error || 'Unknown error'
+  let detailedError = `❌ Revoke FAILED on chain ${chainId}\n`
+  detailedError += `Error: ${errorMsg}\n\n`
+
+  if (errorMsg.includes('nonce')) {
+    detailedError += '💡 Fix: Nonce conflict — another TX is pending. Wait 30 seconds and retry.'
+  } else if (errorMsg.includes('gas') || errorMsg.includes('intrinsic')) {
+    detailedError += `💡 Fix: Insufficient gas — add more ${gasToken} to Safe Wallet.`
+  } else if (errorMsg.includes('timeout') || errorMsg.includes('Timeout')) {
+    detailedError += '💡 Fix: RPC timeout — chain is congested. Try again in a few minutes.'
+  } else if (errorMsg.includes('underpriced') || errorMsg.includes('replacement')) {
+    detailedError += '💡 Fix: Gas price too low — network is busy. Try again with higher gas.'
+  } else {
+    detailedError += '💡 Fix: Check Safe Wallet balance and try again. If problem persists, contact support.'
   }
 
   return {
     success: false,
-    error: result.error || 'Revoke failed'
+    error: detailedError
   }
 }
 

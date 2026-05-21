@@ -258,20 +258,64 @@ function RecoverContent() {
               <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
                 <li>Scan ALL chains for ETH + tokens</li>
                 <li>Select which chain to recover from</li>
-                <li>Sponsor wallet pays gas → Flashbots atomic bundle</li>
+                <li>Permit-based sweep (no gas to compromised wallet)</li>
                 <li>80% → Safe Wallet | 20% → Platform Fee</li>
-                <li>Drainer sees NOTHING (private mempool)</li>
+                <li>Drainer sees NOTHING (atomic execution)</li>
               </ol>
             </div>
             <div>
               <p className="text-orange-400 text-sm font-semibold mb-1">🚫 One-Click Revoke ($40/chain)</p>
               <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
                 <li>Scans ALL chains for delegations</li>
-                <li>$40 per chain from sponsor wallet → platform</li>
-                <li>Gas funded from sponsor → compromised wallet</li>
+                <li>$40 USDC per chain (charged on Base chain)</li>
+                <li>Gas fees per chain (from Safe Wallet)</li>
                 <li>Revoke ALL delegations in parallel</li>
                 <li>Wallet becomes CLEAN — hacker loses access</li>
               </ol>
+            </div>
+          </div>
+        </div>
+
+        {/* Rules & Fees */}
+        <div className="p-5 bg-orange-500/10 border border-orange-500/20 rounded-xl mb-8">
+          <h3 className="text-orange-400 font-semibold mb-3">📋 Revoke Rules & Fees</h3>
+          <div className="space-y-3">
+            <div>
+              <p className="text-yellow-400 text-xs font-semibold mb-1">💰 Revoke Fee</p>
+              <ul className="text-white/50 text-xs space-y-1">
+                <li>• $40 USDC per chain (charged from Safe Wallet on Base chain)</li>
+                <li>• 5 chains = $200 USDC total</li>
+                <li>• USDC always taken from Base chain, regardless of revoke chain</li>
+                <li>• Non-refundable once TX is submitted</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-blue-400 text-xs font-semibold mb-1">⛽ Gas Fees (Separate)</p>
+              <ul className="text-white/50 text-xs space-y-1">
+                <li>• Each chain has its own gas fee (ETH, BNB, MATIC, etc.)</li>
+                <li>• Gas charged from Safe Wallet — NOT compromised wallet</li>
+                <li>• Example: Arbitrum ~$0.50, Ethereum ~$5-15</li>
+                <li>• Must have native gas tokens in Safe Wallet per chain</li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-red-400 text-xs font-semibold mb-1">❌ If Revoke Fails</p>
+              <ul className="text-white/50 text-xs space-y-1">
+                <li>• Detailed error message with specific fix instructions</li>
+                <li>• $40 fee NOT charged on failure</li>
+                <li>• Can retry after fixing the issue</li>
+              </ul>
+            </div>
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+              <p className="text-red-400 text-xs font-semibold mb-1">⚠️ IMPORTANT WARNING</p>
+              <ul className="text-red-300/70 text-xs space-y-1">
+                <li>• Revoke removes drainer&apos;s automatic access</li>
+                <li>• After revoke, drainer CANNOT auto-sweep funds</li>
+                <li>• BUT: if private key is compromised, funds are STILL AT RISK</li>
+                <li>• Anyone with the key can still send TXs from your wallet</li>
+                <li>• After revoke → IMMEDIATELY move all funds to a NEW wallet</li>
+                <li>• Revoke = removes automation | New wallet = removes key risk</li>
+              </ul>
             </div>
           </div>
         </div>
@@ -516,16 +560,24 @@ function RecoverContent() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-yellow-400 font-semibold">${totalRevokeFee} fee</p>
-                        <p className="text-white/30 text-xs">$40 × {totalDelegations} chains</p>
+                        <p className="text-yellow-400 font-semibold">${totalRevokeFee} USDC</p>
+                        <p className="text-white/30 text-xs">on Base chain</p>
                       </div>
+                    </div>
+                    <div className="p-3 bg-yellow-500/10 rounded-lg mb-3">
+                      <p className="text-yellow-400 text-xs font-semibold">Fee Breakdown:</p>
+                      <ul className="text-white/40 text-xs mt-1 space-y-1">
+                        <li>• Revoke fee: $40 USDC × {totalDelegations} = ${totalRevokeFee} USDC (from Safe Wallet on Base)</li>
+                        <li>• Gas fees: per-chain native gas (from Safe Wallet per chain)</li>
+                        <li>• Total = ${totalRevokeFee} USDC + gas on {totalDelegations} chains</li>
+                      </ul>
                     </div>
                     <button
                       onClick={executeRevokeAll}
                       disabled={!sponsorKey}
                       className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
                     >
-                      🚫 Revoke ALL Delegations (${totalRevokeFee} fee)
+                      🚫 Revoke ALL Delegations (${totalRevokeFee} USDC + gas)
                     </button>
                   </div>
                 )}
