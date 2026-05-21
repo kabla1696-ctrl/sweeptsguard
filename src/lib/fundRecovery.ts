@@ -1123,12 +1123,14 @@ export async function submitRecoveryBundle(
   try {
     const message = JSON.stringify(bundleRequest)
     const signature = await authSigner.signMessage(message)
+    // Flashbots requires format: <address>:<signature>
+    const flashbotsSignature = `${authSigner.address}:${signature}`
 
     const response = await fetch(relayUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Flashbots-Signature': signature
+        'X-Flashbots-Signature': flashbotsSignature
       },
       body: message
     })

@@ -143,7 +143,7 @@ export const EXCHANGE_WALLETS: Record<string, { name: string; type: 'deposit' | 
   // Bybit
   '0x1151314c646ce4e0efd76d1af4760ae66a9fe30f': { name: 'Bybit', type: 'hot' },
   '0xf89d7b9c864f589bbf53a82105107622b35eaa40': { name: 'Bybit', type: 'hot' },
-  '0+lsi1b780064b87d524114adb444777662527783426': { name: 'Bybit', type: 'deposit' },
+  '0x1b780064b87d524114adb4447776625277834260': { name: 'Bybit', type: 'deposit' },
 
   // OKX
   '0x236f7c1e5c4c191b7b999ab42b7e7cd4f6e0c7b4': { name: 'OKX', type: 'hot' },

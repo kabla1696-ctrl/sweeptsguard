@@ -72,15 +72,23 @@ export class ReputationChecker {
       }
 
       // Estimate age from first transaction (simplified)
+      // NOTE: We cannot determine the true "first seen" date without indexing infrastructure.
+      // Using a proxy: if address has many TXs, it's likely established.
       let ageInDays = 0
       let firstSeen: string | null = null
       try {
-        // Try to get a block from the past to estimate age
         const currentBlock = await provider.getBlockNumber()
-        const oldBlock = await provider.getBlock(Math.max(currentBlock - 100000, 1))
-        if (oldBlock) {
-          firstSeen = new Date(oldBlock.timestamp * 1000).toISOString()
-          ageInDays = Math.floor((Date.now() - oldBlock.timestamp * 1000) / (1000 * 60 * 60 * 24))
+        const currentBlockData = await provider.getBlock(currentBlock)
+        if (currentBlockData) {
+          // firstSeen is unknown without indexers — use null
+          firstSeen = null
+          // Estimate minimum age from txCount (rough: ~1 block per 12s on ETH)
+          // This is a lower-bound estimate, not exact
+          if (txCount > 0) {
+            const estimatedBlocksOfHistory = txCount * 50 // rough: avg 50 blocks between TXs
+            const estimatedSeconds = estimatedBlocksOfHistory * 12
+            ageInDays = Math.floor(estimatedSeconds / (60 * 60 * 24))
+          }
           if (ageInDays > 365) {
             score += 15
             tags.push('Established')

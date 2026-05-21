@@ -53,16 +53,18 @@ export class FlashbotsClient {
       // Sign all transactions
       const signedTxs: string[] = []
 
-      for (const tx of transactions) {
-        const nonce = await this.provider.getTransactionCount(signer.address)
-        const feeData = await this.provider.getFeeData()
+      // BUG FIX: Fetch nonce ONCE before loop, increment for each TX
+      // Previous code fetched nonce inside loop, giving all TXs the same nonce
+      let nonce = await this.provider.getTransactionCount(signer.address, 'pending')
+      const feeData = await this.provider.getFeeData()
 
+      for (const tx of transactions) {
         const signedTx = await signer.signTransaction({
           to: tx.to,
           data: tx.data,
           value: tx.value || 0n,
           gasLimit: tx.gasLimit || 100000n,
-          nonce,
+          nonce: nonce++,
           maxFeePerGas: feeData.maxFeePerGas || 0n,
           maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || 0n,
           type: 2,
@@ -86,6 +88,8 @@ export class FlashbotsClient {
       // Sign the request
       const message = JSON.stringify(bundle)
       const signature = await this.signAuth(message)
+      // Flashbots requires format: <address>:<signature>
+      const flashbotsSig = `${this.authSigner.address}:${signature}`
 
       // Send to Flashbots relay
       const relayUrl = this.chainId === 11155111 ? FLASHBOTS_RELAY_SEPOLIA : FLASHBOTS_RELAY
@@ -94,7 +98,7 @@ export class FlashbotsClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Flashbots-Signature': signature
+          'X-Flashbots-Signature': flashbotsSig
         },
         body: message
       })
@@ -130,16 +134,17 @@ export class FlashbotsClient {
     try {
       const signedTxs: string[] = []
 
-      for (const tx of transactions) {
-        const nonce = await this.provider.getTransactionCount(signer.address)
-        const feeData = await this.provider.getFeeData()
+      // BUG FIX: Fetch nonce ONCE before loop, increment for each TX
+      let nonce = await this.provider.getTransactionCount(signer.address, 'pending')
+      const feeData = await this.provider.getFeeData()
 
+      for (const tx of transactions) {
         const signedTx = await signer.signTransaction({
           to: tx.to,
           data: tx.data,
           value: tx.value || 0n,
           gasLimit: tx.gasLimit || 100000n,
-          nonce,
+          nonce: nonce++,
           maxFeePerGas: feeData.maxFeePerGas || 0n,
           maxPriorityFeePerGas: feeData.maxPriorityFeePerGas || 0n,
           type: 2,
@@ -161,6 +166,8 @@ export class FlashbotsClient {
 
       const message = JSON.stringify(bundle)
       const signature = await this.signAuth(message)
+      // Flashbots requires format: <address>:<signature>
+      const flashbotsSig = `${this.authSigner.address}:${signature}`
 
       const relayUrl = this.chainId === 11155111 ? FLASHBOTS_RELAY_SEPOLIA : FLASHBOTS_RELAY
 
@@ -168,7 +175,7 @@ export class FlashbotsClient {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Flashbots-Signature': signature
+          'X-Flashbots-Signature': flashbotsSig
         },
         body: message
       })

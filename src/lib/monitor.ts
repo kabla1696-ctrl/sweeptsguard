@@ -59,6 +59,7 @@ export class WalletMonitor {
   private alerts: AlertSystem | null = null
   private onAlert?: (alert: MonitorAlert) => void
   private onSweep?: (result: SweepResult) => void
+  private checkCount = 0 // Track check cycles for periodic tasks
 
   constructor(config: MonitorConfig) {
     this.config = config
@@ -173,7 +174,8 @@ export class WalletMonitor {
     }
 
     // Check for exchange deposits (every 10 checks)
-    if (this.state.lastCheck % 10 === 0) {
+    this.checkCount++
+    if (this.checkCount % 10 === 0) {
       await this.checkExchangeDeposits()
     }
 
