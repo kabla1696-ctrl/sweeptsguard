@@ -4,6 +4,45 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
+// Map chainId to explorer hostname
+function getExplorerForChain(chainId: number): string {
+  const explorers: Record<number, string> = {
+    1: 'etherscan.io',
+    8453: 'basescan.org',
+    56: 'bscscan.com',
+    42161: 'arbiscan.io',
+    137: 'polygonscan.com',
+    10: 'optimistic.etherscan.io',
+    43114: 'snowtrace.io',
+    250: 'ftmscan.com',
+    25: 'cronoscan.com',
+    81457: 'blastscan.io',
+    7777777: 'zorascan.io',
+    1101: 'zkevm.polygonscan.com',
+    169: 'pacific-explorer.manta.network',
+    324: 'era.zksync.network',
+    59144: 'lineascan.build',
+    5000: 'mantlescan.xyz',
+    34443: 'scrollscan.com',
+    534352: 'scrollscan.com',
+    100: 'gnosisscan.io',
+    7000: 'zetachain.blockscout.com',
+    1625: 'explorer.gravity.xyz',
+    1116: 'scan.coredao.org',
+    1329: 'seitrace.com',
+    80094: 'berascan.com',
+    57073: 'inkscan.io',
+    196: 'explorer.xlayer.xyz',
+    43111: 'hemi.xyz',
+    8217: 'kaiascan.io',
+    1868: 'soneium.blockscout.com',
+    2818: 'morphscan.io',
+    1923: 'swellchainscan.io',
+    10143: 'explorer.mode.network',
+  }
+  return explorers[chainId] || 'etherscan.io'
+}
+
 interface ScanResult {
   address: string
   delegation: {
@@ -41,7 +80,7 @@ function ScanContent() {
   const [error, setError] = useState('')
 
   const scanWallet = useCallback(async (addr: string) => {
-    if (!addr || !addr.startsWith('0x') || addr.length !== 42) {
+    if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
       setError('Please enter a valid EVM address')
       return
     }
@@ -281,7 +320,7 @@ function ScanContent() {
                           </p>
                         </div>
                         <a
-                          href={`https://etherscan.io/tx/${call.txHash}`}
+                          href={`https://${getExplorerForChain(call.chainId)}/tx/${call.txHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-red-400 text-xs hover:underline"
@@ -344,7 +383,7 @@ function ScanContent() {
                           </p>
                         </div>
                         <a
-                          href={`https://etherscan.io/tx/${tx.txHash}`}
+                          href={`https://${getExplorerForChain(tx.chainId)}/tx/${tx.txHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-green-400 text-xs hover:underline"
@@ -369,7 +408,7 @@ function ScanContent() {
             <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-white/40">Chains scanned:</span>
-                <span className="text-white/70 font-medium">{result.totalChainsScanned || 15} / 15</span>
+                <span className="text-white/70 font-medium">{result.totalChainsScanned || 32} / 32</span>
               </div>
               {result.failedChains && result.failedChains.length > 0 && (
                 <div className="flex items-center justify-between text-sm mt-2">
@@ -380,7 +419,7 @@ function ScanContent() {
               <div className="flex items-center justify-between text-sm mt-2">
                 <span className="text-white/40">Delegations found:</span>
                 <span className={`font-medium ${result.delegations.length > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                  {result.delegations.length} / {result.totalChainsScanned || 15} chains
+                  {result.delegations.length} / {result.totalChainsScanned || 32} chains
                 </span>
               </div>
             </div>

@@ -185,9 +185,14 @@ export class WalletScanner {
       const multicallAddress = chain.multicallAddress
       if (!multicallAddress) return []
 
+      // BUG FIX: L2 chains don't support negative block numbers (-10000)
+      // Get current block first, then calculate fromBlock
+      const currentBlock = await this.withTimeout(provider.getBlockNumber(), 8000)
+      const fromBlock = Math.max(0, currentBlock - 10000)
+
       // Get recent token transfer events to find tokens
       const filter = {
-        fromBlock: -10000, // Last ~10000 blocks
+        fromBlock,
         toBlock: 'latest',
         topics: [
           ethers.id('Transfer(address,address,uint256)'),
@@ -241,7 +246,6 @@ export class WalletScanner {
     try {
       const provider = this.getProvider(chainId)
       const currentBlock = await provider.getBlockNumber()
-      const fromBlock = Math.max(0, currentBlock - 100000)
 
       // Get Approval events
       const approvalFilter = {
@@ -295,15 +299,7 @@ export class WalletScanner {
       const currentBlock = await provider.getBlockNumber()
       const fromBlock = Math.max(0, currentBlock - 5000) // Reduced from 50k to 5k
 
-      // Known drainer method selectors
-      const DRAINER_METHODS: Record<string, string> = {
-        '0xa1798512': 'Inferno Drain (a1798512)',
-        '0x23b872dd': 'transferFrom (drain)',
-        '0x42842e0e': 'safeTransferFrom (NFT drain)',
-        '0x095ea7b3': 'approve (setup drain)',
-        '0xd505accf': 'permit (signature drain)',
-        '0x2b67b570': 'Permit2 (signature drain)',
-      }
+      // BUG FIX: Removed duplicate DRAINER_METHODS — now uses module-level constant
 
       const drainerCalls: { method: string; to: string; txHash: string; timestamp: string }[] = []
 
@@ -485,7 +481,6 @@ export class WalletScanner {
 
     // Detect private key compromise
     // Check if outgoing transactions go to known drainer addresses
-    const drainDestinations = recentDrains.map(d => ({ to: d.to.toLowerCase(), chain: d.chainName }))
     const pkCompromised = {
       isCompromised: false,
       drainerAddresses: [] as string[],
@@ -505,10 +500,11 @@ export class WalletScanner {
       }
     }
     
-    // Also check if wallet sends to many different addresses across chains (drain pattern)
+    // BUG FIX: Increased thresholds from (2 dest, 3 chains) to (5 dest, 5 chains)
+    // Previous thresholds caused false positives for normal bridge users
     const uniqueDestinations = new Set(recentDrains.map(d => d.to.toLowerCase()))
     const uniqueChains = new Set(recentDrains.map(d => d.chainName))
-    if (uniqueDestinations.size >= 2 && uniqueChains.size >= 3) {
+    if (uniqueDestinations.size >= 5 && uniqueChains.size >= 5) {
       pkCompromised.isCompromised = true
       pkCompromised.method = 'multi_chain_drain_pattern'
     }
