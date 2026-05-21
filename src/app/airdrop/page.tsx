@@ -10,10 +10,7 @@ const PLATFORM_FEE_PERCENT = 20
 // SweepGuard's own EIP-7702 rescuer contracts (fee goes to OUR wallet, not zun's!)
 // Deployed via: npx hardhat run scripts/deploy-rescuer.js --network <name>
 const SWEEPGUARD_RESCUER: Record<number, string> = {
-  // TODO: Fill addresses after deployment
-  // 1: '0x...',     // Ethereum
-  // 8453: '0x...',  // Base
-  // 42161: '0x...', // Arbitrum
+  8453: '0xDB671f97bfB72e324A758588456373EEC141400F', // Base ✅ deployed
 }
 
 // Fallback to zun's Antidrain for chains we haven't deployed on yet
