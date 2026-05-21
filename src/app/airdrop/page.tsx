@@ -7,6 +7,45 @@ import { ethers } from 'ethers'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
+// Antidrain contract — deployed on 18+ EVM chains by zun (whitehat)
+// This is the SAME contract used by the Antidrain extension/website
+const ANTIDRAIN_CONTRACT = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
+
+// Chains where Antidrain contract is deployed (verified on Etherscan)
+const ANTIDRAIN_CHAINS = new Set([
+  1,      // Ethereum
+  8453,   // Base
+  42161,  // Arbitrum
+  10,     // Optimism
+  56,     // BSC
+  137,    // Polygon
+  43114,  // Avalanche
+  81457,  // Blast
+  324,    // zkSync
+  59144,  // Linea
+  5000,   // Mantle
+  534352, // Scroll
+  80094,  // Berachain
+  1329,   // Sei
+  57073,  // Ink
+  1868,   // Soneium
+  143,    // Monad
+  98866,  // Plume
+  130,    // Unichain
+  999,    // HyperEVM
+  685689, // Gensyn
+  9745,   // Plasma
+])
+
+// Antidrain executeRescue ABI (key functions only)
+const ANTIDRAIN_ABI = [
+  'function executeRescue(address safeRecipient, address[] tokens, address claimTarget, bytes claimData, address fw) external payable',
+  'function executeMoveERC20(address safeRecipient, address[] tokens, address fw) external',
+  'function executeRescueNative(address payable safeRecipient, address payable fw) external',
+  'function accountNonces(address account, address sponsor) external view returns (uint256)',
+  'function FEE_BPS() external view returns (uint256)',
+  'function feeWallet() external view returns (address)',
+]
 // All 33 chain explorer URLs for TX links
 const EXPLORER_URLS: Record<number, string> = {
   1: 'https://etherscan.io',
@@ -66,24 +105,24 @@ const PRIVATE_SEQUENCER_CHAINS = new Set([
 ])
 
 const SUPPORTED_CHAINS = [
-  { id: 1, name: 'Ethereum', token: 'ETH', method: 'Flashbots' },
-  { id: 8453, name: 'Base', token: 'ETH', method: 'Rapid-fire' },
-  { id: 42161, name: 'Arbitrum', token: 'ETH', method: 'Rapid-fire' },
-  { id: 137, name: 'Polygon', token: 'MATIC', method: 'Rapid-fire' },
-  { id: 56, name: 'BSC', token: 'BNB', method: 'Rapid-fire' },
-  { id: 10, name: 'Optimism', token: 'ETH', method: 'Rapid-fire' },
-  { id: 43114, name: 'Avalanche', token: 'AVAX', method: 'Rapid-fire' },
-  { id: 250, name: 'Fantom', token: 'FTM', method: 'Rapid-fire' },
-  { id: 81457, name: 'Blast', token: 'ETH', method: 'Rapid-fire' },
-  { id: 324, name: 'zkSync', token: 'ETH', method: 'Rapid-fire' },
-  { id: 59144, name: 'Linea', token: 'ETH', method: 'Rapid-fire' },
-  { id: 5000, name: 'Mantle', token: 'MNT', method: 'Rapid-fire' },
-  { id: 534352, name: 'Scroll', token: 'ETH', method: 'Rapid-fire' },
-  { id: 80094, name: 'Berachain', token: 'BERA', method: 'Rapid-fire' },
-  { id: 1329, name: 'Sei', token: 'SEI', method: 'Rapid-fire' },
+  { id: 1, name: 'Ethereum', token: 'ETH', method: ANTIDRAIN_CHAINS.has(1) ? 'EIP-7702' : 'Flashbots' },
+  { id: 8453, name: 'Base', token: 'ETH', method: ANTIDRAIN_CHAINS.has(8453) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 42161, name: 'Arbitrum', token: 'ETH', method: ANTIDRAIN_CHAINS.has(42161) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 137, name: 'Polygon', token: 'MATIC', method: ANTIDRAIN_CHAINS.has(137) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 56, name: 'BSC', token: 'BNB', method: ANTIDRAIN_CHAINS.has(56) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 10, name: 'Optimism', token: 'ETH', method: ANTIDRAIN_CHAINS.has(10) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 43114, name: 'Avalanche', token: 'AVAX', method: ANTIDRAIN_CHAINS.has(43114) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 250, name: 'Fantom', token: 'FTM', method: 'Direct Claim' },
+  { id: 81457, name: 'Blast', token: 'ETH', method: ANTIDRAIN_CHAINS.has(81457) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 324, name: 'zkSync', token: 'ETH', method: ANTIDRAIN_CHAINS.has(324) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 59144, name: 'Linea', token: 'ETH', method: ANTIDRAIN_CHAINS.has(59144) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 5000, name: 'Mantle', token: 'MNT', method: ANTIDRAIN_CHAINS.has(5000) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 534352, name: 'Scroll', token: 'ETH', method: ANTIDRAIN_CHAINS.has(534352) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 80094, name: 'Berachain', token: 'BERA', method: ANTIDRAIN_CHAINS.has(80094) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 1329, name: 'Sei', token: 'SEI', method: ANTIDRAIN_CHAINS.has(1329) ? 'EIP-7702' : 'Rapid-fire' },
   { id: 43111, name: 'Hemi', token: 'ETH', method: 'Rapid-fire' },
-  { id: 57073, name: 'Ink', token: 'ETH', method: 'Rapid-fire' },
-  { id: 1868, name: 'Soneium', token: 'ETH', method: 'Rapid-fire' },
+  { id: 57073, name: 'Ink', token: 'ETH', method: ANTIDRAIN_CHAINS.has(57073) ? 'EIP-7702' : 'Rapid-fire' },
+  { id: 1868, name: 'Soneium', token: 'ETH', method: ANTIDRAIN_CHAINS.has(1868) ? 'EIP-7702' : 'Rapid-fire' },
 ]
 
 interface PreviewData {
@@ -143,7 +182,7 @@ export default function AirdropPage() {
   const [pendingAction, setPendingAction] = useState<'claim' | null>(null)
 
   // Track last action for retry
-  const [lastAction, setLastAction] = useState<'claim' | 'execute' | null>(null)
+  const [lastAction, setLastAction] = useState<'claim' | 'execute' | 'eip7702' | null>(null)
 
   // BUG FIX #1: Clear private keys from memory on unmount
   useEffect(() => {
@@ -393,6 +432,138 @@ export default function AirdropPage() {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // EIP-7702 + ANTIDRAIN RESCUE — THE REAL SOLUTION
+  // Key NEVER leaves browser. Sponsor pays gas. Atomic batch.
+  // Same system used by zun's Antidrain extension.
+  // ═══════════════════════════════════════════════════════════
+  const handleEIP7702Rescue = async () => {
+    if (!previewData || !privateKey || !sponsorKey) return
+    if (!ANTIDRAIN_CHAINS.has(chainId)) {
+      setErrorMsg('EIP-7702 Antidrain not available on this chain. Use Direct Claim instead.')
+      return
+    }
+
+    // Validate safe wallet ≠ compromised wallet
+    const validationError = validateSafeAddress(safeWallet, walletAddress)
+    if (validationError) {
+      setErrorMsg(validationError)
+      setStep('error')
+      return
+    }
+
+    setStep('claiming')
+    setErrorMsg('')
+    setLastAction('eip7702')
+
+    try {
+      // Step 1: Create provider + compromised wallet signer (LOCAL ONLY)
+      const rpcUrl = getChainRPC(chainId)
+      const provider = new ethers.JsonRpcProvider(rpcUrl)
+      const compromisedWallet = new ethers.Wallet(privateKey, provider)
+
+      // Step 2: Get current nonce for EIP-7702 authorization
+      const nonce = await provider.getTransactionCount(compromisedWallet.address)
+
+      // Step 3: Sign EIP-7702 authorization LOCALLY
+      // EIP-7702 authorization = keccak256(0x05 || rlp([chainId, address, nonce]))
+      const authPayload = ethers.concat([
+        '0x05',
+        ethers.encodeRlp([
+          ethers.toBeHex(chainId),
+          ANTIDRAIN_CONTRACT.toLowerCase(),
+          ethers.toBeHex(nonce),
+        ]),
+      ])
+      const authHash = ethers.keccak256(authPayload)
+      const sig = compromisedWallet.signingKey.sign(authHash)
+      const auth = {
+        chainId: chainId,
+        address: ANTIDRAIN_CONTRACT,
+        nonce: nonce,
+        yParity: sig.v - 27, // 0 or 1
+        r: sig.r,
+        s: sig.s,
+      }
+
+      // Step 4: Clear private key from memory immediately
+      setPrivateKey('')
+
+      // Step 5: Send authorization to backend for TX construction + submission
+      const res = await fetch('/api/airdrop/claim', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'antidrain-rescue',
+          contractAddress,
+          chainId,
+          safeWallet,
+          walletAddress,
+          sponsorPrivateKey: sponsorKey,
+          tokenAddress: previewData.tokenAddress,
+          claimableRaw: previewData.claimableRaw,
+          claimData: claimData || undefined,
+          merkleProof: merkleProof || undefined,
+          tokenAmount: tokenAmount || undefined,
+          eip7702Auth: {
+            chainId: auth.chainId,
+            address: auth.address,
+            nonce: auth.nonce,
+            yParity: auth.yParity,
+            r: auth.r,
+            s: auth.s,
+          },
+        })
+      })
+      const data = await res.json()
+
+      if (data.success) {
+        setTxHash(data.txHash || '')
+        setStep('done')
+      } else {
+        const errMsg = data.error || 'EIP-7702 rescue failed'
+        const sanitized = errMsg.includes('execution reverted')
+          ? 'Claim transaction reverted — the airdrop may not be claimable yet or you may not be eligible.'
+          : errMsg.includes('insufficient funds')
+            ? 'Sponsor wallet has insufficient funds for gas.'
+            : errMsg.includes('nonce')
+              ? 'Nonce conflict — please try again.'
+              : errMsg
+        setErrorMsg(sanitized)
+        setStep('error')
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'EIP-7702 rescue failed'
+      setErrorMsg(msg.includes('rejected') ? 'Authorization signature rejected by user.' : msg)
+      setStep('error')
+    }
+  }
+
+  // Helper: Get RPC URL for chain
+  const getChainRPC = (id: number): string => {
+    const rpcs: Record<number, string> = {
+      1: 'https://eth.llamarpc.com',
+      8453: 'https://mainnet.base.org',
+      42161: 'https://arb1.arbitrum.io/rpc',
+      137: 'https://polygon-rpc.com',
+      56: 'https://bsc-dataseed1.binance.org',
+      10: 'https://mainnet.optimism.io',
+      43114: 'https://api.avax.network/ext/bc/C/rpc',
+      250: 'https://rpc.ftm.tools',
+      81457: 'https://rpc.blast.io',
+      324: 'https://mainnet.era.zksync.io',
+      59144: 'https://rpc.linea.build',
+      5000: 'https://rpc.mantle.xyz',
+      534352: 'https://rpc.scroll.io',
+      80094: 'https://rpc.berachain.com',
+      1329: 'https://evm-rpc.sei-apis.com',
+      57073: 'https://rpc-gel.inkonchain.com',
+      1868: 'https://rpc.soneium.org',
+      143: 'https://rpc.monad.xyz',
+    }
+    return rpcs[id] || 'https://eth.llamarpc.com'
+  }
+
   const selectedChain = SUPPORTED_CHAINS.find(c => c.id === chainId)
 
   return (
@@ -420,8 +591,8 @@ export default function AirdropPage() {
         <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
           <p className="text-green-400 text-sm">
             🔒 <strong>Two Claim Modes</strong> —
-            <strong className="text-blue-400"> MetaMask Sign</strong>: Private key NEVER leaves browser (recommended).
-            <strong className="text-yellow-400"> Direct Claim</strong>: Private key sent to API for direct TX (use only if MetaMask unavailable).
+            <strong className="text-green-400"> EIP-7702 Rescue</strong>: Key NEVER leaves browser, sponsor pays gas, atomic batch. Works on {ANTIDRAIN_CHAINS.size}+ chains (recommended! ✅).
+            <strong className="text-yellow-400"> Direct Claim</strong>: Private key sent to API — fallback for chains without EIP-7702 support.
           </p>
         </div>
 
@@ -698,11 +869,15 @@ export default function AirdropPage() {
               <p className="text-orange-400/60 text-xs mt-1">⚠️ This key is used to pay gas. NEVER share your hacked wallet&apos;s private key.</p>
             </div>
 
-            {/* Hacked Wallet Private Key (for Direct Claim mode) */}
+            {/* Hacked Wallet Private Key */}
             <div>
               <label className="block text-sm text-white/50 mb-2">
                 Hacked Wallet Private Key
-                <span className="text-green-400 ml-2">(Direct Claim — no contract needed)</span>
+                {ANTIDRAIN_CHAINS.has(chainId) ? (
+                  <span className="text-green-400 ml-2">(EIP-7702 — key stays in browser ✅)</span>
+                ) : (
+                  <span className="text-yellow-400 ml-2">(Direct Claim — key sent to API ⚠️)</span>
+                )}
               </label>
               <div className="relative">
                 <input
@@ -719,7 +894,11 @@ export default function AirdropPage() {
                   {showPrivateKey ? '🙈' : '👁️'}
                 </button>
               </div>
-              <p className="text-yellow-400/60 text-xs mt-1">⚠️ Sent to API for direct claim TX. Use MetaMask Sign mode if possible (key never leaves browser).</p>
+              {ANTIDRAIN_CHAINS.has(chainId) ? (
+                <p className="text-green-400/60 text-xs mt-1">✅ Used to sign EIP-7702 authorization LOCALLY — never sent to any server. Same system as zun's Antidrain.</p>
+              ) : (
+                <p className="text-yellow-400/60 text-xs mt-1">⚠️ Sent to API for direct claim TX. Only use on chains without EIP-7702 support.</p>
+              )}
             </div>
 
             {/* Optional Fields */}
@@ -871,22 +1050,36 @@ export default function AirdropPage() {
                 ← Back
               </button>
 
-              {!signature ? (
+              {/* EIP-7702 + Antidrain button — BEST option for supported chains */}
+              {ANTIDRAIN_CHAINS.has(chainId) ? (
                 <button
-                  onClick={handleSign}
-                  disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
-                >
-                  ✍️ Sign Authorization (MetaMask)
-                </button>
-              ) : (
-                <button
-                  onClick={handleExecute}
+                  onClick={handleEIP7702Rescue}
                   disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
                   className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
                 >
-                  ⚡ Execute Claim
+                  🔒 EIP-7702 Rescue (Key Stays Local)
                 </button>
+              ) : (
+                /* Fallback: Direct Claim for non-Antidrain chains */
+                <>
+                  {!signature ? (
+                    <button
+                      onClick={handleSign}
+                      disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
+                    >
+                      ✍️ Sign Authorization (MetaMask)
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleExecute}
+                      disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
+                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
+                    >
+                      ⚡ Execute Claim
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

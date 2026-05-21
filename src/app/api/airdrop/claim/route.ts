@@ -1102,6 +1102,160 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    // ============ ANTIDRAIN RESCUE (EIP-7702) ============
+    // The REAL solution — uses Antidrain contract (deployed on 18+ chains)
+    // Compromised wallet signs EIP-7702 authorization LOCALLY (frontend)
+    // Sponsor wallet broadcasts TX, pays gas, atomic claim + transfer
+    // Key NEVER reaches the server!
+    if (action === 'antidrain-rescue') {
+      const {
+        eip7702Auth,
+        tokenAddress: rescueToken,
+        claimableRaw: rescueAmount,
+        claimData: rescueClaimData,
+        merkleProof: rescueMerkleProof,
+        sponsorPrivateKey: rescueSponsorKey,
+      } = body
+
+      if (!eip7702Auth || !rescueSponsorKey || !safeWallet || !walletAddress || !contractAddress) {
+        return NextResponse.json({
+          error: 'EIP-7702 authorization, sponsor key, safe wallet, wallet address, and contract address required'
+        }, { status: 400 })
+      }
+
+      // Verify Antidrain is deployed on this chain
+      const antidrainAddress = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
+      const antidrainCode = await provider.getCode(antidrainAddress)
+      if (!antidrainCode || antidrainCode === '0x') {
+        return NextResponse.json({
+          error: `Antidrain contract not deployed on chain ${chainId}. Use Direct Claim instead.`
+        }, { status: 400 })
+      }
+
+      // CRITICAL: Safe wallet CANNOT be the compromised wallet
+      try {
+        const normalizedSafe = ethers.getAddress(safeWallet)
+        const normalizedCompromised = ethers.getAddress(walletAddress)
+        if (normalizedSafe === normalizedCompromised) {
+          return NextResponse.json({
+            error: 'Safe wallet CANNOT be the compromised wallet — tokens would go back to the drainer!'
+          }, { status: 400 })
+        }
+      } catch {
+        return NextResponse.json({ error: 'Invalid safe wallet address' }, { status: 400 })
+      }
+
+      const sponsorWallet = new ethers.Wallet(rescueSponsorKey, provider)
+      const [sponsorBalance, feeData, sponsorNonce] = await Promise.all([
+        provider.getBalance(sponsorWallet.address),
+        provider.getFeeData(),
+        provider.getTransactionCount(sponsorWallet.address, 'latest'),
+      ])
+
+      const maxFeePerGas = feeData.maxFeePerGas || feeData.gasPrice || ethers.parseUnits('20', 'gwei')
+      const maxPriorityFeePerGas = feeData.maxPriorityFeePerGas || ethers.parseUnits('2', 'gwei')
+      const gasNeeded = maxFeePerGas * 600000n // Higher gas for EIP-7702 + batch
+
+      if (sponsorBalance < gasNeeded) {
+        return NextResponse.json({
+          error: `Sponsor wallet needs ${ethers.formatEther(gasNeeded)} ${gasToken} for gas. Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+        }, { status: 400 })
+      }
+
+      // Build claim calldata for the airdrop contract
+      const claimCalldata = rescueClaimData || buildClaimTxData(
+        walletAddress,
+        rescueAmount || '0',
+        rescueClaimData,
+        rescueMerkleProof
+      )
+
+      // Build Antidrain executeRescue calldata
+      const antidrainIface = new ethers.Interface([
+        'function executeRescue(address safeRecipient, address[] tokens, address claimTarget, bytes claimData, address fw) external payable',
+      ])
+
+      const rescueCalldata = antidrainIface.encodeFunctionData('executeRescue', [
+        safeWallet,                                    // safeRecipient — where tokens go
+        rescueToken ? [rescueToken] : [],              // tokens to rescue after claim
+        contractAddress,                               // claimTarget — airdrop contract
+        claimCalldata,                                 // claimData — the claim function calldata
+        PLATFORM_FEE_WALLET,                           // fw — fee wallet (our platform gets 20%)
+      ])
+
+      // Simulate before submitting
+      try {
+        console.log('🔍 Simulating Antidrain executeRescue...')
+        await provider.call({
+          to: antidrainAddress,
+          data: rescueCalldata,
+          from: sponsorWallet.address,
+          value: 0n,
+        })
+        console.log('✅ Antidrain simulation passed')
+      } catch (simErr: unknown) {
+        const simMsg = simErr instanceof Error ? simErr.message : 'Unknown simulation error'
+        console.error('❌ Antidrain simulation FAILED:', simMsg)
+        return NextResponse.json({
+          error: `Antidrain rescue simulation failed: ${simMsg}`,
+          simulationFailed: true,
+        }, { status: 400 })
+      }
+
+      // Construct EIP-7702 transaction (Type 4)
+      // The authorization list delegates the compromised wallet to Antidrain contract
+      const eip7702Tx = {
+        to: antidrainAddress,
+        data: rescueCalldata,
+        value: 0n,
+        gasLimit: 600000n,
+        maxFeePerGas,
+        maxPriorityFeePerGas,
+        nonce: sponsorNonce,
+        chainId: BigInt(chainId),
+        type: 4, // EIP-7702
+        authorizationList: [{
+          chainId: BigInt(eip7702Auth.chainId),
+          address: eip7702Auth.address,
+          nonce: BigInt(eip7702Auth.nonce),
+          yParity: eip7702Auth.yParity,
+          r: eip7702Auth.r,
+          s: eip7702Auth.s,
+        }],
+      } as Record<string, unknown>
+
+      // Submit via private sequencer (L2) or direct (Ethereum)
+      // NOTE: EIP-7702 (Type 4) transactions may not be supported by Flashbots relay yet.
+      // For Ethereum, we submit directly — the TX is atomic so drainer can't intercept.
+      let txHash: string
+      try {
+        const txResponse = await sponsorWallet.sendTransaction(eip7702Tx as ethers.TransactionRequest)
+        txHash = txResponse.hash
+        const receipt = await txResponse.wait(1, 120000).catch(() => null)
+        if (!receipt || receipt.status !== 1) {
+          return NextResponse.json({
+            error: `Transaction reverted. TX: ${txHash}`,
+            txHash,
+          })
+        }
+      } catch (submitErr: unknown) {
+        const submitMsg = submitErr instanceof Error ? submitErr.message : 'TX submission failed'
+        return NextResponse.json({ error: `EIP-7702 TX failed: ${submitMsg}` }, { status: 500 })
+      }
+
+      console.log(`✅ Antidrain EIP-7702 rescue TX: ${txHash}`)
+
+      return NextResponse.json({
+        success: true,
+        txHash,
+        executionMethod: 'eip7702-antidrain',
+        message: 'Rescued via EIP-7702 + Antidrain — key never left browser!',
+        antidrainContract: antidrainAddress,
+        feePercent: 20,
+        feeWallet: PLATFORM_FEE_WALLET,
+      })
+    }
+
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : 'Internal error'
