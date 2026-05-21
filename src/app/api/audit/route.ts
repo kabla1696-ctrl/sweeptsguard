@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { isValidAddress } from '@/lib/validation'
+import { isValidAddress, sanitizeErrorMessage } from '@/lib/validation'
 
 interface AuditResult {
   address: string
@@ -75,7 +75,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Audit check failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Audit check failed' }, { status: 500 })
   }
 }

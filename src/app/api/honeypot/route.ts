@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { honeypotChecker } from '@/lib/honeypot'
+import { isValidAddress, sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
@@ -10,11 +11,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Token address required' }, { status: 400 })
   }
 
+  if (!isValidAddress(token)) {
+    return NextResponse.json({ error: 'Invalid token address format. Must be 0x followed by 40 hex characters.' }, { status: 400 })
+  }
+
+  if (!Number.isFinite(chainId) || chainId < 1) {
+    return NextResponse.json({ error: 'Invalid chainId' }, { status: 400 })
+  }
+
   try {
     const result = await honeypotChecker.check(token, chainId)
     return NextResponse.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Check failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Check failed' }, { status: 500 })
   }
 }

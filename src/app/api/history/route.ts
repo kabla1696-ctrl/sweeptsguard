@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { tracker } from '@/lib/tracker'
 import { CHAINS } from '@/lib/chains'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
@@ -44,7 +45,6 @@ export async function GET(request: NextRequest) {
       total: transfers.length
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch history'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Failed to fetch history' }, { status: 500 })
   }
 }

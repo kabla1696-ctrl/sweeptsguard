@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scanner } from '@/lib/scanner'
 import { CHAINS } from '@/lib/chains'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 const ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/
 
@@ -41,7 +42,6 @@ export async function GET(request: NextRequest) {
       delegation: scanResult.delegation
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch portfolio'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Failed to fetch portfolio' }, { status: 500 })
   }
 }

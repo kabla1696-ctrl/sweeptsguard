@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { CHAINS } from '@/lib/chains'
-import { isValidAddress } from '@/lib/validation'
+import { isValidAddress, sanitizeErrorMessage } from '@/lib/validation'
 
 interface DeFiPosition {
   protocol: string
@@ -61,7 +61,12 @@ export async function GET(request: NextRequest) {
             ], provider)
 
             try {
-              const accountData = await contract.getUserAccountData(address)
+              // Wrap RPC call with timeout to prevent hanging
+              const accountDataPromise = contract.getUserAccountData(address)
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('RPC timeout')), 10000)
+              )
+              const accountData = await Promise.race([accountDataPromise, timeoutPromise])
               const totalBorrow = accountData[4] as bigint
               const totalCollateral = accountData[0] as bigint
 
@@ -93,7 +98,6 @@ export async function GET(request: NextRequest) {
       note: positions.length === 0 ? 'No DeFi positions found. This only checks major protocols on mainnet.' : undefined
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch DeFi positions'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Failed to fetch DeFi positions' }, { status: 500 })
   }
 }

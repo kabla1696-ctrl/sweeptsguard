@@ -9,6 +9,23 @@ export function normalizeAddress(address: string): string {
   return address.trim()
 }
 
+/**
+ * Sanitize error messages before sending to clients.
+ * Strips RPC URLs, file paths, and limits length to prevent info leakage.
+ */
+export function sanitizeErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : 'Internal error'
+  // Strip URLs to prevent leaking RPC endpoints or internal services
+  let sanitized = raw.replace(/https?:\/\/[^\s"')\]]+/g, '[endpoint]')
+  // Strip file system paths
+  sanitized = sanitized.replace(/\/[\w/.-]+\.(ts|js|tsx|jsx)/g, '[file]')
+  // Limit length
+  if (sanitized.length > 200) {
+    sanitized = sanitized.slice(0, 200) + '...'
+  }
+  return sanitized
+}
+
 export function getExplorerUrl(chainId: number, address: string, type: 'address' | 'tx' = 'address'): string {
   const explorers: Record<number, string> = {
     1: 'https://etherscan.io',

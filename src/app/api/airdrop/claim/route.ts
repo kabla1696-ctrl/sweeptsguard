@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { submitRecoveryBundle } from '@/lib/fundRecovery'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
@@ -650,6 +651,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'All fields required' }, { status: 400 })
       }
 
+      // Validate claimableRaw is a valid BigInt string if provided
+      if (claimableRaw !== undefined && claimableRaw !== null && claimableRaw !== '') {
+        if (typeof claimableRaw !== 'string') {
+          return NextResponse.json({ error: 'claimableRaw must be a string' }, { status: 400 })
+        }
+        try {
+          BigInt(claimableRaw)
+        } catch {
+          return NextResponse.json({ error: 'claimableRaw must be a valid integer string' }, { status: 400 })
+        }
+      }
+
       // BUG FIX #1: Block Direct Claim on public mempool chains (front-running risk)
       const PRIVATE_SEQUENCER_CHAINS = new Set([
         8453, 42161, 10, 324, 59144, 534352, 5000, 34443, 81457,
@@ -740,8 +753,8 @@ export async function POST(request: NextRequest) {
         })
         console.log('✅ Claim simulation passed — safe to proceed')
       } catch (simErr: unknown) {
-        const simMsg = simErr instanceof Error ? simErr.message : 'Unknown simulation error'
-        console.error('❌ Claim simulation FAILED:', simMsg)
+        const simMsg = sanitizeErrorMessage(simErr)
+        console.error('❌ Claim simulation FAILED:', simErr)
         return NextResponse.json({
           error: `Claim TX simulation failed — NOT submitting fund TX to prevent gas loss. Reason: ${simMsg}`,
           simulationFailed: true,
@@ -796,7 +809,7 @@ export async function POST(request: NextRequest) {
         }
 
         return NextResponse.json({
-          error: `Flashbots submission failed: ${bundleResult.error}. Claim NOT executed to prevent drainer from stealing gas. Try again.`
+          error: `Flashbots submission failed: ${sanitizeErrorMessage(bundleResult.error)}. Claim NOT executed to prevent drainer from stealing gas. Try again.`
         })
       }
 
@@ -904,6 +917,11 @@ export async function POST(request: NextRequest) {
     if (action === 'sign') {
       if (!safeWallet || !walletAddress) {
         return NextResponse.json({ error: 'Safe wallet and wallet address required' }, { status: 400 })
+      }
+
+      // Validate claimableRaw if provided
+      if (claimableRaw !== undefined && claimableRaw !== null && typeof claimableRaw !== 'string') {
+        return NextResponse.json({ error: 'claimableRaw must be a string' }, { status: 400 })
       }
 
       // Get claimer contract address for this chain
@@ -1087,8 +1105,8 @@ export async function POST(request: NextRequest) {
         })
         console.log('✅ Simulation passed')
       } catch (simErr: unknown) {
-        const simMsg = simErr instanceof Error ? simErr.message : 'Unknown simulation error'
-        console.error('❌ Simulation FAILED:', simMsg)
+        const simMsg = sanitizeErrorMessage(simErr)
+        console.error('❌ Simulation FAILED:', simErr)
         return NextResponse.json({
           error: `Claim simulation failed: ${simMsg}`,
           simulationFailed: true,
@@ -1260,8 +1278,8 @@ export async function POST(request: NextRequest) {
         })
         console.log('✅ Antidrain simulation passed')
       } catch (simErr: unknown) {
-        const simMsg = simErr instanceof Error ? simErr.message : 'Unknown simulation error'
-        console.error('❌ Antidrain simulation FAILED:', simMsg)
+        const simMsg = sanitizeErrorMessage(simErr)
+        console.error('❌ Antidrain simulation FAILED:', simErr)
         return NextResponse.json({
           error: `Antidrain rescue simulation failed: ${simMsg}`,
           simulationFailed: true,
@@ -1305,8 +1323,7 @@ export async function POST(request: NextRequest) {
           })
         }
       } catch (submitErr: unknown) {
-        const submitMsg = submitErr instanceof Error ? submitErr.message : 'TX submission failed'
-        return NextResponse.json({ error: `EIP-7702 TX failed: ${submitMsg}` }, { status: 500 })
+        return NextResponse.json({ error: `EIP-7702 TX failed: ${sanitizeErrorMessage(submitErr)}` }, { status: 500 })
       }
 
       console.log(`✅ Antidrain EIP-7702 rescue TX: ${txHash}`)
@@ -1324,8 +1341,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err: unknown) {
-    const errMsg = err instanceof Error ? err.message : 'Internal error'
-    console.error('Airdrop claim error:', errMsg)
-    return NextResponse.json({ error: errMsg }, { status: 500 })
+    console.error('Airdrop claim error:', err)
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Internal error' }, { status: 500 })
   }
 }

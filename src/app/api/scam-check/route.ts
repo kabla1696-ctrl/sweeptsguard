@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scamDetector } from '@/lib/scamDetector'
-import { isValidAddress } from '@/lib/validation'
+import { isValidAddress, sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
@@ -19,14 +19,19 @@ export async function GET(request: NextRequest) {
     const result = await scamDetector.checkAddress(address, chainId)
     return NextResponse.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Check failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Check failed' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const { tokenAddress, chainId = 1 } = body as { tokenAddress?: string; chainId?: number }
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  const { tokenAddress, chainId: rawChainId } = body as { tokenAddress?: string; chainId?: unknown }
+  const chainId = typeof rawChainId === 'number' && Number.isFinite(rawChainId) ? rawChainId : 1
 
   if (!tokenAddress) {
     return NextResponse.json({ error: 'Token address required' }, { status: 400 })
@@ -40,7 +45,6 @@ export async function POST(request: NextRequest) {
     const analysis = await scamDetector.analyzeToken(tokenAddress, chainId)
     return NextResponse.json(analysis)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Analysis failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Analysis failed' }, { status: 500 })
   }
 }

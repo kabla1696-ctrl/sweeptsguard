@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { tracker } from '@/lib/tracker'
 import { DEFAULT_CHAINS } from '@/lib/chains'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
@@ -20,7 +21,6 @@ export async function GET(request: NextRequest) {
       drainerTransfers: transfers.filter(t => t.isDrainerTransfer).length
     })
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Tracking failed'
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Tracking failed' }, { status: 500 })
   }
 }

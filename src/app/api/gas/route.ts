@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { gasTracker } from '@/lib/gasTracker'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const chainIdParam = request.nextUrl.searchParams.get('chainId')
@@ -33,7 +34,6 @@ export async function GET(request: NextRequest) {
     const allPrices = await gasTracker.getAllGasPrices()
     return NextResponse.json({ chains: allPrices })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch gas prices'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Failed to fetch gas prices' }, { status: 500 })
   }
 }

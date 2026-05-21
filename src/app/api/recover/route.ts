@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, executeFullRecoveryAndRevoke, executePermitSweep } from '@/lib/fundRecovery'
 import { isKnownDrainer } from '@/lib/draindb'
 import { ethers } from 'ethers'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const USDC_DECIMALS = 6
@@ -9,10 +10,21 @@ const MIN_USDC_PER_DELEGATION = 40
 const MIN_GAS_PER_CHAIN = '0.001'
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const { action, privateKey, safeAddress, chainId, sponsorPrivateKey } = body
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  const { action, privateKey, safeAddress, chainId, sponsorPrivateKey } = body as {
+    action?: string
+    privateKey?: string
+    safeAddress?: string
+    chainId?: number
+    sponsorPrivateKey?: string
+  }
 
-  if (!privateKey) {
+  if (!privateKey || typeof privateKey !== 'string') {
     return NextResponse.json({ error: 'Private key required' }, { status: 400 })
   }
 
@@ -261,8 +273,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json(response)
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Scan failed'
-        return NextResponse.json({ error: errorMessage }, { status: 500 })
+        return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Scan failed' }, { status: 500 })
       }
     }
 
@@ -353,8 +364,7 @@ export async function POST(request: NextRequest) {
           amountRecovered: amountStr || 'Check safe wallet'
         })
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Recovery failed'
-        return NextResponse.json({ error: errorMessage }, { status: 500 })
+        return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Recovery failed' }, { status: 500 })
       }
     }
 
@@ -380,8 +390,7 @@ export async function POST(request: NextRequest) {
           explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
         })
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Revoke failed'
-        return NextResponse.json({ error: errorMessage }, { status: 500 })
+        return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Revoke failed' }, { status: 500 })
       }
     }
 
@@ -485,8 +494,7 @@ export async function POST(request: NextRequest) {
           feePerChain: '40'
         })
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Batch revoke failed'
-        return NextResponse.json({ error: errorMessage }, { status: 500 })
+        return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Batch revoke failed' }, { status: 500 })
       }
     }
 
@@ -526,8 +534,7 @@ export async function POST(request: NextRequest) {
           explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
         })
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : 'Recovery failed'
-        return NextResponse.json({ error: errorMessage }, { status: 500 })
+        return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Recovery failed' }, { status: 500 })
       }
     }
 

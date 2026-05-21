@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
+import { getExplorerUrl } from '@/lib/validation'
 
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
@@ -32,43 +33,6 @@ const ANTIDRAIN_ABI = [
   'function FEE_BPS() external view returns (uint256)',
   'function feeWallet() external view returns (address)',
 ]
-// All 33 chain explorer URLs for TX links
-const EXPLORER_URLS: Record<number, string> = {
-  1: 'https://etherscan.io',
-  8453: 'https://basescan.org',
-  42161: 'https://arbiscan.io',
-  137: 'https://polygonscan.com',
-  56: 'https://bscscan.com',
-  10: 'https://optimistic.etherscan.io',
-  43114: 'https://snowtrace.io',
-  250: 'https://ftmscan.com',
-  25: 'https://cronoscan.com',
-  81457: 'https://blastscan.io',
-  7777777: 'https://explorer.zora.energy',
-  1101: 'https://zkevm.polygonscan.com',
-  169: 'https://pacific-explorer.manta.network',
-  324: 'https://explorer.zksync.io',
-  59144: 'https://lineascan.build',
-  5000: 'https://mantlescan.xyz',
-  34443: 'https://explorer.mode.network',
-  534352: 'https://scrollscan.com',
-  100: 'https://gnosisscan.io',
-  7000: 'https://zetachain.blockscout.com',
-  1625: 'https://gravity.dexguru.dev',
-  1116: 'https://scan.coredao.org',
-  1329: 'https://seitrace.com',
-  80094: 'https://berascan.com',
-  57073: 'https://explorer.inkonchain.com',
-  196: 'https://www.oklink.com/x-layer',
-  43111: 'https://explorer.hemi.xyz',
-  8217: 'https://kaiascan.io',
-  1868: 'https://soneium.blockscout.com',
-  2818: 'https://explorer.morphl2.io',
-  1923: 'https://explorer.swellnetwork.io',
-  10143: 'https://testnet.monadexplorer.com',
-  16600: 'https://chainscan.0g.ai',
-}
-
 // Chains with PRIVATE sequencers (no public mempool — drainer can't frontrun)
 const PRIVATE_SEQUENCER_CHAINS = new Set([
   8453,   // Base
@@ -1083,7 +1047,7 @@ export default function AirdropPage() {
             <h3 className="text-xl font-semibold text-green-400 mb-2">Claim Successful!</h3>
             {txHash && (
               <a
-                href={`${EXPLORER_URLS[chainId] || 'https://etherscan.io'}/tx/${txHash}`}
+                href={getExplorerUrl(chainId, txHash, 'tx')}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 text-sm hover:underline break-all"

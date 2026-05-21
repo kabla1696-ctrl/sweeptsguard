@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { reputationChecker } from '@/lib/reputation'
-import { isValidAddress } from '@/lib/validation'
+import { isValidAddress, sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
@@ -19,7 +19,6 @@ export async function GET(request: NextRequest) {
     const result = await reputationChecker.check(address, chainId)
     return NextResponse.json(result)
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Check failed'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Check failed' }, { status: 500 })
   }
 }

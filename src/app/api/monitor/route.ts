@@ -1,16 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createMonitor, type MonitorAlert, type SweepResult } from '@/lib/monitor'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 // In-memory store (in production, use Redis/DB)
+const MAX_MONITORS = 100
 const monitors = new Map<string, ReturnType<typeof createMonitor>>()
 const monitorAlerts = new Map<string, MonitorAlert[]>()
 const monitorSweeps = new Map<string, SweepResult[]>()
 
 export async function POST(request: NextRequest) {
-  const body = await request.json()
-  const { action, address, safeAddress, privateKey, chainIds, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl } = body
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  const { action, address, safeAddress, privateKey, chainIds, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl } = body as {
+    action?: string
+    address?: string
+    safeAddress?: string
+    privateKey?: string
+    chainIds?: number[]
+    telegramBotToken?: string
+    telegramChatId?: string
+    discordWebhookUrl?: string
+    slackWebhookUrl?: string
+  }
 
-  if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+  if (!address || typeof address !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
     return NextResponse.json({ error: 'Valid address required' }, { status: 400 })
   }
 
@@ -24,6 +41,11 @@ export async function POST(request: NextRequest) {
       }
       if (safeAddress.toLowerCase() === address.toLowerCase()) {
         return NextResponse.json({ error: 'Safe address must differ from compromised address' }, { status: 400 })
+      }
+
+      // Enforce max concurrent monitors
+      if (!monitors.has(address) && monitors.size >= MAX_MONITORS) {
+        return NextResponse.json({ error: `Maximum concurrent monitors (${MAX_MONITORS}) reached` }, { status: 429 })
       }
 
       // Stop existing monitor if any
@@ -82,6 +104,10 @@ export async function GET(request: NextRequest) {
 
   if (!address) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
+  }
+
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    return NextResponse.json({ error: 'Invalid address format' }, { status: 400 })
   }
 
   const monitor = monitors.get(address)

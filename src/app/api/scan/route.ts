@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scanner } from '@/lib/scanner'
 import { DEFAULT_CHAINS } from '@/lib/chains'
+import { sanitizeErrorMessage } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
@@ -21,7 +22,6 @@ export async function GET(request: NextRequest) {
     ])
     return NextResponse.json(result)
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Scan failed'
-    return NextResponse.json({ error: errorMessage }, { status: 500 })
+    return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Scan failed' }, { status: 500 })
   }
 }
