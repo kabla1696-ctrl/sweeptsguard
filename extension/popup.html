@@ -5,8 +5,8 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 380px;
-      min-height: 500px;
+      width: 400px;
+      min-height: 520px;
       background: #0a0a0f;
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -25,6 +25,11 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+    .header .version {
+      margin-left: auto;
+      font-size: 10px;
+      color: rgba(255,255,255,0.2);
+    }
     .tabs {
       display: flex;
       border-bottom: 1px solid rgba(255,255,255,0.05);
@@ -37,19 +42,21 @@
       color: rgba(255,255,255,0.3);
       font-size: 11px;
       transition: all 0.2s;
+      border-bottom: 2px solid transparent;
     }
     .tab.active {
       color: #4ade80;
-      border-bottom: 2px solid #4ade80;
+      border-bottom-color: #4ade80;
     }
+    .tab:hover { color: rgba(255,255,255,0.6); }
     .content { padding: 16px; }
-    .section { margin-bottom: 16px; }
+    .section { margin-bottom: 14px; }
     .section-title {
       font-size: 11px;
       color: rgba(255,255,255,0.3);
       margin-bottom: 6px;
     }
-    input, select {
+    input[type="text"], input[type="password"] {
       width: 100%;
       padding: 8px 10px;
       background: rgba(255,255,255,0.03);
@@ -59,9 +66,7 @@
       font-size: 11px;
       outline: none;
     }
-    input:focus, select:focus {
-      border-color: rgba(74,222,128,0.5);
-    }
+    input:focus { border-color: rgba(74,222,128,0.5); }
     .btn {
       width: 100%;
       padding: 10px;
@@ -72,6 +77,7 @@
       font-size: 12px;
       transition: all 0.2s;
     }
+    .btn:hover { filter: brightness(1.1); }
     .btn-primary {
       background: linear-gradient(to right, #4ade80, #10b981);
       color: #000;
@@ -81,9 +87,10 @@
       border: 1px solid rgba(255,255,255,0.05);
       color: rgba(255,255,255,0.5);
     }
-    .btn-blue {
-      background: linear-gradient(to right, #3b82f6, #06b6d4);
-      color: #fff;
+    .btn-danger {
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #ef4444;
     }
     .status {
       padding: 8px 10px;
@@ -108,6 +115,11 @@
       line-height: 1.5;
     }
     .info-box strong { color: #4ade80; }
+    .info-box.warning {
+      background: rgba(234,179,8,0.05);
+      border-color: rgba(234,179,8,0.1);
+    }
+    .info-box.warning strong { color: #eab308; }
     .chain-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -122,17 +134,37 @@
       font-size: 10px;
       cursor: pointer;
       text-align: center;
+      transition: all 0.2s;
     }
     .chain-btn.active {
       background: rgba(74,222,128,0.1);
       border-color: rgba(74,222,128,0.3);
       color: #4ade80;
     }
+    .chain-btn:hover { background: rgba(255,255,255,0.06); }
     .hidden { display: none; }
     .divider {
       height: 1px;
       background: rgba(255,255,255,0.05);
       margin: 12px 0;
+    }
+    .wallet-card {
+      padding: 10px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .wallet-card .label {
+      font-size: 10px;
+      color: rgba(255,255,255,0.3);
+      margin-bottom: 4px;
+    }
+    .wallet-card .address {
+      font-size: 11px;
+      color: #4ade80;
+      font-family: monospace;
+      word-break: break-all;
     }
     .split-preview {
       padding: 10px;
@@ -146,26 +178,43 @@
       padding: 4px 0;
       font-size: 11px;
     }
+    .spinner {
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: #4ade80;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .tx-link {
+      color: #3b82f6;
+      text-decoration: none;
+      font-size: 11px;
+      word-break: break-all;
+    }
+    .tx-link:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
   <div class="header">
     <span style="font-size: 20px;">🛡️</span>
     <h1>SweepGuard</h1>
-    <span style="margin-left: auto; font-size: 10px; color: rgba(255,255,255,0.2);">v4.0</span>
+    <span class="version">v5.0</span>
   </div>
 
   <div class="tabs">
-    <div class="tab active" data-tab="wallets">Wallets</div>
-    <div class="tab" data-tab="claim">Claim</div>
-    <div class="tab" data-tab="settings">Settings</div>
+    <div class="tab active" data-tab="wallets">🔑 Wallets</div>
+    <div class="tab" data-tab="rescue">🚀 Rescue</div>
+    <div class="tab" data-tab="settings">⚙️ Settings</div>
   </div>
 
   <!-- WALLETS TAB -->
   <div id="wallets" class="content">
     <div class="info-box">
-      <p>🔒 <strong>Signature-Based Security</strong><br>
-      Your private key NEVER leaves your browser. You only sign an EIP-712 message. The smart contract handles everything atomically.</p>
+      <p>🔒 <strong>EIP-7702 Rescue</strong> — Key NEVER leaves browser.<br>
+      Same system as zun's Antidrain. Sponsor pays gas.</p>
     </div>
 
     <div class="section">
@@ -177,39 +226,37 @@
       <input type="text" id="safeWallet" placeholder="0x..." />
     </div>
     <div class="section">
-      <div class="section-title">Sponsor Wallet Address (pays gas)</div>
-      <input type="text" id="sponsorWallet" placeholder="0x..." />
-    </div>
-    <div class="section">
-      <div class="section-title">Sponsor Private Key</div>
+      <div class="section-title">Sponsor Wallet Private Key (pays gas)</div>
       <input type="password" id="sponsorKey" placeholder="0x..." />
     </div>
 
-    <button id="saveWallets" class="btn btn-primary" style="margin-top: 12px;">Save Wallets</button>
+    <button id="saveWallets" class="btn btn-primary" style="margin-top: 12px;">💾 Save & Encrypt</button>
+    <button id="clearWallets" class="btn btn-danger" style="margin-top: 6px;">🗑️ Clear All</button>
     <div id="saveStatus" class="status hidden"></div>
+
+    <div class="divider"></div>
+
+    <!-- Saved wallet info -->
+    <div id="savedInfo" class="hidden">
+      <div class="section-title">Saved Wallets</div>
+      <div class="wallet-card">
+        <div class="label">Hacked Wallet</div>
+        <div id="savedHacked" class="address">--</div>
+      </div>
+      <div class="wallet-card">
+        <div class="label">Safe Wallet</div>
+        <div id="savedSafe" class="address">--</div>
+      </div>
+    </div>
   </div>
 
-  <!-- CLAIM TAB -->
-  <div id="claim" class="content hidden">
-    <div class="info-box">
-      <p>🎯 <strong>How It Works</strong><br>
-      1. Go to any airdrop claim page<br>
-      2. Click "Claim" on the page<br>
-      3. SweepGuard intercepts → shows popup<br>
-      4. Sign EIP-712 message in MetaMask<br>
-      5. Smart contract claims + splits atomically</p>
-    </div>
+  <!-- RESCUE TAB -->
+  <div id="rescue" class="content hidden">
+    <div id="rescueStatus" class="status hidden"></div>
 
     <div class="section">
       <div class="section-title">Chain</div>
-      <div class="chain-grid">
-        <div class="chain-btn active" data-chain="1">Ethereum</div>
-        <div class="chain-btn" data-chain="8453">Base</div>
-        <div class="chain-btn" data-chain="42161">Arbitrum</div>
-        <div class="chain-btn" data-chain="137">Polygon</div>
-        <div class="chain-btn" data-chain="56">BSC</div>
-        <div class="chain-btn" data-chain="10">Optimism</div>
-      </div>
+      <div class="chain-grid" id="chainGrid"></div>
     </div>
 
     <div class="section">
@@ -217,9 +264,12 @@
       <input type="text" id="airdropContract" placeholder="0x..." />
     </div>
 
-    <div class="divider"></div>
+    <div class="section">
+      <div class="section-title">Token Address (auto-detected if empty)</div>
+      <input type="text" id="tokenAddress" placeholder="0x... (optional)" />
+    </div>
 
-    <div id="claimStatus" class="status hidden"></div>
+    <div class="divider"></div>
 
     <div id="splitPreview" class="split-preview hidden">
       <div class="section-title">Token Split (80/20)</div>
@@ -233,8 +283,22 @@
       </div>
     </div>
 
-    <button id="signClaim" class="btn btn-blue" style="margin-top: 12px;">✍️ Sign & Claim (MetaMask)</button>
-    <button id="executeClaim" class="btn btn-primary hidden" style="margin-top: 8px;">⚡ Execute Claim</button>
+    <button id="previewBtn" class="btn btn-secondary" style="margin-top: 8px;">🔍 Preview</button>
+    <button id="rescueBtn" class="btn btn-primary" style="margin-top: 8px;">🚀 EIP-7702 Rescue</button>
+
+    <div id="rescueProgress" class="hidden" style="margin-top: 12px; text-align: center;">
+      <div class="spinner"></div>
+      <p id="rescueProgressText" style="color: rgba(255,255,255,0.4); font-size: 11px; margin-top: 6px;">
+        Signing EIP-7702 authorization...
+      </p>
+    </div>
+
+    <div id="rescueResult" class="hidden" style="margin-top: 12px;">
+      <div class="info-box">
+        <p id="rescueResultText"></p>
+      </div>
+      <a id="rescueTxLink" class="tx-link" href="#" target="_blank"></a>
+    </div>
   </div>
 
   <!-- SETTINGS TAB -->
@@ -249,18 +313,27 @@
     </div>
     <div class="section">
       <div class="section-title">Extension Version</div>
-      <input type="text" value="v4.0.0 (Signature-Based)" disabled />
+      <input type="text" value="v5.0.0 (EIP-7702 Antidrain)" disabled />
     </div>
+
     <div class="info-box" style="margin-top: 16px;">
       <p>🛡️ <strong>Security Model</strong><br>
-      • EIP-712 signature verification<br>
-      • One-time use (nonce prevents replay)<br>
-      • 10-minute deadline expiry<br>
-      • Atomic execution (claim + split in one TX)<br>
-      • 80/20 split enforced by smart contract</p>
+      • EIP-7702 authorization signed locally<br>
+      • Private key encrypted with PBKDF2 + AES-256-GCM<br>
+      • Key NEVER sent to any server<br>
+      • Atomic claim + transfer (same TX)<br>
+      • 80/20 split enforced by smart contract<br>
+      • Same system as zun's Antidrain</p>
+    </div>
+
+    <div class="info-box warning">
+      <p>⚠️ <strong>Important</strong><br>
+      • Only Base chain supported (more coming soon)<br>
+      • Contract: 0xDB671f97bfB72e324A758588456373EEC141400F<br>
+      • Sponsor wallet needs ETH for gas on target chain</p>
     </div>
   </div>
 
-  <script src="popup.js"></script>
+  <script src="popup.js" type="module"></script>
 </body>
 </html>

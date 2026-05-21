@@ -1,19 +1,17 @@
-// SweepGuard Extension v4.0 — Popup Script
-// EIP-712 Signature-Based Claim System
+// SweepGuard v5.0 — Popup Script
+// EIP-7702 Antidrain-style rescue
 
-const CLAIMER_CONTRACTS = {
-  1: '',      // Ethereum (deploy first)
-  8453: '',   // Base
-  42161: '',  // Arbitrum
-  137: '',    // Polygon
-  56: '',     // BSC
-  10: '',     // Optimism
-}
+import {
+  SWEEPGUARD_RESCUER, CHAIN_NAMES, EXPLORER_URLS,
+  PRIVATE_SEQUENCER_CHAINS, RPC_URLS
+} from './constants.js'
 
-let selectedChain = 1
-let signature = null
+let selectedChain = 8453 // Default Base
 
-// Tab switching
+// ═══════════════════════════════════════════════════════
+// TAB SWITCHING
+// ═══════════════════════════════════════════════════════
+
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
@@ -23,166 +21,241 @@ document.querySelectorAll('.tab').forEach(tab => {
   })
 })
 
-// Chain selection
-document.querySelectorAll('.chain-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.chain-btn').forEach(b => b.classList.remove('active'))
-    btn.classList.add('active')
-    selectedChain = parseInt(btn.dataset.chain)
-  })
+// ═══════════════════════════════════════════════════════
+// CHAIN SELECTOR
+// ═══════════════════════════════════════════════════════
+
+const chainGrid = document.getElementById('chainGrid')
+const chains = Object.entries(CHAIN_NAMES).map(([id, name]) => ({
+  id: parseInt(id),
+  name,
+  deployed: !!SWEEPGUARD_RESCUER[parseInt(id)],
+}))
+
+chainGrid.innerHTML = chains.map(chain => `
+  <div class="chain-btn ${chain.id === selectedChain ? 'active' : ''} ${!chain.deployed ? 'disabled' : ''}"
+       data-chain="${chain.id}"
+       title="${chain.deployed ? '✅ Contract deployed' : '⏳ Coming soon'}">
+    ${chain.name} ${chain.deployed ? '✅' : ''}
+  </div>
+`).join('')
+
+chainGrid.addEventListener('click', (e) => {
+  const btn = e.target.closest('.chain-btn')
+  if (!btn || btn.classList.contains('disabled')) return
+
+  selectedChain = parseInt(btn.dataset.chain)
+  chainGrid.querySelectorAll('.chain-btn').forEach(b => b.classList.remove('active'))
+  btn.classList.add('active')
+  updateStatus()
 })
 
-// Load saved wallets
-chrome.runtime.sendMessage({ type: 'GET_WALLETS' }, (data) => {
-  if (data) {
-    document.getElementById('hackedKey').value = data.hackedKey || ''
-    document.getElementById('safeWallet').value = data.safeWallet || ''
-    document.getElementById('sponsorKey').value = data.sponsorKey || ''
-    document.getElementById('sponsorWallet').value = data.sponsorWallet || ''
+// ═══════════════════════════════════════════════════════
+// WALLET MANAGEMENT
+// ═══════════════════════════════════════════════════════
+
+async function loadWallets() {
+  const response = await chrome.runtime.sendMessage({ type: 'GET_WALLETS' })
+  if (response) {
+    document.getElementById('hackedKey').value = response.hackedKey || ''
+    document.getElementById('safeWallet').value = response.safeWallet || ''
+    document.getElementById('sponsorKey').value = response.sponsorKey || ''
+
+    if (response.hackedAddress) {
+      document.getElementById('savedHacked').textContent = response.hackedAddress
+      document.getElementById('savedSafe').textContent = response.safeWallet || '--'
+      document.getElementById('savedInfo').classList.remove('hidden')
+    }
   }
-})
+}
 
-// Save wallets
-document.getElementById('saveWallets').addEventListener('click', () => {
-  const hackedKey = document.getElementById('hackedKey').value
-  const safeWallet = document.getElementById('safeWallet').value
-  const sponsorKey = document.getElementById('sponsorKey').value
-  const sponsorWallet = document.getElementById('sponsorWallet').value
+document.getElementById('saveWallets').addEventListener('click', async () => {
+  const hackedKey = document.getElementById('hackedKey').value.trim()
+  const safeWallet = document.getElementById('safeWallet').value.trim()
+  const sponsorKey = document.getElementById('sponsorKey').value.trim()
 
-  if (!hackedKey || !safeWallet || !sponsorKey || !sponsorWallet) {
+  if (!hackedKey || !safeWallet || !sponsorKey) {
     showStatus('saveStatus', 'Please fill all fields', 'red')
     return
   }
 
-  chrome.runtime.sendMessage({
-    type: 'SAVE_WALLETS',
-    hackedKey,
-    safeWallet,
-    sponsorKey,
-    sponsorWallet,
-  }, (response) => {
-    if (response?.success) {
-      showStatus('saveStatus', '✅ Wallets saved securely', 'green')
+  // Derive address from private key
+  let hackedAddress = ''
+  try {
+    // Simple derivation — in production, use ethers.js
+    const { ethers } = await import('./ethers.min.js').catch(() => ({ ethers: null }))
+    if (ethers) {
+      const wallet = new ethers.Wallet(hackedKey)
+      hackedAddress = wallet.address
     }
+  } catch (err) {
+    showStatus('saveStatus', `Invalid private key: ${err.message}`, 'red')
+    return
+  }
+
+  const response = await chrome.runtime.sendMessage({
+    type: 'SAVE_WALLETS',
+    wallets: { hackedKey, safeWallet, sponsorKey, hackedAddress },
   })
+
+  if (response?.success) {
+    showStatus('saveStatus', '✅ Wallets saved & encrypted', 'green')
+    loadWallets()
+  }
 })
 
-// Sign & Claim (EIP-712)
-document.getElementById('signClaim').addEventListener('click', async () => {
-  const airdropContract = document.getElementById('airdropContract').value
-  if (!airdropContract) {
-    showStatus('claimStatus', 'Enter airdrop contract address', 'red')
+document.getElementById('clearWallets').addEventListener('click', async () => {
+  const response = await chrome.runtime.sendMessage({ type: 'CLEAR_WALLETS' })
+  if (response?.success) {
+    document.getElementById('hackedKey').value = ''
+    document.getElementById('safeWallet').value = ''
+    document.getElementById('sponsorKey').value = ''
+    document.getElementById('savedInfo').classList.add('hidden')
+    showStatus('saveStatus', '🗑️ All wallets cleared', 'yellow')
+  }
+})
+
+// ═══════════════════════════════════════════════════════
+// RESCUE FUNCTIONALITY
+// ═══════════════════════════════════════════════════════
+
+document.getElementById('previewBtn').addEventListener('click', async () => {
+  const contract = document.getElementById('airdropContract').value.trim()
+  if (!contract) {
+    showRescueStatus('Enter airdrop contract address', 'red')
     return
   }
 
-  const claimerAddress = CLAIMER_CONTRACTS[selectedChain]
-  if (!claimerAddress) {
-    showStatus('claimStatus', `SweepGuardClaimer not deployed on chain ${selectedChain}`, 'red')
-    return
-  }
+  showRescueStatus('🔍 Checking contract...', 'blue')
 
-  showStatus('claimStatus', '✍️ Check MetaMask for signature request...', 'blue')
-
-  // Get wallets
-  chrome.runtime.sendMessage({ type: 'GET_WALLETS' }, async (data) => {
-    if (!data?.hackedKey || !data?.safeWallet) {
-      showStatus('claimStatus', 'Configure wallets first', 'red')
+  try {
+    const wallets = await chrome.runtime.sendMessage({ type: 'GET_WALLETS' })
+    if (!wallets?.hackedAddress) {
+      showRescueStatus('Configure wallets first', 'red')
       return
     }
 
-    try {
-      // Derive hacked wallet address from private key
-      // In production, this would use ethers.js
-      const hackedAddress = '0x...' // TODO: derive from private key
-
-      // Build EIP-712 typed data
-      const deadline = Math.floor(Date.now() / 1000) + 600
-      const typedData = {
-        types: {
-          EIP712Domain: [
-            { name: 'name', type: 'string' },
-            { name: 'version', type: 'string' },
-            { name: 'chainId', type: 'uint256' },
-            { name: 'verifyingContract', type: 'address' },
-          ],
-          ClaimAirdrop: [
-            { name: 'hackedWallet', type: 'address' },
-            { name: 'safeWallet', type: 'address' },
-            { name: 'tokenAddress', type: 'address' },
-            { name: 'airdropContract', type: 'address' },
-            { name: 'claimData', type: 'bytes' },
-            { name: 'amount', type: 'uint256' },
-            { name: 'deadline', type: 'uint256' },
-            { name: 'nonce', type: 'uint256' },
-          ],
-        },
-        primaryType: 'ClaimAirdrop',
-        domain: {
-          name: 'SweepGuard',
-          version: '1',
-          chainId: selectedChain,
-          verifyingContract: claimerAddress,
-        },
-        message: {
-          hackedWallet: hackedAddress,
-          safeWallet: data.safeWallet,
-          tokenAddress: '0x0000000000000000000000000000000000000000',
-          airdropContract: airdropContract,
-          claimData: '0x',
-          amount: '0',
-          deadline: deadline.toString(),
-          nonce: '0',
-        },
-      }
-
-      // Request MetaMask signature
-      if (typeof window.ethereum !== 'undefined') {
-        const accounts = await window.ethereum.request({ method: 'eth_accounts' })
-        if (accounts.length === 0) {
-          await window.ethereum.request({ method: 'eth_requestAccounts' })
-        }
-
-        const sig = await window.ethereum.request({
-          method: 'eth_signTypedData_v4',
-          params: [hackedAddress, JSON.stringify(typedData)],
-        })
-
-        signature = sig
-        showStatus('claimStatus', '✅ Signature ready! Click "Execute Claim"', 'green')
-        document.getElementById('executeClaim').classList.remove('hidden')
-        document.getElementById('signClaim').classList.add('hidden')
-      } else {
-        showStatus('claimStatus', 'MetaMask not found', 'red')
-      }
-    } catch (err) {
-      showStatus('claimStatus', `Error: ${err.message}`, 'red')
+    const rpcUrl = RPC_URLS[selectedChain]
+    if (!rpcUrl) {
+      showRescueStatus(`No RPC for chain ${selectedChain}`, 'red')
+      return
     }
-  })
+
+    // Call preview API
+    const res = await fetch('https://sweeptsguard.vercel.app/api/airdrop/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'preview',
+        contractAddress: contract,
+        chainId: selectedChain,
+        safeWallet: wallets.safeWallet,
+        walletAddress: wallets.hackedAddress,
+        sponsorAddress: wallets.sponsorWallet,
+      }),
+    })
+    const data = await res.json()
+
+    if (data.error) {
+      showRescueStatus(data.error, 'red')
+      return
+    }
+
+    // Show preview
+    if (data.claimableAmount && data.claimableAmount !== '0') {
+      document.getElementById('safeAmount').textContent = `${data.safeWalletAmount} ${data.tokenSymbol}`
+      document.getElementById('feeAmount').textContent = `${data.platformFeeAmount} ${data.tokenSymbol}`
+      document.getElementById('splitPreview').classList.remove('hidden')
+    }
+
+    showRescueStatus(
+      `✅ ${data.tokenSymbol}: ${data.claimableAmount} | Gas: ${data.estimatedGasCost} ${data.sponsorGasToken}`,
+      data.sponsorHasGas ? 'green' : 'yellow'
+    )
+  } catch (err) {
+    showRescueStatus(`Preview failed: ${err.message}`, 'red')
+  }
 })
 
-// Execute Claim
-document.getElementById('executeClaim').addEventListener('click', async () => {
-  if (!signature) {
-    showStatus('claimStatus', 'Sign first', 'red')
+document.getElementById('rescueBtn').addEventListener('click', async () => {
+  const contract = document.getElementById('airdropContract').value.trim()
+  if (!contract) {
+    showRescueStatus('Enter airdrop contract address', 'red')
     return
   }
 
-  showStatus('claimStatus', '⏳ Submitting claim...', 'blue')
+  const wallets = await chrome.runtime.sendMessage({ type: 'GET_WALLETS' })
+  if (!wallets?.hackedKey || !wallets?.sponsorKey || !wallets?.safeWallet) {
+    showRescueStatus('Configure wallets first (hacked key, safe wallet, sponsor key)', 'red')
+    return
+  }
 
-  // In production, this would call the SweepGuardClaimer contract
-  // with the signature and sponsor wallet
-  chrome.runtime.sendMessage({
-    type: 'EXECUTE_SIGNED_CLAIM',
-    signature,
-    chainId: selectedChain,
-  }, (response) => {
-    if (response?.action === 'EXECUTE') {
-      showStatus('claimStatus', '✅ Claim submitted! Check transaction.', 'green')
-    } else {
-      showStatus('claimStatus', '❌ Execution failed', 'red')
+  // Check if contract deployed on this chain
+  if (!SWEEPGUARD_RESCUER[selectedChain]) {
+    showRescueStatus(`SweepGuardRescuer not deployed on ${CHAIN_NAMES[selectedChain]}. Coming soon!`, 'red')
+    return
+  }
+
+  // Confirm
+  const confirmed = confirm(
+    `🚀 EIP-7702 Rescue\n\n` +
+    `Chain: ${CHAIN_NAMES[selectedChain]}\n` +
+    `Contract: ${contract.slice(0, 20)}...\n` +
+    `Safe: ${wallets.safeWallet.slice(0, 20)}...\n\n` +
+    `The compromised wallet's private key will sign an EIP-7702 authorization LOCALLY. ` +
+    `Key is NEVER sent to any server.\n\n` +
+    `Proceed?`
+  )
+  if (!confirmed) return
+
+  // Show progress
+  document.getElementById('rescueProgress').classList.remove('hidden')
+  document.getElementById('rescueResult').classList.add('hidden')
+  document.getElementById('rescueBtn').disabled = true
+
+  try {
+    updateProgress('Signing EIP-7702 authorization...')
+
+    const result = await chrome.runtime.sendMessage({
+      type: 'EXECUTE_RESCUE',
+      params: {
+        chainId: selectedChain,
+        hackedKey: wallets.hackedKey,
+        safeWallet: wallets.safeWallet,
+        sponsorKey: wallets.sponsorKey,
+        airdropContract: contract,
+        tokenAddress: document.getElementById('tokenAddress').value.trim() || '',
+        hackedAddress: wallets.hackedAddress,
+      },
+    })
+
+    if (result?.error) {
+      showRescueStatus(`❌ ${result.error}`, 'red')
+    } else if (result?.success) {
+      // Success!
+      document.getElementById('rescueResultText').innerHTML =
+        `✅ <strong>Rescue successful!</strong><br>` +
+        `TX: ${result.txHash.slice(0, 20)}...`
+
+      const explorer = result.explorer || 'https://basescan.org'
+      const link = document.getElementById('rescueTxLink')
+      link.href = `${explorer}/tx/${result.txHash}`
+      link.textContent = `View on Explorer: ${result.txHash.slice(0, 30)}...`
+
+      document.getElementById('rescueResult').classList.remove('hidden')
+      showRescueStatus('🎉 Airdrop rescued! 80% → safe wallet, 20% → platform fee.', 'green')
     }
-  })
+  } catch (err) {
+    showRescueStatus(`❌ ${err.message}`, 'red')
+  } finally {
+    document.getElementById('rescueProgress').classList.add('hidden')
+    document.getElementById('rescueBtn').disabled = false
+  }
 })
+
+// ═══════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════
 
 function showStatus(elementId, message, color) {
   const el = document.getElementById(elementId)
@@ -190,3 +263,26 @@ function showStatus(elementId, message, color) {
   el.className = `status status-${color}`
   el.classList.remove('hidden')
 }
+
+function showRescueStatus(message, color) {
+  showStatus('rescueStatus', message, color)
+}
+
+function updateProgress(text) {
+  document.getElementById('rescueProgressText').textContent = text
+}
+
+function updateStatus() {
+  const chain = CHAIN_NAMES[selectedChain]
+  const deployed = !!SWEEPGUARD_RESCUER[selectedChain]
+  if (!deployed) {
+    showRescueStatus(`⏳ ${chain}: Contract coming soon`, 'yellow')
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+
+loadWallets()
+updateStatus()
