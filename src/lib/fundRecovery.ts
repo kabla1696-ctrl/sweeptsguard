@@ -37,6 +37,59 @@ export interface TokenBalance {
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
+// ============================================================
+// CHAIN NAME HELPER
+// ============================================================
+function getChainName(chainId: number): string {
+  const names: Record<number, string> = {
+    1: 'Ethereum',
+    8453: 'Base',
+    56: 'BNB Chain',
+    42161: 'Arbitrum',
+    137: 'Polygon',
+    10: 'Optimism',
+    43114: 'Avalanche',
+    250: 'Fantom',
+    25: 'Cronos',
+    81457: 'Blast',
+    324: 'zkSync',
+    59144: 'Linea',
+    5000: 'Mantle',
+    534352: 'Scroll',
+    100: 'Gnosis',
+    7000: 'ZetaChain',
+    80094: 'Berachain',
+    57073: 'Ink',
+    1868: 'Soneium',
+    1329: 'Sei',
+    1116: 'Core',
+    1625: 'Gravity',
+    1101: 'Polygon zkEVM',
+    169: 'Manta',
+    34443: 'Mode',
+    196: 'XLayer',
+    43111: 'Hemi',
+    8217: 'Kaia',
+    2818: 'Morph',
+    1923: 'Swellchain',
+    10143: 'Monad',
+    16600: '0G',
+    7777777: 'Zora',
+    11155111: 'Sepolia',
+  }
+  return names[chainId] || `Chain ${chainId}`
+}
+
+// Chains where the mempool is public — drainer bots can see pending TXs
+function isPublicMempoolChain(chainId: number): boolean {
+  // Private sequencer chains are safe
+  if (PRIVATE_SEQUENCER_CHAINS.has(chainId)) return false
+  // Ethereum uses Flashbots (private relay)
+  if (chainId === 1 || chainId === 11155111) return false
+  // Everything else has a public mempool
+  return true
+}
+
 // Revoke fee: $40 USDC on Base chain
 const REVOKE_FEE_USDC = 40
 const BASE_CHAIN_ID = 8453
@@ -1131,21 +1184,19 @@ export async function submitSafeRecovery(
       return { success: true, txHashes: hashes }
     }
 
-    // For other chains with public mempool: try Flashbots first, then warn
+    // For chains with public mempool: try Flashbots relay as last resort
     const bundleResult = await submitRecoveryBundle(signedTxs, chainId, rpcUrl)
     if (bundleResult.success) {
       return { success: true, txHashes: bundleResult.bundleHash ? [bundleResult.bundleHash] : [] }
     }
 
-    // Last resort: direct submission with warning
-    console.log('⚠️ WARNING: Direct submission on public mempool chain — drainer may see pending TXs')
-    // Submit ALL TXs at once — NO delay between them
-    const promises = signedTxs.map(async (signedTx) => {
-      const tx = await provider.broadcastTransaction(signedTx)
-      return tx.hash
-    })
-    const hashes = await Promise.all(promises)
-    return { success: true, txHashes: hashes }
+    // BLOCK: Do NOT fall back to direct submission on public mempool chains
+    // Drainer bots can see and front-run pending TXs in public mempools
+    const chainName = getChainName(chainId)
+    return {
+      success: false,
+      error: `⚠️ ${chainName} has a public mempool — drainer bots can see and front-run your recovery TX. For your safety, recovery is disabled on this chain. Use a private sequencer chain (Base, Arbitrum, Optimism, etc.) or Ethereum (Flashbots).`
+    }
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Submission failed'
     return { success: false, txHashes, error: errorMessage }
@@ -1223,7 +1274,8 @@ export async function executeRevokeDelegation(
   const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
   const compromisedAddress = compromisedWallet.address
 
-  console.log(`🔄 Revoking delegation for ${compromisedAddress} on chain ${chainId}`)
+  const chainName = getChainName(chainId)
+  console.log(`🔄 Revoking delegation for ${compromisedAddress} on ${chainName} (${chainId})`)
 
   // ── Step 1: Check delegation ──
   const code = await provider.getCode(compromisedAddress)
@@ -1231,7 +1283,7 @@ export async function executeRevokeDelegation(
     return {
       success: true,
       delegationRevoked: false,
-      error: `No EIP-7702 delegation found on chain ${chainId}. Wallet is already clean on this chain.`
+      error: `No EIP-7702 delegation found on ${chainName}. Wallet is already clean on this chain.`
     }
   }
 
@@ -1276,7 +1328,7 @@ export async function executeRevokeDelegation(
   if (safeBalance < finalGasNeeded) {
     return {
       success: false,
-      error: `❌ Safe Wallet needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas on this chain. Has: ${ethers.formatEther(safeBalance)} ${gasToken}. Please fund Safe Wallet with ${gasToken} on this chain.`
+      error: `❌ Safe Wallet needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas on ${chainName}. Has: ${ethers.formatEther(safeBalance)} ${gasToken}. Please fund Safe Wallet with ${gasToken} on ${chainName}.`
     }
   }
 
@@ -1294,11 +1346,11 @@ export async function executeRevokeDelegation(
   if (usdcBalance < revokeFeeUsdc) {
     return {
       success: false,
-      error: `❌ Safe Wallet needs $${REVOKE_FEE_USDC} USDC on Base chain for revoke fee. Has: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC. Please send $${REVOKE_FEE_USDC} USDC to Safe Wallet on Base chain (address: ${safeWalletAddress}).`
+      error: `❌ Safe Wallet needs $${REVOKE_FEE_USDC} USDC on Base for revoke fee. Has: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC. Please send $${REVOKE_FEE_USDC} USDC to Safe Wallet on Base (address: ${safeWalletAddress}).`
     }
   }
 
-  console.log(`✅ Safe Wallet gas on chain ${chainId}: ${ethers.formatEther(safeBalance)} ${gasToken}`)
+  console.log(`✅ Safe Wallet gas on ${chainName}: ${ethers.formatEther(safeBalance)} ${gasToken}`)
   console.log(`✅ Safe Wallet USDC on Base: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC`)
 
   // ── Step 4: Build transactions ──
@@ -1378,7 +1430,7 @@ export async function executeRevokeDelegation(
 
   // ── Step 5: Submit ──
   // Target chain: gas fund + revoke (atomic bundle via Flashbots/private sequencer)
-  console.log('🚀 Submitting revoke on target chain...')
+  console.log(`🚀 Submitting revoke on ${chainName}...`)
   const result = await submitSafeRecovery([fundTx, revokeTx], chainId, rpcUrl)
 
   // Base chain: submit $40 USDC fee (separate chain, same timeframe)
@@ -1409,16 +1461,16 @@ export async function executeRevokeDelegation(
       txHashes: result.txHashes,
       feeDetails: {
         revokeFeeUsdc: `$${REVOKE_FEE_USDC} USDC (paid from Safe Wallet on Base chain)`,
-        gasFeeNative: `${gasFeeNativeFormatted} ${gasToken} (paid from Safe Wallet on chain ${chainId})`,
+        gasFeeNative: `${gasFeeNativeFormatted} ${gasToken} (paid from Safe Wallet on ${chainName})`,
         gasFeeUsd: `~$${gasFeeUsd}`,
-        totalCost: `$${REVOKE_FEE_USDC} USDC on Base + ${gasFeeNativeFormatted} ${gasToken} (~$${gasFeeUsd}) on chain ${chainId}`
+        totalCost: `$${REVOKE_FEE_USDC} USDC on Base + ${gasFeeNativeFormatted} ${gasToken} (~$${gasFeeUsd}) on ${chainName}`
       }
     }
   }
 
   // ── Failure: Detailed error ──
   const errorMsg = result.error || 'Unknown error'
-  let detailedError = `❌ Revoke FAILED on chain ${chainId}\n`
+  let detailedError = `❌ Revoke FAILED on ${chainName}\n`
   detailedError += `Error: ${errorMsg}\n\n`
 
   if (errorMsg.includes('nonce')) {
@@ -1526,9 +1578,10 @@ export async function executeFullRecoveryAndRevoke(
   const sponsorBalance = await provider.getBalance(sponsorWallet.address)
   if (sponsorBalance < finalGasNeeded) {
     const gasToken = chainId === 56 ? 'BNB' : chainId === 137 ? 'MATIC' : 'ETH'
+    const chainName = getChainName(chainId)
     return {
       success: false,
-      error: `Sponsor needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas. Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+      error: `Sponsor needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas on ${chainName}. Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
     }
   }
 

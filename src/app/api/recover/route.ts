@@ -3,6 +3,11 @@ import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, ex
 import { isKnownDrainer } from '@/lib/draindb'
 import { ethers } from 'ethers'
 
+const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+const USDC_DECIMALS = 6
+const MIN_USDC_PER_DELEGATION = 40
+const MIN_GAS_PER_CHAIN = '0.0001'
+
 export async function POST(request: NextRequest) {
   const body = await request.json()
   const { action, privateKey, safeAddress, chainId, sponsorPrivateKey } = body
@@ -179,7 +184,63 @@ export async function POST(request: NextRequest) {
           parseFloat(r!.ethFormatted) > 0.0001 || r!.tokens.length > 0
         ).length
 
-        return NextResponse.json({
+        // ── Phase 3: Sponsor balance pre-check (optional) ──
+        let sponsorBalance: Record<string, unknown> | undefined
+        if (sponsorPrivateKey) {
+          try {
+            const sponsorWallet = new ethers.Wallet(sponsorPrivateKey)
+            const sponsorAddress = sponsorWallet.address
+
+            // Check USDC balance on Base
+            const baseProvider = new ethers.JsonRpcProvider(rpcUrls[8453])
+            const usdcContract = new ethers.Contract(
+              BASE_USDC_ADDRESS,
+              ['function balanceOf(address) view returns (uint256)'],
+              baseProvider
+            )
+            const baseUsdcBalance = await usdcContract.balanceOf(sponsorAddress)
+            const baseUsdcFormatted = ethers.formatUnits(baseUsdcBalance, USDC_DECIMALS)
+
+            // Collect chains that have delegations
+            const chainsWithDelegations = delegations.map(d => d.chainId)
+
+            // Check gas balance on each chain with delegation
+            const chainBalances: { chainId: number; chainName: string; gasBalance: string; gasToken: string; sufficient: boolean }[] = []
+            for (const cid of chainsWithDelegations) {
+              try {
+                const provider = new ethers.JsonRpcProvider(rpcUrls[cid])
+                const gasBalance = await provider.getBalance(sponsorAddress)
+                const gasFormatted = ethers.formatEther(gasBalance)
+                chainBalances.push({
+                  chainId: cid,
+                  chainName: chainNames[cid] || `Chain ${cid}`,
+                  gasBalance: gasFormatted,
+                  gasToken: gasTokenNames[cid] || 'ETH',
+                  sufficient: parseFloat(gasFormatted) >= parseFloat(MIN_GAS_PER_CHAIN)
+                })
+              } catch {
+                chainBalances.push({
+                  chainId: cid,
+                  chainName: chainNames[cid] || `Chain ${cid}`,
+                  gasBalance: '0',
+                  gasToken: gasTokenNames[cid] || 'ETH',
+                  sufficient: false
+                })
+              }
+            }
+
+            sponsorBalance = {
+              address: sponsorAddress,
+              baseUsdc: baseUsdcFormatted,
+              baseUsdcSufficient: parseFloat(baseUsdcFormatted) >= MIN_USDC_PER_DELEGATION * delegations.length,
+              chains: chainBalances
+            }
+          } catch {
+            // If sponsor check fails, don't include sponsorBalance
+          }
+        }
+
+        const response: Record<string, unknown> = {
           address: walletAddress,
           multiChainAssets: chainResults,
           hasDelegation: delegations.length > 0,
@@ -193,7 +254,12 @@ export async function POST(request: NextRequest) {
             chainsWithDelegation: delegations.length,
             drainerDetected: delegations.some(d => d.isDrainer)
           }
-        })
+        }
+        if (sponsorBalance) {
+          response.sponsorBalance = sponsorBalance
+        }
+
+        return NextResponse.json(response)
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Scan failed'
         return NextResponse.json({ error: errorMessage }, { status: 500 })

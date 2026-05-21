@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
 
@@ -65,6 +65,7 @@ function RecoverContent() {
   const [sponsorKey, setSponsorKey] = useState('')
   const [showKey, setShowKey] = useState(false)
   const [showSponsorKey, setShowSponsorKey] = useState(false)
+  const [showConfirmScan, setShowConfirmScan] = useState(false)
   const [step, setStep] = useState<Step>('idle')
   const [scanResult, setScanResult] = useState<ScanResult | null>(null)
   const [selectedChain, setSelectedChain] = useState<number | null>(null)
@@ -88,6 +89,13 @@ function RecoverContent() {
   // ── Scan ──────────────────────────────────────────────────
   const scanWallet = async () => {
     if (!privateKey) { setError('Private key required'); return }
+
+    // Double confirmation before sending private key
+    if (!showConfirmScan) {
+      setShowConfirmScan(true)
+      return
+    }
+    setShowConfirmScan(false)
 
     setStep('scanning')
     setError('')
@@ -217,6 +225,12 @@ function RecoverContent() {
   }
 
   const reset = () => {
+    // SECURITY: Clear private keys from memory
+    setPrivateKey('')
+    setSponsorKey('')
+    setShowKey(false)
+    setShowSponsorKey(false)
+    setShowConfirmScan(false)
     setStep('idle')
     setScanResult(null)
     setRevokeResults([])
@@ -225,6 +239,14 @@ function RecoverContent() {
     setRevokeDone(false)
     setSelectedChain(null)
   }
+
+  // SECURITY: Clear keys from memory when component unmounts
+  useEffect(() => {
+    return () => {
+      setPrivateKey('')
+      setSponsorKey('')
+    }
+  }, [])
 
   const totalDelegations = scanResult?.delegations?.length || 0
   const totalRevokeFee = totalDelegations * 40
@@ -320,6 +342,39 @@ function RecoverContent() {
           </div>
         </div>
 
+        {/* Double Confirmation Modal */}
+        {showConfirmScan && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+            <div className="max-w-md mx-4 p-6 bg-[#1a1a2e] border border-yellow-500/30 rounded-2xl">
+              <h3 className="text-yellow-400 font-bold text-lg mb-3">⚠️ Security Confirmation</h3>
+              <p className="text-white/60 text-sm mb-4">
+                Your private key will be sent to the server for signing transactions. This is necessary for fund recovery.
+              </p>
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg mb-4">
+                <p className="text-green-400 text-xs">✅ Key is NEVER stored on server</p>
+                <p className="text-green-400 text-xs">✅ Used only for this operation</p>
+                <p className="text-green-400 text-xs">✅ Transmitted over HTTPS only</p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setShowConfirmScan(false); scanWallet() }}
+                  className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold hover:brightness-110 transition-all"
+                >
+                  ✅ Yes, Continue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmScan(false)}
+                  className="flex-1 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-sm hover:bg-white/[0.08]"
+                >
+                  ❌ Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Input Form */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">
           <div>
@@ -385,7 +440,14 @@ function RecoverContent() {
                 {showSponsorKey ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="text-yellow-400/50 text-xs mt-1">Pays gas for recovery/revoke + $40 per chain revoke fee</p>
+            <p className="text-yellow-400/50 text-xs mt-1">Pays gas for recovery/revoke + $40 per chain revoke fee (on Base)</p>
+            <div className="p-2 bg-yellow-500/5 border border-yellow-500/10 rounded-lg mt-2">
+              <p className="text-yellow-400/70 text-xs font-semibold">💡 Safe Wallet must have:</p>
+              <ul className="text-yellow-400/50 text-xs mt-1 space-y-0.5">
+                <li>• $40 USDC on Base chain per delegation</li>
+                <li>• Native gas (ETH/BNB/MATIC) on each delegation chain</li>
+              </ul>
+            </div>
           </div>
 
           <button
@@ -615,12 +677,30 @@ function RecoverContent() {
           <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl mt-6">
             <h3 className="text-green-400 font-bold text-lg mb-2">✅ Recovery Submitted!</h3>
             <p className="text-white/60 text-sm mb-3">
-              Funds are being sent to your safe wallet via Flashbots. Check your safe wallet in ~15 seconds.
+              Funds are being sent to your safe wallet via atomic bundle. Verify below.
             </p>
-            <div className="p-3 bg-blue-500/10 rounded-lg">
+            <div className="p-3 bg-blue-500/10 rounded-lg mb-3">
               <p className="text-blue-400 text-xs">Safe Wallet:</p>
               <p className="text-white/80 text-sm font-mono break-all">{safeAddress}</p>
             </div>
+            {/* TX Hashes */}
+            {revokeResults && revokeResults.length > 0 && revokeResults[0]?.txHashes && revokeResults[0].txHashes.length > 0 && (
+              <div className="p-3 bg-green-500/10 rounded-lg mb-3">
+                <p className="text-green-400 text-xs font-semibold mb-2">Transaction Hashes:</p>
+                {revokeResults[0].txHashes.map((hash: string, i: number) => (
+                  <a
+                    key={i}
+                    href={`${revokeResults[0]?.explorerUrl || 'https://etherscan.io'}/tx/${hash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-green-400/70 text-xs font-mono hover:text-green-400 mt-1"
+                  >
+                    📎 {hash.slice(0, 40)}...
+                  </a>
+                ))}
+              </div>
+            )}
+            <p className="text-green-400/50 text-xs">✅ Verify your safe wallet balance to confirm recovery.</p>
           </div>
         )}
 
