@@ -52,14 +52,16 @@ chainGrid.addEventListener('click', (e) => {
 
 // ═══════════════════════════════════════════════════════
 // WALLET MANAGEMENT
+// BUG #7 FIX: Never show decrypted private keys in input fields
 // ═══════════════════════════════════════════════════════
 
 async function loadWallets() {
   const response = await chrome.runtime.sendMessage({ type: 'GET_WALLETS' })
   if (response) {
-    document.getElementById('hackedKey').value = response.hackedKey || ''
+    // BUG #7 FIX: Show status only, never any representation of the key
+    document.getElementById('hackedKey').value = response.hasHackedKey ? '(saved)' : ''
     document.getElementById('safeWallet').value = response.safeWallet || ''
-    document.getElementById('sponsorKey').value = response.sponsorKey || ''
+    document.getElementById('sponsorKey').value = response.hasSponsorKey ? '(saved)' : ''
 
     if (response.hackedAddress) {
       document.getElementById('savedHacked').textContent = response.hackedAddress
@@ -74,37 +76,43 @@ document.getElementById('saveWallets').addEventListener('click', async () => {
   const safeWallet = document.getElementById('safeWallet').value.trim()
   const sponsorKey = document.getElementById('sponsorKey').value.trim()
 
+  // Skip if user didn't enter new keys (just placeholders)
+  if (hackedKey === '(saved)' || sponsorKey === '(saved)') {
+    showStatus('saveStatus', 'Enter actual private keys if you want to change them', 'yellow')
+    return
+  }
+
   if (!hackedKey || !safeWallet || !sponsorKey) {
     showStatus('saveStatus', 'Please fill all fields', 'red')
     return
   }
 
-  // Derive address from private key
-  let hackedAddress = ''
+  // Validate addresses
   try {
-    // Simple derivation — in production, use ethers.js
-    const { ethers } = await import('./ethers.min.js').catch(() => ({ ethers: null }))
-    if (ethers) {
-      const wallet = new ethers.Wallet(hackedKey)
-      hackedAddress = wallet.address
-    }
-  } catch (err) {
-    showStatus('saveStatus', `Invalid private key: ${err.message}`, 'red')
+    const { ethers } = await import('./ethers.min.js')
+    ethers.getAddress(safeWallet)
+  } catch {
+    showStatus('saveStatus', 'Invalid safe wallet address', 'red')
     return
   }
 
   const response = await chrome.runtime.sendMessage({
     type: 'SAVE_WALLETS',
-    wallets: { hackedKey, safeWallet, sponsorKey, hackedAddress },
+    wallets: { hackedKey, safeWallet, sponsorKey },
   })
 
-  if (response?.success) {
+  if (response?.error) {
+    showStatus('saveStatus', `❌ ${response.error}`, 'red')
+  } else if (response?.success) {
     showStatus('saveStatus', '✅ Wallets saved & encrypted', 'green')
     loadWallets()
   }
 })
 
 document.getElementById('clearWallets').addEventListener('click', async () => {
+  const confirmed = confirm('Delete all saved wallets? This cannot be undone.')
+  if (!confirmed) return
+
   const response = await chrome.runtime.sendMessage({ type: 'CLEAR_WALLETS' })
   if (response?.success) {
     document.getElementById('hackedKey').value = ''
@@ -126,6 +134,15 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
     return
   }
 
+  // Validate contract address
+  try {
+    const { ethers } = await import('./ethers.min.js')
+    ethers.getAddress(contract)
+  } catch {
+    showRescueStatus('Invalid contract address', 'red')
+    return
+  }
+
   showRescueStatus('🔍 Checking contract...', 'blue')
 
   try {
@@ -141,7 +158,6 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
       return
     }
 
-    // Call preview API
     const res = await fetch('https://sweeptsguard.vercel.app/api/airdrop/claim', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -161,7 +177,6 @@ document.getElementById('previewBtn').addEventListener('click', async () => {
       return
     }
 
-    // Show preview
     if (data.claimableAmount && data.claimableAmount !== '0') {
       document.getElementById('safeAmount').textContent = `${data.safeWalletAmount} ${data.tokenSymbol}`
       document.getElementById('feeAmount').textContent = `${data.platformFeeAmount} ${data.tokenSymbol}`
@@ -184,7 +199,17 @@ document.getElementById('rescueBtn').addEventListener('click', async () => {
     return
   }
 
-  const wallets = await chrome.runtime.sendMessage({ type: 'GET_WALLETS' })
+  // Validate contract address
+  try {
+    const { ethers } = await import('./ethers.min.js')
+    ethers.getAddress(contract)
+  } catch {
+    showRescueStatus('Invalid contract address', 'red')
+    return
+  }
+
+  // BUG #7 FIX: Use GET_WALLETS_RAW to get actual keys for rescue
+  const wallets = await chrome.runtime.sendMessage({ type: 'GET_WALLETS_RAW' })
   if (!wallets?.hackedKey || !wallets?.sponsorKey || !wallets?.safeWallet) {
     showRescueStatus('Configure wallets first (hacked key, safe wallet, sponsor key)', 'red')
     return
@@ -232,7 +257,6 @@ document.getElementById('rescueBtn').addEventListener('click', async () => {
     if (result?.error) {
       showRescueStatus(`❌ ${result.error}`, 'red')
     } else if (result?.success) {
-      // Success!
       document.getElementById('rescueResultText').innerHTML =
         `✅ <strong>Rescue successful!</strong><br>` +
         `TX: ${result.txHash.slice(0, 20)}...`

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SweepGuard — Airdrop Rescue",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "description": "Claim airdrops from compromised wallets. EIP-7702 atomic rescue — key NEVER leaves browser.",
   "permissions": [
     "activeTab",
@@ -40,7 +40,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["injected.js", "icons/*"],
+      "resources": ["injected.js", "confirm.html", "icons/*"],
       "matches": ["<all_urls>"]
     }
   ]

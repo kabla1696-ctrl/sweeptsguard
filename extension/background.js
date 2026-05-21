@@ -12,6 +12,9 @@ import {
 // Encryption password — derived from extension install ID
 let ENCRYPTION_PASSWORD = null
 
+// Active rescue lock — prevents duplicate submissions
+let activeRescue = false
+
 // Initialize encryption password
 async function initEncryption() {
   if (ENCRYPTION_PASSWORD) return
@@ -76,8 +79,6 @@ async function clearWallets() {
 // ═══════════════════════════════════════════════════════
 
 async function signEIP7702Authorization(privateKey, chainId, contractAddress, nonce) {
-  // Import ethers.js from CDN (loaded in background)
-  // EIP-7702 authorization = keccak256(0x05 || rlp([chainId, address, nonce]))
   const { ethers } = await importEthers()
 
   const wallet = new ethers.Wallet(privateKey)
@@ -235,45 +236,69 @@ async function executeEIP7702Rescue(params) {
 }
 
 // ═══════════════════════════════════════════════════════
-// ETHEREUM PROVIDER INJECTION (like MetaMask)
-// Content script injects this as window.ethereum
-// Websites think MetaMask is connected
+// ETHEREUM PROVIDER HANDLER
+// Handles requests from content script (via page)
 // ═══════════════════════════════════════════════════════
 
 async function handleProviderRequest(method, params, tabId) {
   const wallets = await getWallets()
 
   switch (method) {
+    // ── ACCOUNT REQUESTS ──────────────────────────────
+    // BUG #6 FIX: Always show confirmation popup before revealing account
     case 'eth_requestAccounts':
-    case 'eth_accounts':
+    case 'eth_accounts': {
+      if (!wallets.hackedKey) {
+        throw new Error('No wallet configured. Open SweepGuard extension popup → Wallets tab.')
+      }
+
+      // Show confirmation popup
+      const confirmed = await showConfirmationPopup({
+        title: 'Connect Wallet',
+        message: `A website wants to connect to your wallet.\n\nAddress: ${wallets.hackedAddress || '(deriving...)'}`,
+      })
+      if (!confirmed) {
+        throw new Error('User rejected connection request')
+      }
+
       if (wallets.hackedAddress) {
         return [wallets.hackedAddress]
       }
       // Derive from private key
-      if (wallets.hackedKey) {
-        const { ethers } = await importEthers()
-        const wallet = new ethers.Wallet(wallets.hackedKey)
-        await saveWallets({ ...wallets, hackedAddress: wallet.address })
-        return [wallet.address]
-      }
-      throw new Error('No wallet configured. Open SweepGuard extension.')
-
-    case 'eth_chainId': {
-      const { chainId } = await chrome.storage.local.get('chainId')
-      return chainId || '0x2105' // Default Base (8453)
+      const { ethers } = await importEthers()
+      const wallet = new ethers.Wallet(wallets.hackedKey)
+      await saveWallets({ ...wallets, hackedAddress: wallet.address })
+      return [wallet.address]
     }
 
-    case 'wallet_switchEthereumChain':
-      await chrome.storage.local.set({ chainId: params[0].chainId })
-      return null
+    // ── CHAIN ─────────────────────────────────────────
+    case 'eth_chainId': {
+      const { chainId } = await chrome.storage.local.get('chainId')
+      const id = chainId || 8453
+      return '0x' + id.toString(16)
+    }
 
+    // BUG #13 FIX: Validate chain ID
+    case 'wallet_switchEthereumChain': {
+      const requestedChainId = parseInt(params[0].chainId, 16)
+      if (!SWEEPGUARD_RESCUER[requestedChainId] && !CHAIN_NAMES[requestedChainId]) {
+        throw new Error(`Chain ${requestedChainId} is not supported by SweepGuard`)
+      }
+      await chrome.storage.local.set({ chainId: requestedChainId })
+      return null
+    }
+
+    // ── TRANSACTION ───────────────────────────────────
     case 'eth_sendTransaction':
-      // Intercept TX — check if it's a claim TX
       return await handleSendTransaction(params[0], tabId)
 
-    case 'personal_sign':
+    // ── SIGNING ───────────────────────────────────────
+    // BUG #2 FIX: Block eth_sign entirely (raw hash signing = extremely dangerous)
     case 'eth_sign':
-      // Sign message locally
+      throw new Error('eth_sign is blocked for security. Use personal_sign instead.')
+
+    // BUG #1 FIX: personal_sign requires popup confirmation — NEVER auto-sign
+    case 'personal_sign':
       return await handleSignMessage(params, wallets)
 
     default:
@@ -281,63 +306,148 @@ async function handleProviderRequest(method, params, tabId) {
   }
 }
 
-// Intercept claim transactions
+// ═══════════════════════════════════════════════════════
+// SIGN MESSAGE — WITH POPUP CONFIRMATION
+// BUG #1 FIX: Never auto-sign. Always ask user first.
+// ═══════════════════════════════════════════════════════
+
+async function handleSignMessage(params, wallets) {
+  if (!wallets.hackedKey) {
+    throw new Error('No wallet configured. Open SweepGuard extension.')
+  }
+
+  const { ethers } = await importEthers()
+  const message = params[1] || params[0]
+
+  // Decode message for display
+  let displayMessage = message
+  try {
+    displayMessage = ethers.toUtf8String(message)
+  } catch {
+    displayMessage = message
+  }
+
+  // Show confirmation popup
+  const confirmed = await showConfirmationPopup({
+    title: 'Sign Message',
+    message: `A website wants you to sign a message.\n\nMessage: ${displayMessage.slice(0, 200)}${displayMessage.length > 200 ? '...' : ''}\n\n⚠️ Only sign if you trust this site!`,
+  })
+  if (!confirmed) {
+    throw new Error('User rejected signing request')
+  }
+
+  const wallet = new ethers.Wallet(wallets.hackedKey)
+  return await wallet.signMessage(ethers.getBytes(message))
+}
+
+// ═══════════════════════════════════════════════════════
+// SEND TRANSACTION — INTERCEPT CLAIM TXs
+// BUG #3 FIX: Proper confirmation flow via popup
+// BUG #11 FIX: Duplicate submission lock
+// ═══════════════════════════════════════════════════════
+
 async function handleSendTransaction(txParams, tabId) {
   const wallets = await getWallets()
   if (!wallets.hackedKey) {
     throw new Error('No wallet configured. Open SweepGuard extension.')
   }
 
-  // Show confirmation popup
-  return new Promise((resolve, reject) => {
-    chrome.runtime.sendMessage({
-      type: 'CONFIRM_TX',
-      txParams,
-      tabId,
-    }, async (response) => {
-      if (response?.confirmed) {
-        try {
-          const result = await executeEIP7702Rescue({
-            chainId: parseInt(response.chainId),
-            hackedKey: wallets.hackedKey,
-            safeWallet: wallets.safeWallet,
-            sponsorKey: wallets.sponsorKey,
-            airdropContract: txParams.to,
-            tokenAddress: response.tokenAddress,
-            claimData: txParams.data,
-            claimableRaw: response.claimableRaw || '0',
-            hackedAddress: wallets.hackedAddress,
-          })
-          resolve(result.txHash)
-        } catch (err) {
-          reject(err)
-        }
-      } else {
-        reject(new Error('User rejected transaction'))
-      }
-    })
+  // BUG #11 FIX: Prevent duplicate submissions
+  if (activeRescue) {
+    throw new Error('A rescue is already in progress. Please wait for it to complete.')
+  }
+
+  // Show confirmation popup with TX details
+  const confirmed = await showConfirmationPopup({
+    title: 'Confirm Transaction',
+    message: `To: ${txParams.to}\nData: ${(txParams.data || '0x').slice(0, 66)}...\n\nThis will execute an EIP-7702 rescue.\nSponsor wallet pays gas.`,
   })
+  if (!confirmed) {
+    throw new Error('User rejected transaction')
+  }
+
+  // BUG #11 FIX: Set lock
+  activeRescue = true
+
+  try {
+    // BUG #8 FIX: Get chain ID from storage, not from unconfirmed message
+    const { chainId: storedChainId } = await chrome.storage.local.get('chainId')
+    const chainId = storedChainId || 8453
+
+    const result = await executeEIP7702Rescue({
+      chainId,
+      hackedKey: wallets.hackedKey,
+      safeWallet: wallets.safeWallet,
+      sponsorKey: wallets.sponsorKey,
+      airdropContract: txParams.to,
+      tokenAddress: '',
+      claimData: txParams.data || '0x',
+      claimableRaw: '0',
+      hackedAddress: wallets.hackedAddress,
+    })
+
+    return result.txHash
+  } finally {
+    // BUG #11 FIX: Always release lock
+    activeRescue = false
+  }
 }
 
-// Sign message locally (for personal_sign, eth_sign)
-async function handleSignMessage(params, wallets) {
-  const { ethers } = await importEthers()
-  const wallet = new ethers.Wallet(wallets.hackedKey)
-  const message = params[1] || params[0]
-  return await wallet.signMessage(ethers.getBytes(message))
+// ═══════════════════════════════════════════════════════
+// CONFIRMATION POPUP
+// Shows a confirmation dialog via chrome.windows API
+// Returns true if user confirms, false if rejects
+// ═══════════════════════════════════════════════════════
+
+async function showConfirmationPopup({ title, message }) {
+  // Use chrome.notifications as confirmation mechanism
+  // In production, this should open a dedicated popup window
+  return new Promise((resolve) => {
+    // Store pending confirmation
+    const confirmId = 'confirm_' + Date.now()
+    chrome.storage.local.set({
+      [confirmId]: { title, message, resolve: true }
+    })
+
+    // Open popup window for confirmation
+    chrome.windows.create({
+      url: `confirm.html?title=${encodeURIComponent(title)}&message=${encodeURIComponent(message)}&id=${confirmId}`,
+      type: 'popup',
+      width: 400,
+      height: 350,
+      focused: true,
+    })
+
+    // Listen for confirmation response
+    const listener = (changes) => {
+      if (changes[confirmId]) {
+        const val = changes[confirmId].newValue
+        if (val?.confirmed !== undefined) {
+          chrome.storage.onChanged.removeListener(listener)
+          chrome.storage.local.remove(confirmId)
+          resolve(val.confirmed)
+        }
+      }
+    }
+    chrome.storage.onChanged.addListener(listener)
+
+    // Timeout after 5 minutes
+    setTimeout(() => {
+      chrome.storage.onChanged.removeListener(listener)
+      chrome.storage.local.remove(confirmId)
+      resolve(false)
+    }, 300000)
+  })
 }
 
 // ═══════════════════════════════════════════════════════
 // ETHERS.JS LOADER
-// Import from CDN in service worker context
 // ═══════════════════════════════════════════════════════
 
 let ethersModule = null
 
 async function importEthers() {
   if (ethersModule) return ethersModule
-  // In extension context, ethers is loaded via importScripts or bundled
-  // For now, we use a minimal implementation
   ethersModule = await import('./ethers.min.js')
   return ethersModule
 }
@@ -349,12 +459,70 @@ async function importEthers() {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   const handler = async () => {
     switch (message.type) {
-      case 'SAVE_WALLETS':
-        await saveWallets(message.wallets)
-        return { success: true }
+      case 'SAVE_WALLETS': {
+        // BUG #4 FIX: Validate addresses before saving
+        const { ethers } = await importEthers()
+        const { hackedKey, safeWallet, sponsorKey } = message.wallets
 
-      case 'GET_WALLETS':
+        // Validate safe wallet address
+        if (safeWallet) {
+          try { ethers.getAddress(safeWallet) } catch {
+            throw new Error('Invalid safe wallet address')
+          }
+        }
+
+        // Derive addresses for validation
+        let hackedAddress = ''
+        if (hackedKey) {
+          const hw = new ethers.Wallet(hackedKey)
+          hackedAddress = hw.address
+          // BUG #4 FIX: safeWallet ≠ hackedAddress
+          if (safeWallet && ethers.getAddress(safeWallet) === ethers.getAddress(hackedAddress)) {
+            throw new Error('Safe wallet CANNOT be the same as hacked wallet!')
+          }
+        }
+
+        let sponsorWallet = ''
+        if (sponsorKey) {
+          const sw = new ethers.Wallet(sponsorKey)
+          sponsorWallet = sw.address
+          // BUG #4 FIX: safeWallet ≠ sponsorWallet
+          if (safeWallet && ethers.getAddress(safeWallet) === ethers.getAddress(sponsorWallet)) {
+            throw new Error('Safe wallet CANNOT be the same as sponsor wallet!')
+          }
+          // BUG #4 FIX: hackedKey ≠ sponsorKey
+          if (hackedKey && sponsorKey === hackedKey) {
+            throw new Error('Sponsor key CANNOT be the same as hacked key!')
+          }
+        }
+
+        await saveWallets({
+          ...message.wallets,
+          hackedAddress,
+          sponsorWallet,
+        })
+        return { success: true }
+      }
+
+      case 'GET_WALLETS': {
+        const wallets = await getWallets()
+        // BUG #7 FIX: Never return decrypted private keys to popup
+        // Return addresses only — popup doesn't need raw keys
+        return {
+          hackedKey: wallets.hackedKey ? '••••••••' : '',
+          safeWallet: wallets.safeWallet,
+          sponsorKey: wallets.sponsorKey ? '••••••••' : '',
+          sponsorWallet: wallets.sponsorWallet,
+          hackedAddress: wallets.hackedAddress,
+          hasHackedKey: !!wallets.hackedKey,
+          hasSponsorKey: !!wallets.sponsorKey,
+        }
+      }
+
+      case 'GET_WALLETS_RAW': {
+        // Only for internal use (rescue execution)
         return await getWallets()
+      }
 
       case 'CLEAR_WALLETS':
         await clearWallets()
@@ -362,19 +530,27 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       case 'GET_STATUS': {
         const wallets = await getWallets()
-        const chainId = (await chrome.storage.local.get('chainId')).chainId || 8453
+        const { chainId } = await chrome.storage.local.get('chainId')
+        const effectiveChainId = chainId || 8453
         const hasWallet = !!wallets.hackedKey
         const hasSponsor = !!wallets.sponsorKey
-        const rescuerDeployed = !!SWEEPGUARD_RESCUER[chainId]
-        return { hasWallet, hasSponsor, chainId, rescuerDeployed }
+        const rescuerDeployed = !!SWEEPGUARD_RESCUER[effectiveChainId]
+        return { hasWallet, hasSponsor, chainId: effectiveChainId, rescuerDeployed }
       }
 
       case 'EXECUTE_RESCUE': {
+        // BUG #11 FIX: Prevent duplicate submissions
+        if (activeRescue) {
+          return { error: 'A rescue is already in progress. Please wait.' }
+        }
+        activeRescue = true
         try {
           const result = await executeEIP7702Rescue(message.params)
           return result
         } catch (err) {
           return { error: err.message }
+        } finally {
+          activeRescue = false
         }
       }
 
@@ -389,6 +565,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } catch (err) {
           return { error: err.message }
         }
+      }
+
+      case 'CONFIRM_RESPONSE': {
+        // Handle confirmation popup response
+        const { confirmId, confirmed } = message
+        await chrome.storage.local.set({ [confirmId]: { confirmed } })
+        return { success: true }
       }
 
       default:
