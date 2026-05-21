@@ -2,12 +2,6 @@
 
 import { useState } from 'react'
 
-declare global {
-  interface Window {
-    ethereum?: { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }
-  }
-}
-
 interface WalletConnectButtonProps {
   onConnect?: (address: string) => void
   onDisconnect?: () => void

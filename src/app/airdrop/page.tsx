@@ -1,10 +1,69 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { ethers } from 'ethers'
 
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
+
+// All 33 chain explorer URLs for TX links
+const EXPLORER_URLS: Record<number, string> = {
+  1: 'https://etherscan.io',
+  8453: 'https://basescan.org',
+  42161: 'https://arbiscan.io',
+  137: 'https://polygonscan.com',
+  56: 'https://bscscan.com',
+  10: 'https://optimistic.etherscan.io',
+  43114: 'https://snowtrace.io',
+  250: 'https://ftmscan.com',
+  25: 'https://cronoscan.com',
+  81457: 'https://blastscan.io',
+  7777777: 'https://explorer.zora.energy',
+  1101: 'https://zkevm.polygonscan.com',
+  169: 'https://pacific-explorer.manta.network',
+  324: 'https://explorer.zksync.io',
+  59144: 'https://lineascan.build',
+  5000: 'https://mantlescan.xyz',
+  34443: 'https://explorer.mode.network',
+  534352: 'https://scrollscan.com',
+  100: 'https://gnosisscan.io',
+  7000: 'https://zetachain.blockscout.com',
+  1625: 'https://gravity.dexguru.dev',
+  1116: 'https://scan.coredao.org',
+  1329: 'https://seitrace.com',
+  80094: 'https://berascan.com',
+  57073: 'https://explorer.inkonchain.com',
+  196: 'https://www.oklink.com/x-layer',
+  43111: 'https://explorer.hemi.xyz',
+  8217: 'https://kaiascan.io',
+  1868: 'https://soneium.blockscout.com',
+  2818: 'https://explorer.morphl2.io',
+  1923: 'https://explorer.swellnetwork.io',
+  10143: 'https://testnet.monadexplorer.com',
+  16600: 'https://chainscan.0g.ai',
+}
+
+// Chains with PRIVATE sequencers (no public mempool — drainer can't frontrun)
+const PRIVATE_SEQUENCER_CHAINS = new Set([
+  8453,   // Base
+  42161,  // Arbitrum
+  10,     // Optimism
+  324,    // zkSync
+  59144,  // Linea
+  534352, // Scroll
+  5000,   // Mantle
+  34443,  // Mode
+  81457,  // Blast
+  7777777,// Zora
+  57073,  // Ink
+  1868,   // Soneium
+  1923,   // Swellchain
+  2818,   // Morph
+  43111,  // Hemi
+  80094,  // Berachain
+  1329,   // Sei
+])
 
 const SUPPORTED_CHAINS = [
   { id: 1, name: 'Ethereum', token: 'ETH', method: 'Flashbots' },
@@ -79,9 +138,52 @@ export default function AirdropPage() {
   // Guide state
   const [showGuide, setShowGuide] = useState(false)
 
+  // Double confirmation for private key send
+  const [showConfirmSend, setShowConfirmSend] = useState(false)
+  const [pendingAction, setPendingAction] = useState<'claim' | null>(null)
+
+  // Track last action for retry
+  const [lastAction, setLastAction] = useState<'claim' | 'execute' | null>(null)
+
+  // BUG FIX #1: Clear private keys from memory on unmount
+  useEffect(() => {
+    return () => {
+      setPrivateKey('')
+      setSponsorKey('')
+    }
+  }, [])
+
+  // BUG FIX #2: Validate safe wallet ≠ compromised wallet
+  const validateSafeAddress = (safe: string, hacked: string): string | null => {
+    if (!safe || !hacked) return null
+    try {
+      const normalizedSafe = ethers.getAddress(safe)
+      const normalizedHacked = ethers.getAddress(hacked)
+      if (normalizedSafe === normalizedHacked) {
+        return 'Safe wallet CANNOT be the compromised wallet — tokens would go back to the drainer!'
+      }
+    } catch {
+      return 'Invalid safe wallet address format'
+    }
+    return null
+  }
+
+  // BUG FIX #3: Public mempool chain warning
+  const isPublicMempoolChain = (id: number) => {
+    return !PRIVATE_SEQUENCER_CHAINS.has(id) && id !== 1 // Ethereum uses Flashbots
+  }
+
   // Step 1: Preview — detect token, eligibility, amount
   const handlePreview = async () => {
     if (!contractAddress || !walletAddress || !safeWallet || !sponsorWallet) return
+
+    // BUG FIX #2: Validate safe wallet ≠ compromised wallet
+    const validationError = validateSafeAddress(safeWallet, walletAddress)
+    if (validationError) {
+      setErrorMsg(validationError)
+      setStep('error')
+      return
+    }
 
     setPreviewLoading(true)
     setPreviewData(null)
@@ -176,8 +278,26 @@ export default function AirdropPage() {
   const handleDirectClaim = async () => {
     if (!previewData || !privateKey || !sponsorKey) return
 
+    // BUG FIX #2: Validate safe wallet ≠ compromised wallet
+    const validationError = validateSafeAddress(safeWallet, walletAddress)
+    if (validationError) {
+      setErrorMsg(validationError)
+      setStep('error')
+      return
+    }
+
+    // BUG FIX #4: Double confirmation before sending private key
+    if (!showConfirmSend) {
+      setShowConfirmSend(true)
+      setPendingAction('claim')
+      return
+    }
+    setShowConfirmSend(false)
+    setPendingAction(null)
+
     setStep('claiming')
     setErrorMsg('')
+    setLastAction('claim')
 
     try {
       const res = await fetch('/api/airdrop/claim', {
@@ -200,15 +320,25 @@ export default function AirdropPage() {
       })
       const data = await res.json()
 
+      // BUG FIX #1: Clear private key from memory after use
+      setPrivateKey('')
+
       if (data.success) {
         setTxHash(data.txHash || '')
         setStep('done')
       } else {
-        setErrorMsg(data.error || 'Claim failed')
+        // BUG FIX #9: Sanitize error messages
+        const errMsg = data.error || 'Claim failed'
+        const sanitized = errMsg.includes('execution reverted')
+          ? 'Claim transaction reverted — the airdrop may not be claimable yet or you may not be eligible.'
+          : errMsg.includes('insufficient funds')
+            ? 'Sponsor wallet has insufficient funds for gas.'
+            : errMsg
+        setErrorMsg(sanitized)
         setStep('error')
       }
     } catch {
-      setErrorMsg('Transaction failed. Try again.')
+      setErrorMsg('Transaction failed. Please try again.')
       setStep('error')
     }
   }
@@ -219,6 +349,7 @@ export default function AirdropPage() {
 
     setStep('claiming')
     setErrorMsg('')
+    setLastAction('execute')
 
     try {
       const res = await fetch('/api/airdrop/claim', {
@@ -244,11 +375,20 @@ export default function AirdropPage() {
         setTxHash(data.txHash || '')
         setStep('done')
       } else {
-        setErrorMsg(data.error || 'Claim failed')
+        // BUG FIX #9: Sanitize error messages
+        const errMsg = data.error || 'Claim failed'
+        const sanitized = errMsg.includes('execution reverted')
+          ? 'Claim transaction reverted — the airdrop may not be claimable yet or you may not be eligible.'
+          : errMsg.includes('simulation failed')
+            ? 'Claim simulation failed — the airdrop contract rejected the claim. Check eligibility.'
+            : errMsg.includes('insufficient funds')
+              ? 'Sponsor wallet has insufficient funds for gas.'
+              : errMsg
+        setErrorMsg(sanitized)
         setStep('error')
       }
     } catch {
-      setErrorMsg('Transaction failed. Try again.')
+      setErrorMsg('Transaction failed. Please try again.')
       setStep('error')
     }
   }
@@ -279,8 +419,9 @@ export default function AirdropPage() {
         {/* Security Badge */}
         <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
           <p className="text-green-400 text-sm">
-            🔒 <strong>Signature-Based Security</strong> — Your private key NEVER leaves your browser.
-            You only sign an EIP-712 message in MetaMask. The smart contract handles everything atomically.
+            🔒 <strong>Two Claim Modes</strong> —
+            <strong className="text-blue-400"> MetaMask Sign</strong>: Private key NEVER leaves browser (recommended).
+            <strong className="text-yellow-400"> Direct Claim</strong>: Private key sent to API for direct TX (use only if MetaMask unavailable).
           </p>
         </div>
 
@@ -471,6 +612,14 @@ export default function AirdropPage() {
                   </button>
                 ))}
               </div>
+              {/* BUG FIX #3: Public mempool chain warning */}
+              {isPublicMempoolChain(chainId) && (
+                <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                  <p className="text-yellow-400 text-xs">
+                    ⚠️ <strong>Public Mempool Chain</strong> — {selectedChain?.name} has a public mempool. Drainer bots may detect and front-run transactions. Use with caution.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Airdrop Contract Address */}
@@ -570,7 +719,7 @@ export default function AirdropPage() {
                   {showPrivateKey ? '🙈' : '👁️'}
                 </button>
               </div>
-              <p className="text-green-400/60 text-xs mt-1">✅ Used only for direct claim. Never sent to any server.</p>
+              <p className="text-yellow-400/60 text-xs mt-1">⚠️ Sent to API for direct claim TX. Use MetaMask Sign mode if possible (key never leaves browser).</p>
             </div>
 
             {/* Optional Fields */}
@@ -769,7 +918,7 @@ export default function AirdropPage() {
             <h3 className="text-xl font-semibold text-green-400 mb-2">Claim Successful!</h3>
             {txHash && (
               <a
-                href={`${SUPPORTED_CHAINS.find(c => c.id === chainId)?.id === 1 ? 'https://etherscan.io' : `https://${SUPPORTED_CHAINS.find(c => c.id === chainId)?.name.toLowerCase()}.blockscout.com`}/tx/${txHash}`}
+                href={`${EXPLORER_URLS[chainId] || 'https://etherscan.io'}/tx/${txHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-400 text-sm hover:underline break-all"
@@ -779,7 +928,15 @@ export default function AirdropPage() {
             )}
             <div className="mt-6">
               <button
-                onClick={() => { setStep('input'); setSignature(''); setContractAddress(''); }}
+                onClick={() => {
+                  setStep('input')
+                  setSignature('')
+                  setContractAddress('')
+                  setPrivateKey('')
+                  setSponsorKey('')
+                  setTxHash('')
+                  setLastAction(null)
+                }}
                 className="px-6 py-2 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
               >
                 Claim Another
@@ -794,12 +951,78 @@ export default function AirdropPage() {
             <div className="text-4xl mb-4">❌</div>
             <h3 className="text-xl font-semibold text-red-400 mb-2">Error</h3>
             <p className="text-white/60 text-sm mb-6 max-w-md mx-auto">{errorMsg}</p>
-            <button
-              onClick={() => { setStep('input'); setSignature(''); setErrorMsg(''); }}
-              className="px-6 py-2 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
-            >
-              Try Again
-            </button>
+            <div className="flex gap-3 justify-center">
+              <button
+                onClick={() => {
+                  setStep('input')
+                  setSignature('')
+                  setErrorMsg('')
+                  setPrivateKey('')
+                  setSponsorKey('')
+                  setLastAction(null)
+                  setShowConfirmSend(false)
+                }}
+                className="px-6 py-2 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
+              >
+                Start Over
+              </button>
+              {/* BUG FIX #8: Retry button */}
+              {lastAction && (
+                <button
+                  onClick={() => {
+                    setErrorMsg('')
+                    if (lastAction === 'claim') handleDirectClaim()
+                    else if (lastAction === 'execute') handleExecute()
+                  }}
+                  className="px-6 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold hover:brightness-110"
+                >
+                  🔄 Retry
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* BUG FIX #4: Double Confirmation Modal */}
+        {showConfirmSend && (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-[#1a1a2e] border border-white/10 rounded-2xl p-6 max-w-md w-full">
+              <div className="text-center">
+                <div className="text-4xl mb-4">🔐</div>
+                <h3 className="text-xl font-bold text-white mb-2">Confirm Private Key Send</h3>
+                <p className="text-white/50 text-sm mb-4">
+                  You are about to send the compromised wallet's private key to the API for direct claim execution.
+                </p>
+                <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg mb-4">
+                  <p className="text-yellow-400 text-xs">
+                    ⚠️ The private key will be used to sign the claim transaction on the server. Make sure you trust this connection.
+                  </p>
+                </div>
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
+                  <p className="text-red-400 text-xs">
+                    ⚠️ Safe wallet: <strong>{safeWallet ? ethers.getAddress(safeWallet) : 'Not set'}</strong>
+                    <br />Tokens will be split: 80% → safe wallet, 20% → platform fee.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setShowConfirmSend(false); setPendingAction(null) }}
+                    className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
+                  >
+                    ❌ Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowConfirmSend(false)
+                      if (pendingAction === 'claim') handleDirectClaim()
+                    }}
+                    className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110"
+                  >
+                    ✅ Confirm & Send
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

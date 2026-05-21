@@ -232,15 +232,24 @@ async function validateContractSafety(
     warnings.push('⚠️ No known claim function selector found in bytecode — this may not be an airdrop contract')
   }
 
-  // Check 4: Look for suspicious honeypot patterns
-  const suspiciousPatterns = [
-    'selfdestruct', // contract can self-destruct
-    'ffffffffffffffffffffffffffffffffffffffff', // hardcoded address
+  // Check 4: Look for actual honeypot indicators (not generic patterns)
+  // NOTE: selfdestruct opcode (0xff) appears in many legitimate contracts
+  // and is NOT an indicator of a honeypot. We check for actual scam patterns instead.
+  const scamIndicators = [
+    'approve(address,uint256)', // suspicious if claim contract asks for token approval
+    'transferOwnership', // ownership transfer could indicate rug pull capability
+    'pause', // pausable contract could block claims
   ]
-  for (const pattern of suspiciousPatterns) {
-    if (codeLower.includes(pattern.toLowerCase())) {
-      warnings.push(`⚠️ Contract bytecode contains suspicious pattern: ${pattern.substring(0, 20)}... — verify this is the legitimate contract`)
+  // Only warn if the contract has MULTIPLE suspicious indicators
+  let scamScore = 0
+  for (const indicator of scamIndicators) {
+    const selector = ethers.id(indicator).slice(0, 10)
+    if (codeLower.includes(selector.slice(2).toLowerCase())) {
+      scamScore++
     }
+  }
+  if (scamScore >= 2) {
+    warnings.push('⚠️ Contract has multiple suspicious function selectors (approve/pause/transferOwnership) — verify this is the legitimate airdrop contract')
   }
 
   return { safe: warnings.length === 0, warnings }
@@ -649,6 +658,19 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
+      // CRITICAL: Safe wallet CANNOT be the compromised wallet
+      try {
+        const normalizedSafe = ethers.getAddress(safeWallet)
+        const normalizedCompromised = ethers.getAddress(compromisedWallet.address)
+        if (normalizedSafe === normalizedCompromised) {
+          return NextResponse.json({
+            error: 'Safe wallet CANNOT be the compromised wallet — tokens would go back to the drainer!'
+          }, { status: 400 })
+        }
+      } catch {
+        return NextResponse.json({ error: 'Invalid safe wallet address' }, { status: 400 })
+      }
+
       // P1-3: NONCE CONFLICT DETECTION
       // If the compromised wallet has pending TXs from the drainer in the
       // mempool, our nonce could be wrong. We detect pending TXs and use
@@ -964,6 +986,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           error: 'Signature, safe wallet, wallet address, token address, and sponsor key required'
         }, { status: 400 })
+      }
+
+      // CRITICAL: Safe wallet CANNOT be the compromised wallet
+      try {
+        const normalizedSafe = ethers.getAddress(safeWallet)
+        const normalizedWallet = ethers.getAddress(walletAddress)
+        if (normalizedSafe === normalizedWallet) {
+          return NextResponse.json({
+            error: 'Safe wallet CANNOT be the compromised wallet — tokens would go back to the drainer!'
+          }, { status: 400 })
+        }
+      } catch {
+        return NextResponse.json({ error: 'Invalid safe wallet address' }, { status: 400 })
       }
 
       const claimerAddress = CLAIMER_CONTRACTS[chainId]
