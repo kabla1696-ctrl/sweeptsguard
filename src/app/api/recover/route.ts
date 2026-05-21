@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, executeFullRecoveryAndRevoke } from '@/lib/fundRecovery'
+import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, executeFullRecoveryAndRevoke, executePermitSweep } from '@/lib/fundRecovery'
 import { isKnownDrainer } from '@/lib/draindb'
 import { ethers } from 'ethers'
 
@@ -220,15 +220,44 @@ export async function POST(request: NextRequest) {
       try {
         const targetChain = chainId || 1
         const rpcUrl = rpcUrls[targetChain] || rpcUrls[1]
-        const result = await executeFullRecovery({
-          compromisedWalletPrivateKey: privateKey,
-          safeWalletAddress: safeAddress,
-          chainId: targetChain,
-          rpcUrl,
-          sponsorPrivateKey
-        })
+
+        // ── Strategy 1: Permit-based sweep (tokens with EIP-2612)
+        // No gas funding to compromised wallet = drainer can't intercept
+        console.log('🔐 Trying permit-based sweep first (no gas funding to compromised wallet)...')
+        const permitResult = await executePermitSweep(
+          privateKey,
+          sponsorPrivateKey,
+          safeAddress,
+          targetChain,
+          rpcUrl
+        )
+
+        if (permitResult.success) {
+          console.log('✅ Permit sweep succeeded!')
+          return NextResponse.json({
+            ...permitResult,
+            strategy: 'permit-sweep',
+            message: 'Tokens recovered via permit — drainer had no chance to intercept',
+            explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
+          })
+        }
+
+        // ── Strategy 2: Standard atomic recovery (Flashbots / L2 private sequencer)
+        console.log('⚠️ Permit sweep unavailable, falling back to atomic bundle recovery...')
+        const result = await executeFullRecoveryAndRevoke(
+          privateKey,
+          sponsorPrivateKey,
+          safeAddress,
+          targetChain,
+          rpcUrl
+        )
+
         return NextResponse.json({
           ...result,
+          strategy: 'atomic-bundle',
+          message: result.success
+            ? 'Funds recovered via atomic bundle — submitted in single block'
+            : 'Recovery failed. Check sponsor wallet balance and try again.',
           explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
         })
       } catch (err: unknown) {

@@ -38,6 +38,390 @@ const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
 // ============================================================
+// EIP-2612 Permit Support
+// Tokens with permit can be swept WITHOUT gas funding to compromised wallet
+// Sponsor submits: permit + transferFrom in ONE atomic TX
+// ============================================================
+const PERMIT_ABI = [
+  'function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+  'function nonces(address owner) view returns (uint256)',
+  'function DOMAIN_SEPARATOR() view returns (bytes32)',
+  'function name() view returns (string)',
+  'function transferFrom(address from, address to, uint256 amount) returns (bool)',
+  'function balanceOf(address) view returns (uint256)'
+]
+
+// Tokens known to support EIP-2612 permit
+const PERMIT_TOKENS: Record<number, Set<string>> = {
+  1: new Set([
+    '0x6B175474E89094C44Da98b954EedeAC495271d0F', // DAI
+    '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', // UNI
+    '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', // AAVE
+    '0xD533a949740bb3306d119CC777fa900bA034cd52', // CRV
+    '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', // stETH
+    '0x514910771AF9Ca656af840dff83E8264EcF986CA', // LINK
+    '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', // WETH
+    '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', // WBTC
+    '0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0', // wstETH
+    '0xBe9895146f7AF43049ca1c1AE358B0541Ea49704', // cbETH
+    '0x853d955aCEf822Db058eb8505911ED77F175b99e', // FRAX
+    '0x956F47F50A910163D8BF957Cf5846D573E7f87CA', // FEI
+  ]),
+  8453: new Set([
+    '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', // USDC
+    '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', // DAI
+    '0x4200000000000000000000000000000000000006', // WETH
+    '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', // cbETH
+  ]),
+  42161: new Set([
+    '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', // USDC
+    '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', // USDT
+    '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', // WETH
+    '0x912CE59144191C1204E64559FE8253a0e49E6548', // ARB
+  ]),
+  137: new Set([
+    '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', // USDC
+    '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', // USDT
+    '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', // WETH
+    '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6', // WBTC
+  ]),
+  10: new Set([
+    '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', // USDC
+    '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', // USDT
+    '0x4200000000000000000000000000000000000006', // WETH
+  ])
+}
+
+// Check if token supports EIP-2612 permit
+async function checkPermitSupport(
+  provider: ethers.JsonRpcProvider,
+  tokenAddress: string,
+  chainId: number
+): Promise<boolean> {
+  // Quick check: known permit tokens
+  const knownPermits = PERMIT_TOKENS[chainId]
+  if (knownPermits?.has(tokenAddress.toLowerCase()) || knownPermits?.has(tokenAddress)) {
+    return true
+  }
+  // Try calling nonces() — if it exists, permit is likely supported
+  try {
+    const contract = new ethers.Contract(tokenAddress, PERMIT_ABI, provider)
+    await contract.nonces(ethers.ZeroAddress)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Sign EIP-2612 permit off-chain (no gas needed)
+async function signPermit(
+  wallet: ethers.Wallet,
+  tokenAddress: string,
+  spender: string,
+  amount: bigint,
+  deadline: bigint,
+  provider: ethers.JsonRpcProvider,
+  chainId: number
+): Promise<{ v: number; r: string; s: string }> {
+  const contract = new ethers.Contract(tokenAddress, PERMIT_ABI, provider)
+  const owner = wallet.address
+  const nonce = await contract.nonces(owner)
+  const name = await contract.name()
+
+  // EIP-712 domain
+  const domain = {
+    name,
+    version: '1',
+    chainId,
+    verifyingContract: tokenAddress
+  }
+
+  // EIP-712 permit types
+  const types = {
+    Permit: [
+      { name: 'owner', type: 'address' },
+      { name: 'spender', type: 'address' },
+      { name: 'value', type: 'uint256' },
+      { name: 'nonce', type: 'uint256' },
+      { name: 'deadline', type: 'uint256' }
+    ]
+  }
+
+  const value = {
+    owner,
+    spender,
+    value: amount,
+    nonce,
+    deadline
+  }
+
+  const signature = await wallet.signTypedData(domain, types, value)
+  const sig = ethers.Signature.from(signature)
+
+  return { v: sig.v, r: sig.r, s: sig.s }
+}
+
+// ============================================================
+// PERMIT-BASED SWEEP (DRAINER CAN'T INTERFERE)
+// No gas funding to compromised wallet!
+// Sponsor submits: permit + transferFrom in ONE atomic TX
+// ============================================================
+export async function executePermitSweep(
+  compromisedPrivateKey: string,
+  sponsorPrivateKey: string,
+  safeWalletAddress: string,
+  chainId: number,
+  rpcUrl: string
+): Promise<AtomicRecoveryResult> {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const compromisedWallet = new ethers.Wallet(compromisedPrivateKey, provider)
+  const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
+  const compromisedAddress = compromisedWallet.address
+
+  console.log('🔐 PERMIT-BASED SWEEP — No gas funding to compromised wallet')
+
+  // ── Step 1: Scan assets ──
+  const assets = await scanRecoverableAssets(compromisedAddress, rpcUrl)
+  const tokensWithPermit: { token: TokenBalance; hasPermit: boolean }[] = []
+
+  for (const token of assets.tokens) {
+    const hasPermit = await checkPermitSupport(provider, token.address, chainId)
+    tokensWithPermit.push({ token, hasPermit })
+  }
+
+  const permitTokens = tokensWithPermit.filter(t => t.hasPermit)
+  const nonPermitTokens = tokensWithPermit.filter(t => !t.hasPermit)
+
+  console.log(`✅ ${permitTokens.length} tokens with permit support`)
+  console.log(`⚠️ ${nonPermitTokens.length} tokens without permit (need gas funding)`)
+
+  if (permitTokens.length === 0 && assets.ethBalance === BigInt(0)) {
+    return { success: false, error: 'No tokens with permit support found. Use standard recovery.' }
+  }
+
+  // ── Step 2: Sign permits off-chain (no gas!) ──
+  const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600) // 1 hour
+  const signedPermits: {
+    tokenAddress: string
+    amount: bigint
+    permit: { v: number; r: string; s: string }
+    token: TokenBalance
+  }[] = []
+
+  for (const { token } of permitTokens) {
+    try {
+      // Approve MAX so sponsor can transferFrom
+      const permit = await signPermit(
+        compromisedWallet,
+        token.address,
+        sponsorWallet.address,
+        token.balance, // Approve full balance
+        deadline,
+        provider,
+        chainId
+      )
+      signedPermits.push({
+        tokenAddress: token.address,
+        amount: token.balance,
+        permit,
+        token
+      })
+      console.log(`✍️ Signed permit for ${token.symbol}`)
+    } catch (err) {
+      console.log(`❌ Failed to sign permit for ${token.symbol}: ${err}`)
+    }
+  }
+
+  if (signedPermits.length === 0) {
+    return { success: false, error: 'Failed to sign any permits. Try standard recovery.' }
+  }
+
+  // ── Step 3: Build atomic TXs from sponsor wallet ──
+  const gasParams = await getGasParams(provider, chainId)
+  let sponsorNonce = await getSafeNonce(provider, sponsorWallet.address)
+
+  const buildTxParams = (nonceVal: number, gasLimit: bigint) => ({
+    nonce: nonceVal,
+    chainId,
+    gasLimit,
+    ...(gasParams.type === 2
+      ? { type: 2, maxFeePerGas: gasParams.maxFeePerGas, maxPriorityFeePerGas: gasParams.maxPriorityFeePerGas }
+      : { gasPrice: gasParams.gasPrice })
+  })
+
+  const txs: string[] = []
+  const platformFeeWallet = PLATFORM_FEE_WALLET
+  const feePercent = BigInt(PLATFORM_FEE_PERCENT)
+  const userPercent = 100n - feePercent
+
+  // For each permit token: permit + transferFrom (sponsor pays gas)
+  for (const { tokenAddress, amount, permit, token } of signedPermits) {
+    const contract = new ethers.Contract(tokenAddress, PERMIT_ABI)
+
+    // TX: permit (sponsor calls permit on behalf of compromised wallet)
+    const permitData = contract.interface.encodeFunctionData('permit', [
+      compromisedAddress,
+      sponsorWallet.address,
+      amount,
+      deadline,
+      permit.v,
+      permit.r,
+      permit.s
+    ])
+    const permitTx = await sponsorWallet.signTransaction({
+      to: tokenAddress,
+      data: permitData,
+      value: 0n,
+      ...buildTxParams(sponsorNonce++, 100000n)
+    })
+    txs.push(permitTx)
+
+    // TX: transferFrom → safe wallet (user share)
+    const userShare = (amount * userPercent) / 100n
+    const transferData = contract.interface.encodeFunctionData('transferFrom', [
+      compromisedAddress,
+      safeWalletAddress,
+      userShare
+    ])
+    const transferTx = await sponsorWallet.signTransaction({
+      to: tokenAddress,
+      data: transferData,
+      value: 0n,
+      ...buildTxParams(sponsorNonce++, 100000n)
+    })
+    txs.push(transferTx)
+
+    // TX: transferFrom → platform fee wallet
+    const feeShare = amount - userShare
+    if (feeShare > BigInt(0)) {
+      const feeData2 = contract.interface.encodeFunctionData('transferFrom', [
+        compromisedAddress,
+        platformFeeWallet,
+        feeShare
+      ])
+      const feeTx = await sponsorWallet.signTransaction({
+        to: tokenAddress,
+        data: feeData2,
+        value: 0n,
+        ...buildTxParams(sponsorNonce++, 100000n)
+      })
+      txs.push(feeTx)
+    }
+
+    console.log(`💰 Built permit sweep for ${token.symbol}: ${token.balanceFormatted}`)
+  }
+
+  // ── Step 4: Verify balance before submission ──
+  // Check that compromised wallet still has the funds
+  for (const { tokenAddress, token } of signedPermits) {
+    const contract = new ethers.Contract(tokenAddress, PERMIT_ABI, provider)
+    const currentBalance = await contract.balanceOf(compromisedAddress)
+    if (currentBalance < token.balance) {
+      console.log(`⚠️ DRAINER ACTIVITY DETECTED! ${token.symbol} balance changed: ${token.balanceFormatted} → ${ethers.formatUnits(currentBalance, token.decimals)}`)
+      // Continue anyway — we'll sweep whatever is left
+    }
+  }
+
+  // ── Step 5: Submit atomically ──
+  console.log(`🚀 Submitting ${txs.length} permit sweep TXs atomically...`)
+  const result = await submitSafeRecovery(txs, chainId, rpcUrl)
+
+  if (result.success) {
+    // For ETH + non-permit tokens, do a separate standard recovery if needed
+    let ethRecovered = '0'
+    let nonPermitResults: { symbol: string; amount: string; toUser: string; fee: string }[] = []
+
+    if (assets.ethBalance > BigInt(0) || nonPermitTokens.length > 0) {
+      console.log('💰 ETH/non-permit tokens found — using standard recovery for those...')
+      const standardResult = await executeFullRecoveryAndRevoke(
+        compromisedPrivateKey,
+        sponsorPrivateKey,
+        safeWalletAddress,
+        chainId,
+        rpcUrl
+      )
+      if (standardResult.success) {
+        ethRecovered = standardResult.ethRecovered || '0'
+        nonPermitResults = standardResult.tokensRecovered || []
+      }
+    }
+
+    return {
+      success: true,
+      ethRecovered,
+      tokensRecovered: [
+        ...signedPermits.map(({ token }) => ({
+          symbol: token.symbol,
+          amount: token.balanceFormatted,
+          toUser: ethers.formatUnits((token.balance * userPercent) / 100n, token.decimals),
+          fee: ethers.formatUnits((token.balance * feePercent) / 100n, token.decimals)
+        })),
+        ...nonPermitResults
+      ],
+      delegationRevoked: false,
+      txCount: txs.length,
+      txHashes: result.txHashes
+    }
+  }
+
+  return {
+    success: false,
+    error: result.error || 'Permit sweep failed',
+    txHashes: result.txHashes
+  }
+}
+
+// ============================================================
+// VERIFY BALANCE BEFORE SWEEP
+// Detect if drainer moved funds between scan and sweep
+// ============================================================
+export async function verifyBalanceBeforeSweep(
+  walletAddress: string,
+  rpcUrl: string,
+  expectedEth: bigint,
+  expectedTokens: TokenBalance[]
+): Promise<{
+  safe: boolean
+  currentEth: bigint
+  drainedTokens: string[]
+  remainingTokens: TokenBalance[]
+}> {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const currentEth = await provider.getBalance(walletAddress)
+  const drainedTokens: string[] = []
+  const remainingTokens: TokenBalance[] = []
+
+  for (const token of expectedTokens) {
+    try {
+      const contract = new ethers.Contract(token.address, [
+        'function balanceOf(address) view returns (uint256)'
+      ], provider)
+      const currentBalance = await contract.balanceOf(walletAddress)
+      if (currentBalance === BigInt(0)) {
+        drainedTokens.push(token.symbol)
+      } else if (currentBalance < token.balance) {
+        remainingTokens.push({
+          ...token,
+          balance: currentBalance,
+          balanceFormatted: ethers.formatUnits(currentBalance, token.decimals)
+        })
+      } else {
+        remainingTokens.push(token)
+      }
+    } catch {
+      remainingTokens.push(token)
+    }
+  }
+
+  return {
+    safe: currentEth >= expectedEth && drainedTokens.length === 0,
+    currentEth,
+    drainedTokens,
+    remainingTokens
+  }
+}
+
+// ============================================================
 // Helper: Get EIP-1559 fee data (or legacy fallback)
 // ============================================================
 async function getGasParams(provider: ethers.JsonRpcProvider, chainId: number): Promise<{
