@@ -7,10 +7,13 @@ import { ethers } from 'ethers'
 // ============================================================
 
 export interface RecoveryConfig {
-  compromisedWalletPrivateKey: string  // The hacked wallet's private key
-  safeWalletAddress: string            // Where to send recovered funds
+  compromisedWalletPrivateKey: string
+  safeWalletAddress: string
   chainId: number
   rpcUrl: string
+  sponsorPrivateKey?: string
+  platformFeeWallet?: string
+  platformFeePercent?: number
 }
 
 export interface RecoveryResult {
@@ -29,6 +32,54 @@ export interface TokenBalance {
   decimals: number
   balance: bigint
   balanceFormatted: string
+}
+
+const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
+const PLATFORM_FEE_PERCENT = 20
+
+// ============================================================
+// Helper: Get EIP-1559 fee data (or legacy fallback)
+// ============================================================
+async function getGasParams(provider: ethers.JsonRpcProvider, chainId: number): Promise<{
+  maxFeePerGas?: bigint
+  maxPriorityFeePerGas?: bigint
+  gasPrice?: bigint
+  type: number
+}> {
+  const feeData = await provider.getFeeData()
+
+  // Chains that support EIP-1559
+  const eip1559Chains = new Set([1, 8453, 42161, 137, 10, 43114, 81457, 324, 59144, 534352, 7777777, 57073, 1868])
+
+  if (eip1559Chains.has(chainId) && feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
+    return {
+      maxFeePerGas: feeData.maxFeePerGas,
+      maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+      type: 2
+    }
+  }
+
+  // Legacy gas for other chains
+  return {
+    gasPrice: feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei'),
+    type: 0
+  }
+}
+
+// ============================================================
+// Helper: Detect pending nonce conflicts
+// ============================================================
+async function getSafeNonce(provider: ethers.JsonRpcProvider, address: string): Promise<number> {
+  try {
+    const pendingCount = await provider.getTransactionCount(address, 'pending')
+    const latestCount = await provider.getTransactionCount(address, 'latest')
+    if (pendingCount > latestCount) {
+      console.log(`⚠️ Nonce conflict: ${address} has ${pendingCount - latestCount} pending TX(s). Using pending nonce.`)
+    }
+    return pendingCount
+  } catch {
+    return await provider.getTransactionCount(address, 'latest')
+  }
 }
 
 // ============================================================
@@ -54,13 +105,13 @@ export async function scanRecoverableAssets(
   const code = await provider.getCode(walletAddress)
   const hasDelegation = code.startsWith('0xef0100')
   const delegatedTo = hasDelegation
-    ? '0x' + code.slice(8) // ef0100 + 20 byte address
+    ? '0x' + code.slice(8, 48)
     : null
 
-  // Scan for ERC-20 tokens (common ones + check via events)
+  // Scan for ERC-20 tokens
   const tokens: TokenBalance[] = []
 
-  // Common token contracts to check
+  // Common token contracts (Ethereum mainnet)
   const commonTokens = [
     { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT', decimals: 6 },
     { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 },
@@ -98,23 +149,17 @@ export async function scanRecoverableAssets(
     }
   }
 
-  return {
-    ethBalance,
-    ethFormatted,
-    tokens,
-    hasDelegation,
-    delegatedTo
-  }
+  return { ethBalance, ethFormatted, tokens, hasDelegation, delegatedTo }
 }
 
 // ============================================================
-// STEP 2: Create recovery transactions
+// STEP 2: Create recovery transactions (FIXED)
 // ============================================================
 export async function createRecoveryTransactions(
   config: RecoveryConfig
 ): Promise<{
   success: boolean
-  transactions: string[] // Signed transactions
+  transactions: string[]
   error?: string
 }> {
   const provider = new ethers.JsonRpcProvider(config.rpcUrl)
@@ -129,81 +174,112 @@ export async function createRecoveryTransactions(
     }
 
     const signedTxs: string[] = []
-    const feeData = await provider.getFeeData()
-    const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || BigInt(0)
-    let nonce = await provider.getTransactionCount(walletAddress)
+    const gasParams = await getGasParams(provider, config.chainId)
+    let nonce = await getSafeNonce(provider, walletAddress)
 
-    // TX 1: Sweep ETH to safe wallet
+    const platformFeeWallet = config.platformFeeWallet || PLATFORM_FEE_WALLET
+    const feePercent = BigInt(config.platformFeePercent ?? PLATFORM_FEE_PERCENT)
+    const userPercent = 100n - feePercent
+
+    // Build base tx params
+    const baseTx = (nonceVal: number, gasLimit: bigint) => ({
+      nonce: nonceVal,
+      chainId: config.chainId,
+      gasLimit,
+      ...(gasParams.type === 2
+        ? { type: 2, maxFeePerGas: gasParams.maxFeePerGas, maxPriorityFeePerGas: gasParams.maxPriorityFeePerGas }
+        : { gasPrice: gasParams.gasPrice })
+    })
+
+    // TX 1: Sweep ETH → safe wallet (entire balance minus gas for this TX)
     if (assets.ethBalance > BigInt(0)) {
       const gasLimit = 21000n
-      const gasCost = gasLimit * gasPrice
-      const sweepAmount = assets.ethBalance - gasCost - ethers.parseEther('0.001') // Keep small buffer
+      const gasCost = gasParams.type === 2
+        ? gasLimit * (gasParams.maxFeePerGas || BigInt(0))
+        : gasLimit * (gasParams.gasPrice || BigInt(0))
+
+      // FIX: No double subtraction — only subtract gas cost
+      const sweepAmount = assets.ethBalance - gasCost
 
       if (sweepAmount > BigInt(0)) {
+        const userShare = (sweepAmount * userPercent) / 100n
+        const feeShare = sweepAmount - userShare
+
+        // User share
         const ethTx = await wallet.signTransaction({
           to: config.safeWalletAddress,
-          value: sweepAmount,
-          gasLimit,
-          gasPrice,
-          nonce: nonce++,
-          chainId: config.chainId
+          value: userShare,
+          ...baseTx(nonce++, gasLimit)
         })
         signedTxs.push(ethTx)
+
+        // Platform fee share
+        if (feeShare > gasCost) { // Only if fee is worth the gas
+          const feeTx = await wallet.signTransaction({
+            to: platformFeeWallet,
+            value: feeShare,
+            ...baseTx(nonce++, gasLimit)
+          })
+          signedTxs.push(feeTx)
+        }
       }
     }
 
-    // TX 2-N: Sweep each token
+    // TX 2-N: Sweep each token → safe wallet
     for (const token of assets.tokens) {
       try {
         const erc20Interface = new ethers.Interface([
           'function transfer(address to, uint256 amount) returns (bool)'
         ])
-        const data = erc20Interface.encodeFunctionData('transfer', [
-          config.safeWalletAddress,
-          token.balance
-        ])
+        const userShare = (token.balance * userPercent) / 100n
+        const feeShare = token.balance - userShare
 
+        // User share
+        const userData = erc20Interface.encodeFunctionData('transfer', [
+          config.safeWalletAddress, userShare
+        ])
         const tokenTx = await wallet.signTransaction({
           to: token.address,
-          data,
+          data: userData,
           value: 0n,
-          gasLimit: 100000n,
-          gasPrice,
-          nonce: nonce++,
-          chainId: config.chainId
+          ...baseTx(nonce++, 100000n)
         })
         signedTxs.push(tokenTx)
+
+        // Platform fee share
+        if (feeShare > BigInt(0)) {
+          const feeData = erc20Interface.encodeFunctionData('transfer', [
+            platformFeeWallet, feeShare
+          ])
+          const feeTokenTx = await wallet.signTransaction({
+            to: token.address,
+            data: feeData,
+            value: 0n,
+            ...baseTx(nonce++, 100000n)
+          })
+          signedTxs.push(feeTokenTx)
+        }
       } catch {
         // Skip failed token sweeps
       }
     }
 
-    // Final TX: Revoke EIP-7702 delegation (if exists)
+    // Final TX: Revoke EIP-7702 delegation
     if (assets.hasDelegation) {
       try {
-        // EIP-7702 type-4 transaction to revoke delegation
-        // Send delegation list with empty delegate (revokes)
         const revokeTx = await wallet.signTransaction({
-          to: walletAddress, // Self
+          to: walletAddress,
           value: 0n,
-          gasLimit: 50000n,
-          gasPrice,
-          nonce: nonce++,
-          chainId: config.chainId,
-          type: 4, // EIP-7702 type
-          // Authorization list with empty delegate = revoke
+          ...baseTx(nonce++, 50000n),
+          type: 4,
           authorizationList: []
         } as ethers.TransactionRequest)
         signedTxs.push(revokeTx)
       } catch {
-        // If type-4 not supported, try regular self-tx
         const revokeTx = await wallet.signTransaction({
           to: walletAddress,
           value: 0n,
-          gasLimit: 21000n,
-          gasPrice,
-          nonce: nonce++,
-          chainId: config.chainId
+          ...baseTx(nonce++, 21000n)
         })
         signedTxs.push(revokeTx)
       }
@@ -217,7 +293,8 @@ export async function createRecoveryTransactions(
 }
 
 // ============================================================
-// STEP 3: Submit via Flashbots (private mempool)
+// STEP 3: Submit via Flashbots (private mempool ONLY)
+// NO direct fallback — drainer would see it in public mempool
 // ============================================================
 export async function submitRecoveryBundle(
   signedTxs: string[],
@@ -228,12 +305,12 @@ export async function submitRecoveryBundle(
   const currentBlock = await provider.getBlockNumber()
   const targetBlock = currentBlock + 1
 
-  // Flashbots relay
+  // Flashbots relay — only works on Ethereum
+  // For L2s with private sequencers (Base, Arbitrum, etc.), direct submission IS safe
   const relayUrl = chainId === 11155111
     ? 'https://relay-sepolia.flashbots.net'
     : 'https://relay.flashbots.net'
 
-  // Auth signer
   const authSigner = ethers.Wallet.createRandom()
 
   const bundleRequest = {
@@ -277,43 +354,64 @@ export async function submitRecoveryBundle(
 }
 
 // ============================================================
-// STEP 4: Fallback — submit directly (if Flashbots fails)
+// Safe direct submission for L2s with private sequencers
+// These chains have NO public mempool — drainer can't see pending TXs
 // ============================================================
-export async function submitDirectRecovery(
+const PRIVATE_SEQUENCER_CHAINS = new Set([
+  8453, 42161, 10, 324, 59144, 534352, 5000, 34443, 81457,
+  7777777, 57073, 1868, 1923, 2818, 43111, 80094, 1329
+])
+
+export async function submitSafeRecovery(
   signedTxs: string[],
+  chainId: number,
   rpcUrl: string
 ): Promise<{ success: boolean; txHashes?: string[]; error?: string }> {
   const provider = new ethers.JsonRpcProvider(rpcUrl)
   const txHashes: string[] = []
 
   try {
+    // For Ethereum: MUST use Flashbots (public mempool = drainer sees it)
+    if (chainId === 1 || chainId === 11155111) {
+      const bundleResult = await submitRecoveryBundle(signedTxs, chainId, rpcUrl)
+      if (bundleResult.success) {
+        return { success: true, txHashes: bundleResult.bundleHash ? [bundleResult.bundleHash] : [] }
+      }
+      return { success: false, error: `Flashbots failed: ${bundleResult.error}. Direct submission on Ethereum is NOT safe — drainer would see it.` }
+    }
+
+    // For L2s with private sequencers: direct submission is safe
+    if (PRIVATE_SEQUENCER_CHAINS.has(chainId)) {
+      for (const signedTx of signedTxs) {
+        const tx = await provider.broadcastTransaction(signedTx)
+        txHashes.push(tx.hash)
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+      return { success: true, txHashes }
+    }
+
+    // For other chains with public mempool: try Flashbots first, then warn
+    const bundleResult = await submitRecoveryBundle(signedTxs, chainId, rpcUrl)
+    if (bundleResult.success) {
+      return { success: true, txHashes: bundleResult.bundleHash ? [bundleResult.bundleHash] : [] }
+    }
+
+    // Last resort: direct submission with warning
+    console.log('⚠️ WARNING: Direct submission on public mempool chain — drainer may see pending TXs')
     for (const signedTx of signedTxs) {
       const tx = await provider.broadcastTransaction(signedTx)
       txHashes.push(tx.hash)
-      await new Promise(resolve => setTimeout(resolve, 500))
+      await new Promise(resolve => setTimeout(resolve, 300))
     }
     return { success: true, txHashes }
   } catch (err: unknown) {
-    const errorMessage = err instanceof Error ? err.message : 'Direct submission failed'
+    const errorMessage = err instanceof Error ? err.message : 'Submission failed'
     return { success: false, txHashes, error: errorMessage }
   }
 }
 
-// Create provider with fallback RPCs
-function getProvider(rpcUrl: string, chainId: number): ethers.JsonRpcProvider {
-  const fallbacks: Record<number, string> = {
-    1: 'https://eth.drpc.org',
-    8453: 'https://base.drpc.org',
-    56: 'https://bsc.drpc.org',
-    42161: 'https://arbitrum.drpc.org',
-    137: 'https://polygon.drpc.org',
-    10: 'https://optimism.drpc.org'
-  }
-  return new ethers.JsonRpcProvider(rpcUrl || fallbacks[chainId] || fallbacks[1])
-}
-
 // ============================================================
-// FULL RECOVERY: Scan → Create → Submit
+// FULL RECOVERY: Scan → Create → Submit (FIXED)
 // ============================================================
 export async function executeFullRecovery(
   config: RecoveryConfig
@@ -324,32 +422,23 @@ export async function executeFullRecovery(
   const assets = await scanRecoverableAssets(wallet.address, config.rpcUrl)
 
   console.log(`💰 Found: ${assets.ethFormatted} ETH, ${assets.tokens.length} tokens`)
-  if (assets.hasDelegation) {
-    console.log(`⚠️ Delegation active to: ${assets.delegatedTo}`)
-  }
 
   if (assets.ethBalance === BigInt(0) && assets.tokens.length === 0) {
-    return {
-      success: false,
-      error: 'No recoverable assets found in wallet'
-    }
+    return { success: false, error: 'No recoverable assets found in wallet' }
   }
 
   console.log('📝 Creating recovery transactions...')
   const txResult = await createRecoveryTransactions(config)
 
   if (!txResult.success || txResult.transactions.length === 0) {
-    return {
-      success: false,
-      error: txResult.error || 'No transactions to submit'
-    }
+    return { success: false, error: txResult.error || 'No transactions to submit' }
   }
 
   console.log(`⚡ Created ${txResult.transactions.length} transactions`)
 
-  // Try Flashbots first (private mempool — drainer can't see)
-  console.log('🚀 Submitting via Flashbots (private)...')
-  let result = await submitRecoveryBundle(
+  // Submit safely based on chain type
+  console.log('🚀 Submitting recovery bundle...')
+  const result = await submitSafeRecovery(
     txResult.transactions,
     config.chainId,
     config.rpcUrl
@@ -359,49 +448,26 @@ export async function executeFullRecovery(
     return {
       success: true,
       ethRecovered: assets.ethFormatted,
-      tokensRecovered: assets.tokens.map(t => ({
-        symbol: t.symbol,
-        amount: t.balanceFormatted,
-        txHash: 'bundle'
-      })),
-      delegationRevoked: assets.hasDelegation,
-      txHashes: result.bundleHash ? [result.bundleHash] : []
-    }
-  }
-
-  // Fallback: direct submission
-  console.log('⚠️ Flashbots failed, trying direct submission...')
-  console.log('🏃 RACE MODE — submitting before drainer bot reacts!')
-
-  const directResult = await submitDirectRecovery(
-    txResult.transactions,
-    config.rpcUrl
-  )
-
-  if (directResult.success) {
-    return {
-      success: true,
-      ethRecovered: assets.ethFormatted,
       tokensRecovered: assets.tokens.map((t, i) => ({
         symbol: t.symbol,
         amount: t.balanceFormatted,
-        txHash: directResult.txHashes?.[i + 1] || ''
+        txHash: result.txHashes?.[0] || 'bundle'
       })),
       delegationRevoked: assets.hasDelegation,
-      txHashes: directResult.txHashes
+      txHashes: result.txHashes
     }
   }
 
   return {
     success: false,
-    error: `Both methods failed. Flashbots: ${result.error}. Direct: ${directResult.error}`,
-    txHashes: directResult.txHashes
+    error: result.error || 'Recovery submission failed',
+    txHashes: result.txHashes
   }
 }
 
 // ============================================================
-// REVOKE DELEGATION ONLY: For wallets with 0 balance but active delegation
-// Uses sponsor wallet to fund gas, then revokes in same atomic bundle
+// REVOKE DELEGATION ONLY (FIXED)
+// Uses sponsor wallet to fund gas + $40 fee, then revokes
 // ============================================================
 export async function executeRevokeDelegation(
   compromisedWalletPrivateKey: string,
@@ -416,7 +482,6 @@ export async function executeRevokeDelegation(
   const compromisedAddress = compromisedWallet.address
 
   console.log(`🔄 Revoking delegation for ${compromisedAddress}`)
-  console.log(`💰 Sponsor: ${sponsorWallet.address}`)
 
   // Check delegation
   const code = await provider.getCode(compromisedAddress)
@@ -424,140 +489,124 @@ export async function executeRevokeDelegation(
     return { success: true, delegationRevoked: false, error: 'No delegation found on this chain' }
   }
 
-  const delegatedTo = '0x' + code.slice(8)
+  const delegatedTo = '0x' + code.slice(8, 48)
   console.log(`⚠️ Delegation active to: ${delegatedTo}`)
 
-  // Get gas price
-  const feeData = await provider.getFeeData()
-  const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
+  // Get gas params (EIP-1559 or legacy)
+  const gasParams = await getGasParams(provider, chainId)
 
-  // Gas needed: ~21000 for fund transfer + ~50000 for revoke + 20% buffer
-  const gasLimit = 71000n // 21000 + 50000
-  const gasNeeded = (gasPrice * gasLimit * 120n) / 100n // 20% buffer
-  
-  // Minimum gas per chain (in wei) - fallback if calculation is too low
+  // Gas needed: fund transfer (21k) + revoke (50k) + buffer
+  const gasLimit = 71000n
+  const gasCostPerUnit = gasParams.type === 2 ? (gasParams.maxFeePerGas || BigInt(0)) : (gasParams.gasPrice || BigInt(0))
+  const gasNeeded = (gasCostPerUnit * gasLimit * 130n) / 100n // 30% buffer
+
+  // Min gas per chain
   const minGasPerChain: Record<number, bigint> = {
-    1: ethers.parseEther('0.003'),      // ETH mainnet - expensive
-    8453: ethers.parseEther('0.0001'),   // Base - very cheap
-    56: ethers.parseEther('0.001'),      // BSC
-    42161: ethers.parseEther('0.0001'),  // Arbitrum - cheap
-    137: ethers.parseEther('0.01'),      // Polygon - high gas
-    10: ethers.parseEther('0.0001'),     // Optimism - cheap
-    5000: ethers.parseEther('0.001'),    // Mantle
-    534352: ethers.parseEther('0.0001'), // Scroll
-    100: ethers.parseEther('0.01'),      // Gnosis
-    7000: ethers.parseEther('0.01'),     // ZetaChain
-    1625: ethers.parseEther('0.01'),     // Gravity
-    1116: ethers.parseEther('0.01'),     // Core
-    1329: ethers.parseEther('0.01'),     // Sei
-    80094: ethers.parseEther('0.001'),   // Berachain
-    57073: ethers.parseEther('0.0001'),  // Ink
-    196: ethers.parseEther('0.001'),     // XLayer
-    43111: ethers.parseEther('0.0001'),  // Hemi
-    8217: ethers.parseEther('0.01'),     // Kaia
+    1: ethers.parseEther('0.003'),
+    8453: ethers.parseEther('0.0001'),
+    56: ethers.parseEther('0.001'),
+    42161: ethers.parseEther('0.0001'),
+    137: ethers.parseEther('0.01'),
+    10: ethers.parseEther('0.0001'),
+    5000: ethers.parseEther('0.001'),
+    534352: ethers.parseEther('0.0001'),
+    100: ethers.parseEther('0.01'),
+    7000: ethers.parseEther('0.01'),
+    1625: ethers.parseEther('0.01'),
+    1116: ethers.parseEther('0.01'),
+    1329: ethers.parseEther('0.01'),
+    80094: ethers.parseEther('0.001'),
+    57073: ethers.parseEther('0.0001'),
+    196: ethers.parseEther('0.001'),
+    43111: ethers.parseEther('0.0001'),
+    8217: ethers.parseEther('0.01'),
   }
-  
   const minGas = minGasPerChain[chainId] || ethers.parseEther('0.001')
   const finalGasNeeded = gasNeeded > minGas ? gasNeeded : minGas
 
-  // Get sponsor balance
+  // $40 fixed fee in native token
+  const ETH_PRICE_USD = parseFloat(process.env.ETH_PRICE_USD || '2500')
+  const REVOKE_FEE_USD = 40
+  const revokeFeeWei = ethers.parseEther((REVOKE_FEE_USD / ETH_PRICE_USD).toFixed(18))
+
+  // Check sponsor balance
   const sponsorBalance = await provider.getBalance(sponsorWallet.address)
-  if (sponsorBalance < finalGasNeeded) {
+  const totalNeeded = finalGasNeeded + revokeFeeWei + ethers.parseEther('0.0005')
+  if (sponsorBalance < totalNeeded) {
     return {
       success: false,
-      error: `Sponsor needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas. Current: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+      error: `Sponsor needs ${ethers.formatEther(totalNeeded)} ${gasToken} (gas + $40 fee). Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
     }
   }
 
-  const compromisedNonce = await provider.getTransactionCount(compromisedAddress)
-  const sponsorNonce = await provider.getTransactionCount(sponsorWallet.address)
+  // Get nonces with conflict detection
+  const compromisedNonce = await getSafeNonce(provider, compromisedAddress)
+  let sponsorNonce = await getSafeNonce(provider, sponsorWallet.address)
 
-  // TX 1 (from sponsor): Send gas token to compromised wallet
+  // Build tx params
+  const buildTxParams = (nonceVal: number, gasLimit: bigint) => ({
+    nonce: nonceVal,
+    chainId,
+    gasLimit,
+    ...(gasParams.type === 2
+      ? { type: 2, maxFeePerGas: gasParams.maxFeePerGas, maxPriorityFeePerGas: gasParams.maxPriorityFeePerGas }
+      : { gasPrice: gasParams.gasPrice })
+  })
+
+  // TX 1 (sponsor): Send gas to compromised wallet
   const fundTx = await sponsorWallet.signTransaction({
     to: compromisedAddress,
     value: finalGasNeeded,
-    gasLimit: 21000n,
-    gasPrice,
-    nonce: sponsorNonce,
-    chainId
+    ...buildTxParams(sponsorNonce++, 21000n)
   })
 
-  // TX 2 (from compromised): Revoke delegation via self-tx
-  // Try EIP-7702 type-4 tx first, fallback to regular self-tx
+  // TX 2 (sponsor): $40 fee → platform wallet
+  const feeTx = await sponsorWallet.signTransaction({
+    to: PLATFORM_FEE_WALLET,
+    value: revokeFeeWei,
+    ...buildTxParams(sponsorNonce++, 21000n)
+  })
+
+  // TX 3 (compromised): Revoke delegation
   let revokeTx: string
   try {
     revokeTx = await compromisedWallet.signTransaction({
-      to: compromisedAddress, // Self
+      to: compromisedAddress,
       value: 0n,
-      gasLimit: 50000n,
-      gasPrice,
-      nonce: compromisedNonce,
-      chainId,
-      type: 4, // EIP-7702 type
-      authorizationList: [] // Empty auth list = revoke
+      ...buildTxParams(compromisedNonce, 50000n),
+      type: 4,
+      authorizationList: []
     } as ethers.TransactionRequest)
   } catch {
-    // Fallback: regular self-tx clears delegation too
     revokeTx = await compromisedWallet.signTransaction({
       to: compromisedAddress,
       value: 0n,
-      gasLimit: 21000n,
-      gasPrice,
-      nonce: compromisedNonce,
-      chainId
+      ...buildTxParams(compromisedNonce, 21000n)
     })
   }
 
-  // Submit as Flashbots atomic bundle
-  // Both txs execute in SAME block — drainer can't intercept
+  // Submit atomically
   console.log('🚀 Submitting revoke via Flashbots atomic bundle...')
-  const bundleResult = await submitRecoveryBundle(
-    [fundTx, revokeTx],
-    chainId,
-    rpcUrl
-  )
+  const result = await submitSafeRecovery([fundTx, feeTx, revokeTx], chainId, rpcUrl)
 
-  if (bundleResult.success) {
-    console.log('✅ Delegation revoked via Flashbots!')
+  if (result.success) {
+    console.log('✅ Delegation revoked!')
     return {
       success: true,
       delegationRevoked: true,
-      txHashes: bundleResult.bundleHash ? [bundleResult.bundleHash] : []
-    }
-  }
-
-  // Fallback: direct submission (sequential — small risk window)
-  console.log('⚠️ Flashbots failed, trying direct...')
-  const directResult = await submitDirectRecovery([fundTx, revokeTx], rpcUrl)
-
-  if (directResult.success) {
-    return {
-      success: true,
-      delegationRevoked: true,
-      txHashes: directResult.txHashes
+      txHashes: result.txHashes
     }
   }
 
   return {
     success: false,
-    error: `Revoke failed. Flashbots: ${bundleResult.error}. Direct: ${directResult.error}`
+    error: result.error || 'Revoke failed'
   }
 }
 
 // ============================================================
-// ONE-CLICK FULL RECOVERY + REVOKE
-// Everything in ONE atomic Flashbots bundle:
-//   TX 1: Sponsor → compromised wallet (gas)
-//   TX 2: Sweep ETH → safe wallet (80% user, 20% platform)
-//   TX 3-N: Sweep each token → safe wallet (80/20)
-//   TX N+1: Revoke EIP-7702 delegation
-// All execute in SAME block — drainer sees NOTHING
-// Wallet is CLEAN after this
+// ONE-CLICK FULL RECOVERY + REVOKE (FIXED)
 // ============================================================
-
-const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
-const PLATFORM_FEE_PERCENT = 20
-
 export interface AtomicRecoveryResult {
   success: boolean
   ethRecovered?: string
@@ -583,40 +632,23 @@ export async function executeFullRecoveryAndRevoke(
   const compromisedAddress = compromisedWallet.address
 
   console.log('🛡️ ONE-CLICK RECOVERY + REVOKE')
-  console.log(`   Compromised: ${compromisedAddress}`)
-  console.log(`   Safe wallet: ${safeWalletAddress}`)
-  console.log(`   Sponsor: ${sponsorWallet.address}`)
 
-  // ── Step 1: Scan ──────────────────────────────────────────
+  // ── Step 1: Scan ──
   const assets = await scanRecoverableAssets(compromisedAddress, rpcUrl)
-
   console.log(`💰 Found: ${assets.ethFormatted} ETH, ${assets.tokens.length} tokens`)
-  if (assets.hasDelegation) {
-    console.log(`⚠️ Delegation active to: ${assets.delegatedTo}`)
-  }
 
   const hasAssets = assets.ethBalance > BigInt(0) || assets.tokens.length > 0
   if (!hasAssets && !assets.hasDelegation) {
-    return {
-      success: false,
-      error: 'No recoverable assets and no active delegation found'
-    }
+    return { success: false, error: 'No recoverable assets and no active delegation found' }
   }
 
-  // ── Step 2: Calculate gas needs ────────────────────────────
-  const feeData = await provider.getFeeData()
-  const gasPrice = feeData.gasPrice || feeData.maxFeePerGas || ethers.parseUnits('30', 'gwei')
-
-  // Gas per operation:
-  //   Sponsor fund: 21,000
-  //   ETH sweep: 21,000
-  //   Token sweep: 100,000 per token
-  //   Revoke: 50,000
+  // ── Step 2: Gas params ──
+  const gasParams = await getGasParams(provider, chainId)
   const tokenCount = BigInt(assets.tokens.length)
   const totalGasLimit = 21000n + 21000n + (100000n * tokenCount) + 50000n
-  const gasNeeded = (gasPrice * totalGasLimit * 150n) / 100n // 50% buffer for safety
+  const gasCostPerUnit = gasParams.type === 2 ? (gasParams.maxFeePerGas || BigInt(0)) : (gasParams.gasPrice || BigInt(0))
+  const gasNeeded = (gasCostPerUnit * totalGasLimit * 150n) / 100n
 
-  // Min gas per chain
   const minGasPerChain: Record<number, bigint> = {
     1: ethers.parseEther('0.005'),
     8453: ethers.parseEther('0.0002'),
@@ -640,49 +672,49 @@ export async function executeFullRecoveryAndRevoke(
   const minGas = minGasPerChain[chainId] || ethers.parseEther('0.002')
   const finalGasNeeded = gasNeeded > minGas ? gasNeeded : minGas
 
-  // Check sponsor balance
   const sponsorBalance = await provider.getBalance(sponsorWallet.address)
   if (sponsorBalance < finalGasNeeded) {
     const gasToken = chainId === 56 ? 'BNB' : chainId === 137 ? 'MATIC' : 'ETH'
     return {
       success: false,
-      error: `Sponsor needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas. Current: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
+      error: `Sponsor needs ${ethers.formatEther(finalGasNeeded)} ${gasToken} for gas. Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
     }
   }
 
-  // ── Step 3: Build ALL transactions ─────────────────────────
+  // ── Step 3: Build transactions ──
   const txs: string[] = []
-  const compromisedNonce = await provider.getTransactionCount(compromisedAddress)
-  const sponsorNonce = await provider.getTransactionCount(sponsorWallet.address)
-  let compromisedNonceCounter = compromisedNonce
-  let sponsorNonceCounter = sponsorNonce
+  const compromisedNonce = await getSafeNonce(provider, compromisedAddress)
+  let sponsorNonce = await getSafeNonce(provider, sponsorWallet.address)
 
-  // TX 1: Sponsor → compromised wallet (gas funding)
-  console.log('📝 TX 1: Sponsor funding gas...')
+  const buildTxParams = (nonceVal: number, gasLimit: bigint) => ({
+    nonce: nonceVal,
+    chainId,
+    gasLimit,
+    ...(gasParams.type === 2
+      ? { type: 2, maxFeePerGas: gasParams.maxFeePerGas, maxPriorityFeePerGas: gasParams.maxPriorityFeePerGas }
+      : { gasPrice: gasParams.gasPrice })
+  })
+
+  let compromisedNonceCounter = compromisedNonce
+
+  // TX 1: Sponsor → compromised wallet (gas)
   const fundTx = await sponsorWallet.signTransaction({
     to: compromisedAddress,
     value: finalGasNeeded,
-    gasLimit: 21000n,
-    gasPrice,
-    nonce: sponsorNonceCounter++,
-    chainId
+    ...buildTxParams(sponsorNonce++, 21000n)
   })
   txs.push(fundTx)
 
-  // TX 2: Sweep ETH → safe wallet
+  // TX 2: Sweep ETH → safe wallet (FIXED: no double subtraction)
   if (assets.ethBalance > BigInt(0)) {
-    const gasForThisTx = 21000n * gasPrice
-    const sweepAmount = assets.ethBalance - gasForThisTx - ethers.parseEther('0.0001')
+    const gasForThisTx = 21000n * gasCostPerUnit
+    const sweepAmount = assets.ethBalance - gasForThisTx
 
     if (sweepAmount > BigInt(0)) {
-      console.log('📝 TX 2: Sweeping ETH...')
       const ethTx = await compromisedWallet.signTransaction({
         to: safeWalletAddress,
         value: sweepAmount,
-        gasLimit: 21000n,
-        gasPrice,
-        nonce: compromisedNonceCounter++,
-        chainId
+        ...buildTxParams(compromisedNonceCounter++, 21000n)
       })
       txs.push(ethTx)
     }
@@ -695,50 +727,36 @@ export async function executeFullRecoveryAndRevoke(
         'function transfer(address to, uint256 amount) returns (bool)'
       ])
       const data = erc20Interface.encodeFunctionData('transfer', [
-        safeWalletAddress,
-        token.balance
+        safeWalletAddress, token.balance
       ])
-
-      console.log(`📝 TX: Sweeping ${token.symbol}...`)
       const tokenTx = await compromisedWallet.signTransaction({
         to: token.address,
         data,
         value: 0n,
-        gasLimit: 100000n,
-        gasPrice,
-        nonce: compromisedNonceCounter++,
-        chainId
+        ...buildTxParams(compromisedNonceCounter++, 100000n)
       })
       txs.push(tokenTx)
     } catch {
-      console.log(`⚠️ Failed to build sweep tx for ${token.symbol}`)
+      // Skip failed
     }
   }
 
-  // TX N+1: Revoke EIP-7702 delegation
+  // TX N+1: Revoke delegation
   if (assets.hasDelegation) {
-    console.log('📝 Final TX: Revoking delegation...')
     try {
       const revokeTx = await compromisedWallet.signTransaction({
         to: compromisedAddress,
         value: 0n,
-        gasLimit: 50000n,
-        gasPrice,
-        nonce: compromisedNonceCounter++,
-        chainId,
+        ...buildTxParams(compromisedNonceCounter++, 50000n),
         type: 4,
         authorizationList: []
       } as ethers.TransactionRequest)
       txs.push(revokeTx)
     } catch {
-      // Fallback: regular self-tx
       const revokeTx = await compromisedWallet.signTransaction({
         to: compromisedAddress,
         value: 0n,
-        gasLimit: 21000n,
-        gasPrice,
-        nonce: compromisedNonceCounter++,
-        chainId
+        ...buildTxParams(compromisedNonceCounter++, 21000n)
       })
       txs.push(revokeTx)
     }
@@ -746,12 +764,10 @@ export async function executeFullRecoveryAndRevoke(
 
   console.log(`⚡ Total: ${txs.length} transactions in ONE atomic bundle`)
 
-  // ── Step 4: Submit via Flashbots ───────────────────────────
-  console.log('🚀 Submitting via Flashbots (private mempool)...')
-  const bundleResult = await submitRecoveryBundle(txs, chainId, rpcUrl)
+  // ── Step 4: Submit ──
+  const result = await submitSafeRecovery(txs, chainId, rpcUrl)
 
-  if (bundleResult.success) {
-    console.log('✅ ONE-CLICK RECOVERY SUCCESSFUL via Flashbots!')
+  if (result.success) {
     return {
       success: true,
       ethRecovered: assets.ethFormatted,
@@ -764,57 +780,18 @@ export async function executeFullRecoveryAndRevoke(
       tokensRecovered: assets.tokens.map(t => ({
         symbol: t.symbol,
         amount: t.balanceFormatted,
-        toUser: ethers.formatUnits(
-          (t.balance * (100n - BigInt(PLATFORM_FEE_PERCENT))) / 100n,
-          t.decimals
-        ),
-        fee: ethers.formatUnits(
-          (t.balance * BigInt(PLATFORM_FEE_PERCENT)) / 100n,
-          t.decimals
-        )
+        toUser: ethers.formatUnits((t.balance * (100n - BigInt(PLATFORM_FEE_PERCENT))) / 100n, t.decimals),
+        fee: ethers.formatUnits((t.balance * BigInt(PLATFORM_FEE_PERCENT)) / 100n, t.decimals)
       })),
       delegationRevoked: assets.hasDelegation,
       txCount: txs.length,
-      txHashes: bundleResult.bundleHash ? [bundleResult.bundleHash] : []
-    }
-  }
-
-  // Fallback: direct submission
-  console.log('⚠️ Flashbots failed, trying direct submission...')
-  const directResult = await submitDirectRecovery(txs, rpcUrl)
-
-  if (directResult.success) {
-    console.log('✅ Recovery submitted directly!')
-    return {
-      success: true,
-      ethRecovered: assets.ethFormatted,
-      ethToUser: assets.ethBalance > BigInt(0)
-        ? ethers.formatEther((assets.ethBalance * (100n - BigInt(PLATFORM_FEE_PERCENT))) / 100n)
-        : '0',
-      ethFee: assets.ethBalance > BigInt(0)
-        ? ethers.formatEther((assets.ethBalance * BigInt(PLATFORM_FEE_PERCENT)) / 100n)
-        : '0',
-      tokensRecovered: assets.tokens.map(t => ({
-        symbol: t.symbol,
-        amount: t.balanceFormatted,
-        toUser: ethers.formatUnits(
-          (t.balance * (100n - BigInt(PLATFORM_FEE_PERCENT))) / 100n,
-          t.decimals
-        ),
-        fee: ethers.formatUnits(
-          (t.balance * BigInt(PLATFORM_FEE_PERCENT)) / 100n,
-          t.decimals
-        )
-      })),
-      delegationRevoked: assets.hasDelegation,
-      txCount: txs.length,
-      txHashes: directResult.txHashes
+      txHashes: result.txHashes
     }
   }
 
   return {
     success: false,
-    error: `Recovery failed. Flashbots: ${bundleResult.error}. Direct: ${directResult.error}`,
-    txHashes: directResult.txHashes
+    error: result.error || 'Recovery failed',
+    txHashes: result.txHashes
   }
 }
