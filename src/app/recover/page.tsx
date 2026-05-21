@@ -90,7 +90,17 @@ function RecoverContent() {
   const validateSafeAddress = (addr: string) => {
     if (!addr) { setSafeAddressError(''); return }
     try {
-      ethers.getAddress(addr)
+      const checksumAddr = ethers.getAddress(addr)
+      // CRITICAL: Prevent user from sending funds back to compromised wallet
+      if (privateKey) {
+        try {
+          const compromisedAddr = new ethers.Wallet(privateKey).address
+          if (checksumAddr.toLowerCase() === compromisedAddr.toLowerCase()) {
+            setSafeAddressError('⚠️ This is the COMPROMISED wallet! Use a DIFFERENT wallet address.')
+            return
+          }
+        } catch { /* privateKey invalid, skip check */ }
+      }
       setSafeAddressError('')
     } catch {
       setSafeAddressError('Invalid Ethereum address format')
@@ -225,8 +235,15 @@ function RecoverContent() {
         setStep('done-revoke')
         setRevokeDone(true)
       } else {
-        setStep('error')
-        setError(data.error || 'Some revokes failed')
+        // Show per-chain details even when all fail
+        if (data.revokedChains && data.revokedChains.length > 0) {
+          setRevokeResults(data.revokedChains)
+          setStep('done-revoke')
+          setRevokeDone(true)
+        } else {
+          setStep('error')
+          setError(data.error || 'Some revokes failed')
+        }
       }
     } catch {
       setStep('error')
@@ -298,9 +315,8 @@ function RecoverContent() {
               <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
                 <li>Scan ALL chains for ETH + tokens</li>
                 <li>Select which chain to recover from</li>
-                <li>Permit-based sweep (no gas to compromised wallet)</li>
-                <li>80% → Safe Wallet | 20% → Platform Fee</li>
                 <li>Permit-based sweep — drainer sees NOTHING (L2s + Flashbots)</li>
+                <li>80% → Safe Wallet | 20% → Platform Fee</li>
               </ol>
             </div>
             <div>
@@ -746,7 +762,12 @@ function RecoverContent() {
           <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl mt-6">
             <h3 className="text-green-400 font-bold text-lg mb-2">✅ Delegations Revoked!</h3>
             <p className="text-white/60 text-sm mb-4">
-              {revokeResults.filter(r => r.success).length} of {revokeResults.length} delegations revoked. Wallet is CLEAN.
+              {revokeResults.filter(r => r.success).length} of {revokeResults.length} delegations revoked.{' '}
+              {revokeResults.every(r => r.success)
+                ? 'Wallet is CLEAN — drainer lost all access.'
+                : revokeResults.some(r => r.success)
+                ? 'Wallet is PARTIALLY clean — retry failed chains below.'
+                : 'All revokes failed — check errors below.'}
             </p>
             <div className="space-y-2">
               {revokeResults.map((r, i) => (
@@ -773,6 +794,16 @@ function RecoverContent() {
                 </div>
               ))}
             </div>
+            {/* Retry button for partial failures */}
+            {revokeResults.some(r => !r.success) && (
+              <button
+                onClick={executeRevokeAll}
+                disabled={!sponsorKey || step.startsWith('executing')}
+                className="w-full mt-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
+              >
+                🔄 Retry Failed Chains ({revokeResults.filter(r => !r.success).length})
+              </button>
+            )}
           </div>
         )}
 

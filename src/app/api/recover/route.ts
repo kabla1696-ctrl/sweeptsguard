@@ -278,6 +278,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Invalid safe wallet address format' }, { status: 400 })
       }
 
+      // CRITICAL: Prevent sending funds back to compromised wallet
+      const compromisedAddr = new ethers.Wallet(privateKey).address
+      if (ethers.getAddress(safeAddress).toLowerCase() === compromisedAddr.toLowerCase()) {
+        return NextResponse.json({ error: 'Safe wallet CANNOT be the compromised wallet — funds would go back to the drainer!' }, { status: 400 })
+      }
+
       // Must provide sponsor key for gas
       if (!sponsorPrivateKey) {
         return NextResponse.json({ error: 'Sponsor wallet private key required — pays gas for recovery' }, { status: 400 })
@@ -497,6 +503,12 @@ export async function POST(request: NextRequest) {
         ethers.getAddress(safeAddress)
       } catch {
         return NextResponse.json({ error: 'Invalid safe wallet address format' }, { status: 400 })
+      }
+
+      // CRITICAL: Prevent sending funds back to compromised wallet
+      const compromisedAddrRR = new ethers.Wallet(privateKey).address
+      if (ethers.getAddress(safeAddress).toLowerCase() === compromisedAddrRR.toLowerCase()) {
+        return NextResponse.json({ error: 'Safe wallet CANNOT be the compromised wallet — funds would go back to the drainer!' }, { status: 400 })
       }
 
       try {

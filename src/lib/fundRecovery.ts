@@ -483,9 +483,10 @@ export async function executePermitSweep(
     let ethRecovered = '0'
     let nonPermitResults: { symbol: string; amount: string; toUser: string; fee: string }[] = []
 
+    let standardResult: AtomicRecoveryResult | undefined
     if (assets.ethBalance > BigInt(0) || nonPermitTokens.length > 0) {
       console.log('💰 ETH/non-permit tokens found — using standard recovery for those...')
-      const standardResult = await executeFullRecoveryAndRevoke(
+      standardResult = await executeFullRecoveryAndRevoke(
         compromisedPrivateKey,
         sponsorPrivateKey,
         safeWalletAddress,
@@ -512,7 +513,10 @@ export async function executePermitSweep(
       ],
       delegationRevoked: false,
       txCount: txs.length,
-      txHashes: result.txHashes
+      txHashes: [
+        ...(result.txHashes || []),
+        ...(standardResult?.txHashes || [])
+      ]
     }
   }
 
