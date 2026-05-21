@@ -317,7 +317,18 @@ async function handleSignMessage(params, wallets) {
   }
 
   const { ethers } = await importEthers()
-  const message = params[1] || params[0]
+  // personal_sign: params can be [message, address] or [address, message]
+  // Detect which is the address and use the other as message
+  let message = params[0]
+  try {
+    const { ethers: e } = await importEthers()
+    // If params[0] is a valid address, message is params[1]
+    e.getAddress(params[0])
+    message = params[1]
+  } catch {
+    // params[0] is not an address, use it as message
+    message = params[0]
+  }
 
   // Decode message for display
   let displayMessage = message
@@ -337,7 +348,14 @@ async function handleSignMessage(params, wallets) {
   }
 
   const wallet = new ethers.Wallet(wallets.hackedKey)
-  return await wallet.signMessage(ethers.getBytes(message))
+  // BUG #19 FIX: getBytes can crash on non-hex messages
+  let messageBytes
+  try {
+    messageBytes = ethers.getBytes(message)
+  } catch {
+    messageBytes = ethers.toUtf8Bytes(message)
+  }
+  return await wallet.signMessage(messageBytes)
 }
 
 // ═══════════════════════════════════════════════════════
@@ -352,15 +370,30 @@ async function handleSendTransaction(txParams, tabId) {
     throw new Error('No wallet configured. Open SweepGuard extension.')
   }
 
+  // BUG #18 FIX: Validate txParams.to
+  if (!txParams.to) {
+    throw new Error('Transaction missing "to" address')
+  }
+  try {
+    const { ethers: e } = await importEthers()
+    e.getAddress(txParams.to)
+  } catch {
+    throw new Error(`Invalid "to" address: ${txParams.to}`)
+  }
+
   // BUG #11 FIX: Prevent duplicate submissions
   if (activeRescue) {
     throw new Error('A rescue is already in progress. Please wait for it to complete.')
   }
 
-  // Show confirmation popup with TX details
+  // BUG #16 FIX: Show full TX details in confirmation
+  const { chainId: confirmChainId } = await chrome.storage.local.get('chainId')
+  const confirmChainId2 = confirmChainId || 8453
+  const chainName = CHAIN_NAMES[confirmChainId2] || `Chain ${confirmChainId2}`
+
   const confirmed = await showConfirmationPopup({
     title: 'Confirm Transaction',
-    message: `To: ${txParams.to}\nData: ${(txParams.data || '0x').slice(0, 66)}...\n\nThis will execute an EIP-7702 rescue.\nSponsor wallet pays gas.`,
+    message: `Chain: ${chainName}\nTo: ${txParams.to}\nValue: ${txParams.value || '0x0'}\n\n🛡️ EIP-7702 Rescue:\n1. Compromised wallet delegates to SweepGuardRescuer\n2. Contract claims airdrop\n3. 80% → safe wallet, 20% → platform fee\n\n⚠️ Only confirm if you trust this website!`,
   })
   if (!confirmed) {
     throw new Error('User rejected transaction')
@@ -404,7 +437,8 @@ async function showConfirmationPopup({ title, message }) {
   // In production, this should open a dedicated popup window
   return new Promise((resolve) => {
     // Store pending confirmation
-    const confirmId = 'confirm_' + Date.now()
+    // BUG #17 FIX: Use crypto.randomUUID() to prevent collision
+    const confirmId = 'confirm_' + crypto.randomUUID()
     chrome.storage.local.set({
       [confirmId]: { title, message, resolve: true }
     })
