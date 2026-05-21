@@ -147,6 +147,7 @@ export class TransactionTracker {
     if (!chain) return []
 
     const transfers: TrackedTransfer[] = []
+    const addrLower = address.toLowerCase()
 
     try {
       const provider = new ethers.JsonRpcProvider(chain.rpc)
@@ -155,11 +156,11 @@ export class TransactionTracker {
       const latestBlock = await this.withTimeout(provider.getBlockNumber(), 8000).catch(() => 0)
       if (!latestBlock) return []
 
-      // Scan last 10000 blocks (covers weeks on most chains)
-      const startBlock = Math.max(0, latestBlock - 10000)
+      // Scan last 5000 blocks (~17 hours on ETH, varies by chain)
+      const startBlock = Math.max(0, latestBlock - 5000)
 
-      // Native outflows
-      const nativeLogs = await this.withTimeout(provider.getLogs({
+      // ── Strategy 1: ERC-20 Token Transfer events (from address) ──
+      const tokenLogs = await this.withTimeout(provider.getLogs({
         fromBlock: startBlock,
         toBlock: latestBlock,
         topics: [
@@ -168,12 +169,54 @@ export class TransactionTracker {
         ]
       }), 10000).catch(() => [])
 
-      // Batch fetch block timestamps (max 20)
+      // ── Strategy 2: Native ETH outflows — scan recent blocks for txs from address ──
+      // getLogs doesn't work for native ETH (no Transfer event)
+      // Instead, scan the last 200 blocks by fetching block headers with tx hashes
+      const nativeScanEnd = latestBlock
+      const nativeScanStart = Math.max(0, nativeScanEnd - 200)
+      const blockPromises: Promise<void>[] = []
+
+      for (let bn = nativeScanStart; bn <= nativeScanEnd; bn++) {
+        blockPromises.push(
+          this.withTimeout(provider.getBlock(bn, true), 5000).then(block => {
+            if (!block || !block.prefetchedTransactions) return
+            for (const tx of block.prefetchedTransactions) {
+              if (tx.from?.toLowerCase() !== addrLower) continue
+              if (!tx.to || tx.value === 0n) continue // Skip contract creation and zero-value
+
+              const exchangeInfo = isExchangeWallet(tx.to)
+              const drainerInfo = isKnownDrainer(tx.to)
+
+              transfers.push({
+                hash: tx.hash,
+                from: address,
+                to: tx.to,
+                value: ethers.formatEther(tx.value),
+                asset: chain.nativeCurrency,
+                chainId,
+                chainName: chain.name,
+                timestamp: block.timestamp * 1000,
+                isExchangeDeposit: !!exchangeInfo,
+                exchangeName: exchangeInfo?.name,
+                isDrainerTransfer: !!drainerInfo,
+                drainerName: drainerInfo?.name,
+                blockNumber: bn
+              })
+            }
+          }).catch(() => {})
+        )
+      }
+
+      // Run native scan and token log processing in parallel
+      await Promise.all(blockPromises)
+
+      // ── Process ERC-20 token transfer logs ──
+      // Batch fetch block timestamps
       const uniqueBlocks = new Set<number>()
-      for (const log of nativeLogs) uniqueBlocks.add(log.blockNumber)
+      for (const log of tokenLogs) uniqueBlocks.add(log.blockNumber)
       const blockTimestamps = new Map<number, number>()
       await Promise.all(
-        [...uniqueBlocks].slice(0, 20).map(async (bn) => {
+        [...uniqueBlocks].slice(0, 50).map(async (bn) => {
           try {
             const block = await this.withTimeout(provider.getBlock(bn), 5000)
             if (block) blockTimestamps.set(bn, block.timestamp * 1000)
@@ -181,9 +224,36 @@ export class TransactionTracker {
         })
       )
 
-      for (const log of nativeLogs) {
+      // Fetch token symbols for unique token addresses
+      const tokenAddresses = new Set<string>()
+      for (const log of tokenLogs) {
+        if (log.address) tokenAddresses.add(log.address.toLowerCase())
+      }
+      const tokenInfoMap = new Map<string, { symbol: string; decimals: number }>()
+      await Promise.all(
+        [...tokenAddresses].slice(0, 30).map(async (tokenAddr) => {
+          try {
+            const contract = new ethers.Contract(tokenAddr, [
+              'function symbol() view returns (string)',
+              'function decimals() view returns (uint8)'
+            ], provider)
+            const [symbol, decimals] = await Promise.all([
+              this.withTimeout(contract.symbol(), 5000).catch(() => 'UNKNOWN'),
+              this.withTimeout(contract.decimals(), 5000).catch(() => 18)
+            ])
+            tokenInfoMap.set(tokenAddr.toLowerCase(), { symbol, decimals })
+          } catch {}
+        })
+      )
+
+      for (const log of tokenLogs) {
         const to = '0x' + log.topics[2].slice(26)
         const value = BigInt(log.data)
+        if (value === 0n) continue
+
+        const tokenAddr = log.address.toLowerCase()
+        const tokenInfo = tokenInfoMap.get(tokenAddr) || { symbol: 'UNKNOWN', decimals: 18 }
+
         const exchangeInfo = isExchangeWallet(to)
         const drainerInfo = isKnownDrainer(to)
 
@@ -191,8 +261,8 @@ export class TransactionTracker {
           hash: log.transactionHash,
           from: address,
           to,
-          value: ethers.formatEther(value),
-          asset: chain.nativeCurrency,
+          value: ethers.formatUnits(value, tokenInfo.decimals),
+          asset: tokenInfo.symbol,
           chainId,
           chainName: chain.name,
           timestamp: blockTimestamps.get(log.blockNumber) || Date.now(),

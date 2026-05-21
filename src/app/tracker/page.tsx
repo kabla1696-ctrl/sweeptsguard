@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { ethers } from 'ethers'
 
 interface Transfer {
   hash: string
@@ -24,9 +25,11 @@ export default function TrackerPage() {
   const [error, setError] = useState('')
 
   const trackFunds = async () => {
-    if (!address || !address.startsWith('0x') || address.length !== 42) {
-      setError('Please enter a valid EVM address')
-      return
+    if (!address) { setError('Please enter a wallet address'); return }
+    try {
+      ethers.getAddress(address)
+    } catch {
+      setError('Invalid EVM address format'); return
     }
 
     setTracking(true)
@@ -65,7 +68,34 @@ export default function TrackerPage() {
       'BNB Chain': 'https://bscscan.com',
       'Arbitrum': 'https://arbiscan.io',
       'Polygon': 'https://polygonscan.com',
-      'Optimism': 'https://optimistic.etherscan.io'
+      'Optimism': 'https://optimistic.etherscan.io',
+      'Avalanche': 'https://snowtrace.io',
+      'Fantom': 'https://ftmscan.com',
+      'Cronos': 'https://cronoscan.com',
+      'Blast': 'https://blastscan.io',
+      'Zora': 'https://zorascan.xyz',
+      'Polygon zkEVM': 'https://zkevm.polygonscan.com',
+      'Manta Pacific': 'https://pacific-explorer.manta.network',
+      'zkSync Era': 'https://explorer.zksync.io',
+      'Linea': 'https://lineascan.build',
+      'Mantle': 'https://mantlescan.xyz',
+      'Mode': 'https://explorer.mode.network',
+      'Scroll': 'https://scrollscan.com',
+      'Gnosis': 'https://gnosisscan.io',
+      'ZetaChain': 'https://zetascan.com',
+      'Gravity': 'https://explorer.gravity.xyz',
+      'Core': 'https://scan.coredao.org',
+      'Sei': 'https://seiscan.io',
+      'Berachain': 'https://berascan.com',
+      'Ink': 'https://explorer.inkonchain.com',
+      'XLayer': 'https://www.oklink.com/xlayer',
+      'Hemi': 'https://explorer.hemi.xyz',
+      'Kaia': 'https://kaiascan.io',
+      'Soneium': 'https://soneium.blockscout.com',
+      'Morph': 'https://explorer.morphl2.io',
+      'Swellchain': 'https://swellchainscan.io',
+      'Monad Testnet': 'https://testnet.monadexplorer.com',
+      '0G': 'https://chainscan.0g.ai'
     }
     const base = explorers[chainName] || 'https://etherscan.io'
     return `${base}/tx/${hash}`
