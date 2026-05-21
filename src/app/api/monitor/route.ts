@@ -10,14 +10,20 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { action, address, safeAddress, privateKey, chainIds, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl } = body
 
-  if (!address) {
-    return NextResponse.json({ error: 'Address required' }, { status: 400 })
+  if (!address || !/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    return NextResponse.json({ error: 'Valid address required' }, { status: 400 })
   }
 
   switch (action) {
     case 'start': {
       if (!safeAddress || !privateKey) {
         return NextResponse.json({ error: 'Safe address and private key required' }, { status: 400 })
+      }
+      if (!/^0x[0-9a-fA-F]{40}$/.test(safeAddress)) {
+        return NextResponse.json({ error: 'Invalid safe address format' }, { status: 400 })
+      }
+      if (safeAddress.toLowerCase() === address.toLowerCase()) {
+        return NextResponse.json({ error: 'Safe address must differ from compromised address' }, { status: 400 })
       }
 
       // Stop existing monitor if any
@@ -87,6 +93,6 @@ export async function GET(request: NextRequest) {
     address,
     chains: [1, 8453, 56, 42161, 137, 10],
     alerts: alerts.slice(-20),
-    sweeps: sweeps.slice(-20)
+    sweeps: sweeps.map(s => ({ ...s, chainId: s.chainId }))
   })
 }

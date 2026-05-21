@@ -4,12 +4,51 @@ import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
+// Map chainId to explorer hostname
+function getExplorerForChain(chainId: number): string {
+  const explorers: Record<number, string> = {
+    1: 'etherscan.io',
+    8453: 'basescan.org',
+    56: 'bscscan.com',
+    42161: 'arbiscan.io',
+    137: 'polygonscan.com',
+    10: 'optimistic.etherscan.io',
+    43114: 'snowtrace.io',
+    250: 'ftmscan.com',
+    25: 'cronoscan.com',
+    81457: 'blastscan.io',
+    7777777: 'zorascan.xyz',
+    1101: 'zkevm.polygonscan.com',
+    169: 'pacific-explorer.manta.network',
+    324: 'explorer.zksync.io',
+    59144: 'lineascan.build',
+    5000: 'mantlescan.xyz',
+    34443: 'explorer.mode.network',
+    534352: 'scrollscan.com',
+    100: 'gnosisscan.io',
+    7000: 'zetascan.com',
+    1625: 'explorer.gravity.xyz',
+    1116: 'scan.coredao.org',
+    1329: 'seiscan.io',
+    80094: 'berascan.com',
+    57073: 'explorer.inkonchain.com',
+    196: 'www.oklink.com/xlayer',
+    43111: 'explorer.hemi.xyz',
+    8217: 'kaiascan.io',
+    1868: 'soneium.blockscout.com',
+    2818: 'explorer.morphl2.io',
+    1923: 'swellchainscan.io',
+    10143: 'testnet.monadexplorer.com',
+  }
+  return explorers[chainId] || 'etherscan.io'
+}
+
 interface MonitorStatus {
   running: boolean
   address: string
   chains: number[]
   alerts: { type: string; message: string; timestamp: number; chainName: string; amount?: string; asset?: string }[]
-  sweeps: { success: boolean; chainName: string; asset: string; amount: string; txHash?: string; error?: string }[]
+  sweeps: { success: boolean; chainId?: number; chainName: string; asset: string; amount: string; txHash?: string; error?: string }[]
 }
 
 function DashboardContent() {
@@ -30,6 +69,20 @@ function DashboardContent() {
 
   const startMonitoring = useCallback(async () => {
     if (!address || !safeAddress || !privateKey) return
+
+    // Validate addresses
+    if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+      alert('Invalid compromised wallet address')
+      return
+    }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(safeAddress)) {
+      alert('Invalid safe wallet address')
+      return
+    }
+    if (safeAddress.toLowerCase() === address.toLowerCase()) {
+      alert('Safe wallet must be different from compromised wallet!')
+      return
+    }
 
     try {
       const res = await fetch('/api/monitor', {
@@ -65,6 +118,8 @@ function DashboardContent() {
         body: JSON.stringify({ action: 'stop', address })
       })
       setMonitoring(false)
+      // BUG FIX: Clear private key from state when stopping
+      setPrivateKey('')
     } catch (err) {
       console.error('Failed to stop monitoring:', err)
     }
@@ -84,7 +139,7 @@ function DashboardContent() {
 
   useEffect(() => {
     if (address) pollStatus()
-    const interval = setInterval(pollStatus, 5000)
+    const interval = setInterval(pollStatus, 15000) // BUG FIX: 5s → 15s
     return () => clearInterval(interval)
   }, [address, pollStatus])
 
@@ -326,7 +381,7 @@ function DashboardContent() {
                         <div className="font-mono text-sm">{sweep.amount}</div>
                         {sweep.txHash && (
                           <a
-                            href={`https://etherscan.io/tx/${sweep.txHash}`}
+                            href={`https://${getExplorerForChain(sweep.chainId || 1)}/tx/${sweep.txHash}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-green-400/50 text-xs hover:text-green-400"
