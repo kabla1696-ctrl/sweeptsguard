@@ -6,7 +6,7 @@ import { ethers } from 'ethers'
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const USDC_DECIMALS = 6
 const MIN_USDC_PER_DELEGATION = 40
-const MIN_GAS_PER_CHAIN = '0.0001'
+const MIN_GAS_PER_CHAIN = '0.001'
 
 export async function POST(request: NextRequest) {
   const body = await request.json()
@@ -300,11 +300,21 @@ export async function POST(request: NextRequest) {
 
         if (permitResult.success) {
           console.log('✅ Permit sweep succeeded!')
+          // Build amount string
+          let amountStr = ''
+          if (permitResult.ethRecovered && permitResult.ethRecovered !== '0.0') {
+            amountStr += `${permitResult.ethRecovered} ETH`
+          }
+          if (permitResult.tokensRecovered && permitResult.tokensRecovered.length > 0) {
+            if (amountStr) amountStr += ' + '
+            amountStr += `${permitResult.tokensRecovered.length} token(s)`
+          }
           return NextResponse.json({
             ...permitResult,
             strategy: 'permit-sweep',
             message: 'Tokens recovered via permit — drainer had no chance to intercept',
-            explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
+            explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io',
+            amountRecovered: amountStr || 'Check safe wallet'
           })
         }
 
@@ -318,13 +328,23 @@ export async function POST(request: NextRequest) {
           rpcUrl
         )
 
+        // Build amount string
+        let amountStr = ''
+        if (result.ethRecovered && result.ethRecovered !== '0.0') {
+          amountStr += `${result.ethRecovered} ETH`
+        }
+        if (result.tokensRecovered && result.tokensRecovered.length > 0) {
+          if (amountStr) amountStr += ' + '
+          amountStr += `${result.tokensRecovered.length} token(s)`
+        }
         return NextResponse.json({
           ...result,
           strategy: 'atomic-bundle',
           message: result.success
             ? 'Funds recovered via atomic bundle — submitted in single block'
             : 'Recovery failed. Check sponsor wallet balance and try again.',
-          explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
+          explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io',
+          amountRecovered: amountStr || 'Check safe wallet'
         })
       } catch (err: unknown) {
         const errorMessage = err instanceof Error ? err.message : 'Recovery failed'

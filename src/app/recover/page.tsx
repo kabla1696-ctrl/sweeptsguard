@@ -30,6 +30,13 @@ interface Delegation {
   drainerName?: string
 }
 
+interface SponsorBalance {
+  address: string
+  baseUsdc: string
+  baseUsdcSufficient: boolean
+  chains: { chainId: number; chainName: string; gasBalance: string; gasToken: string; sufficient: boolean }[]
+}
+
 interface ScanResult {
   address: string
   multiChainAssets: ChainAsset[]
@@ -37,6 +44,7 @@ interface ScanResult {
   delegations: Delegation[]
   failedChains: number[]
   totalChainsScanned: number
+  sponsorBalance?: SponsorBalance
   summary: {
     totalEthAcrossChains: string
     totalTokens: number
@@ -72,6 +80,9 @@ function RecoverContent() {
   const [revokeResults, setRevokeResults] = useState<RevokeResult[]>([])
   const [error, setError] = useState('')
   const [recoveryDone, setRecoveryDone] = useState(false)
+  const [recoveryTxHashes, setRecoveryTxHashes] = useState<string[]>([])
+  const [recoveryExplorerUrl, setRecoveryExplorerUrl] = useState('')
+  const [recoveryAmount, setRecoveryAmount] = useState('')
   const [revokeDone, setRevokeDone] = useState(false)
   const [safeAddressError, setSafeAddressError] = useState('')
 
@@ -165,6 +176,10 @@ function RecoverContent() {
       if (data.success) {
         setStep('done-recover')
         setRecoveryDone(true)
+        // Store TX hashes from recovery response
+        if (data.txHashes) setRecoveryTxHashes(data.txHashes)
+        if (data.explorerUrl) setRecoveryExplorerUrl(data.explorerUrl)
+        if (data.amountRecovered) setRecoveryAmount(data.amountRecovered)
       } else {
         setStep('error')
         setError(data.error || 'Recovery failed')
@@ -236,6 +251,9 @@ function RecoverContent() {
     setRevokeResults([])
     setError('')
     setRecoveryDone(false)
+    setRecoveryTxHashes([])
+    setRecoveryExplorerUrl('')
+    setRecoveryAmount('')
     setRevokeDone(false)
     setSelectedChain(null)
   }
@@ -282,7 +300,7 @@ function RecoverContent() {
                 <li>Select which chain to recover from</li>
                 <li>Permit-based sweep (no gas to compromised wallet)</li>
                 <li>80% → Safe Wallet | 20% → Platform Fee</li>
-                <li>Drainer sees NOTHING (atomic execution)</li>
+                <li>Permit-based sweep — drainer sees NOTHING (L2s + Flashbots)</li>
               </ol>
             </div>
             <div>
@@ -324,7 +342,7 @@ function RecoverContent() {
               <p className="text-red-400 text-xs font-semibold mb-1">❌ If Revoke Fails</p>
               <ul className="text-white/50 text-xs space-y-1">
                 <li>• Detailed error message with specific fix instructions</li>
-                <li>• $40 fee NOT charged on failure</li>
+                <li>• $40 fee charged only if TX was submitted (check TX status)</li>
                 <li>• Can retry after fixing the issue</li>
               </ul>
             </div>
@@ -446,8 +464,23 @@ function RecoverContent() {
               <ul className="text-yellow-400/50 text-xs mt-1 space-y-0.5">
                 <li>• $40 USDC on Base chain per delegation</li>
                 <li>• Native gas (ETH/BNB/MATIC) on each delegation chain</li>
+                <li>• Minimum ~0.001 ETH per chain for gas</li>
               </ul>
             </div>
+            {/* Show sponsor balance if scan results have it */}
+            {scanResult?.sponsorBalance && (
+              <div className="p-2 bg-green-500/5 border border-green-500/10 rounded-lg mt-2">
+                <p className="text-green-400 text-xs font-semibold">📊 Sponsor Wallet Balance:</p>
+                <p className={`text-xs mt-1 ${scanResult.sponsorBalance.baseUsdcSufficient ? 'text-green-400' : 'text-red-400'}`}>
+                  Base USDC: ${scanResult.sponsorBalance.baseUsdc} {scanResult.sponsorBalance.baseUsdcSufficient ? '✅' : `❌ (need $${totalDelegations * 40})`}
+                </p>
+                {scanResult.sponsorBalance.chains.map((c, i) => (
+                  <p key={i} className={`text-xs ${c.sufficient ? 'text-green-400' : 'text-red-400'}`}>
+                    {c.chainName}: {c.gasBalance} {c.gasToken} {c.sufficient ? '✅' : '❌'}
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
           <button
@@ -677,25 +710,30 @@ function RecoverContent() {
           <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl mt-6">
             <h3 className="text-green-400 font-bold text-lg mb-2">✅ Recovery Submitted!</h3>
             <p className="text-white/60 text-sm mb-3">
-              Funds are being sent to your safe wallet via atomic bundle. Verify below.
+              Funds are being sent to your safe wallet via atomic bundle.
             </p>
+            {recoveryAmount && (
+              <div className="p-3 bg-green-500/10 rounded-lg mb-3">
+                <p className="text-green-400 text-xs font-semibold">Amount Recovered:</p>
+                <p className="text-green-400 text-lg font-mono">{recoveryAmount}</p>
+              </div>
+            )}
             <div className="p-3 bg-blue-500/10 rounded-lg mb-3">
               <p className="text-blue-400 text-xs">Safe Wallet:</p>
               <p className="text-white/80 text-sm font-mono break-all">{safeAddress}</p>
             </div>
-            {/* TX Hashes */}
-            {revokeResults && revokeResults.length > 0 && revokeResults[0]?.txHashes && revokeResults[0].txHashes.length > 0 && (
+            {recoveryTxHashes.length > 0 && (
               <div className="p-3 bg-green-500/10 rounded-lg mb-3">
                 <p className="text-green-400 text-xs font-semibold mb-2">Transaction Hashes:</p>
-                {revokeResults[0].txHashes.map((hash: string, i: number) => (
+                {recoveryTxHashes.map((hash, i) => (
                   <a
                     key={i}
-                    href={`${revokeResults[0]?.explorerUrl || 'https://etherscan.io'}/tx/${hash}`}
+                    href={`${recoveryExplorerUrl || 'https://etherscan.io'}/tx/${hash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block text-green-400/70 text-xs font-mono hover:text-green-400 mt-1"
                   >
-                    📎 {hash.slice(0, 40)}...
+                    📎 {hash.slice(0, 50)}...
                   </a>
                 ))}
               </div>
