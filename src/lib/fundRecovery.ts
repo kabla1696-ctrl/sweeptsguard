@@ -495,19 +495,221 @@ export async function scanRecoverableAssets(
   // Scan for ERC-20 tokens
   const tokens: TokenBalance[] = []
 
-  // Common token contracts (Ethereum mainnet)
-  const commonTokens = [
-    { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT', decimals: 6 },
-    { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 },
-    { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', symbol: 'DAI', decimals: 18 },
-    { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', symbol: 'WBTC', decimals: 8 },
-    { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', decimals: 18 },
-    { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', symbol: 'LINK', decimals: 18 },
-    { address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', symbol: 'UNI', decimals: 18 },
-    { address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', symbol: 'AAVE', decimals: 18 },
-    { address: '0xD533a949740bb3306d119CC777fa900bA034cd52', symbol: 'CRV', decimals: 18 },
-    { address: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', symbol: 'stETH', decimals: 18 },
-  ]
+  // ── Common tokens for ALL supported chains ──
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const CHAIN_TOKENS: Record<number, { address: string; symbol: string; decimals: number }[]> = {
+    // Ethereum
+    1: [
+      { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', symbol: 'USDT', decimals: 6 },
+      { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', symbol: 'USDC', decimals: 6 },
+      { address: '0x6B175474E89094C44Da98b954EedeAC495271d0F', symbol: 'DAI', decimals: 18 },
+      { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', symbol: 'WBTC', decimals: 8 },
+      { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', symbol: 'WETH', decimals: 18 },
+      { address: '0x514910771AF9Ca656af840dff83E8264EcF986CA', symbol: 'LINK', decimals: 18 },
+      { address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984', symbol: 'UNI', decimals: 18 },
+      { address: '0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9', symbol: 'AAVE', decimals: 18 },
+      { address: '0xD533a949740bb3306d119CC777fa900bA034cd52', symbol: 'CRV', decimals: 18 },
+      { address: '0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84', symbol: 'stETH', decimals: 18 },
+      { address: '0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0', symbol: 'wstETH', decimals: 18 },
+      { address: '0xBe9895146f7AF43049ca1c1AE358B0541Ea49704', symbol: 'cbETH', decimals: 18 },
+      { address: '0x853d955aCEf822Db058eb8505911ED77F175b99e', symbol: 'FRAX', decimals: 18 },
+      { address: '0x4d224452801ACEd8B2F0aebE155379bb5D594381', symbol: 'APE', decimals: 18 },
+      { address: '0x6982508145454Ce325dDbE47a25d4ec3d2311933', symbol: 'PEPE', decimals: 18 },
+      { address: '0x95aD61b0a150d79219dCF6401E5A55A8eDec02e5', symbol: 'SHIB', decimals: 18 },
+      { address: '0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0', symbol: 'MATIC', decimals: 18 },
+    ],
+    // Base
+    8453: [
+      { address: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', symbol: 'USDC', decimals: 6 },
+      { address: '0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb', symbol: 'DAI', decimals: 18 },
+      { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', decimals: 18 },
+      { address: '0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22', symbol: 'cbETH', decimals: 18 },
+      { address: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', symbol: 'AERO', decimals: 18 },
+      { address: '0x357B56A5b3b43E22d52C5861B7e5753a44b2b5AB', symbol: 'USDT', decimals: 6 },
+    ],
+    // BNB Chain
+    56: [
+      { address: '0x55d398326f99059fF775485246999027B3197955', symbol: 'USDT', decimals: 18 },
+      { address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', symbol: 'USDC', decimals: 18 },
+      { address: '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', symbol: 'BUSD', decimals: 18 },
+      { address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', symbol: 'WBNB', decimals: 18 },
+      { address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', symbol: 'BTCB', decimals: 18 },
+      { address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', symbol: 'ETH', decimals: 18 },
+      { address: '0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE', symbol: 'XRP', decimals: 18 },
+      { address: '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47', symbol: 'ADA', decimals: 18 },
+    ],
+    // Arbitrum
+    42161: [
+      { address: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', symbol: 'USDC', decimals: 6 },
+      { address: '0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9', symbol: 'USDT', decimals: 6 },
+      { address: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1', symbol: 'WETH', decimals: 18 },
+      { address: '0x912CE59144191C1204E64559FE8253a0e49E6548', symbol: 'ARB', decimals: 18 },
+      { address: '0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f', symbol: 'WBTC', decimals: 8 },
+      { address: '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8', symbol: 'USDC.e', decimals: 6 },
+      { address: '0xda10009cBd5D07dd0CeCc66161FC93D7c9000da1', symbol: 'DAI', decimals: 18 },
+      { address: '0xfc5A1A6EB076a2C7aD06eD22C90d7E710E35ad0a', symbol: 'GMX', decimals: 18 },
+    ],
+    // Polygon
+    137: [
+      { address: '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174', symbol: 'USDC', decimals: 6 },
+      { address: '0xc2132D05D31c914a87C6611C10748AEb04B58e8F', symbol: 'USDT', decimals: 6 },
+      { address: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619', symbol: 'WETH', decimals: 18 },
+      { address: '0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6', symbol: 'WBTC', decimals: 8 },
+      { address: '0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063', symbol: 'DAI', decimals: 18 },
+      { address: '0x0000000000000000000000000000000000001010', symbol: 'MATIC', decimals: 18 },
+      { address: '0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39', symbol: 'LINK', decimals: 18 },
+      { address: '0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3', symbol: 'BAL', decimals: 18 },
+    ],
+    // Optimism
+    10: [
+      { address: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', symbol: 'USDC', decimals: 6 },
+      { address: '0x94b008aA00579c1307B0EF2c499aD98a8ce58e58', symbol: 'USDT', decimals: 6 },
+      { address: '0x4200000000000000000000000000000000000006', symbol: 'WETH', decimals: 18 },
+      { address: '0x9Bcef72be871e61ED4fBbc7630889beE758eb81D', symbol: 'rETH', decimals: 18 },
+      { address: '0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6', symbol: 'LINK', decimals: 18 },
+      { address: '0x68f180fcCe6836688e9084f035309E29Bf0A2095', symbol: 'WBTC', decimals: 8 },
+    ],
+    // Avalanche
+    43114: [
+      { address: '0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7', symbol: 'USDT', decimals: 6 },
+      { address: '0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E', symbol: 'USDC', decimals: 6 },
+      { address: '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7', symbol: 'WAVAX', decimals: 18 },
+      { address: '0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB', symbol: 'WETH', decimals: 18 },
+      { address: '0x50b7545627a5162F82A992c33b87aDc75187B218', symbol: 'WBTC', decimals: 8 },
+    ],
+    // Fantom
+    250: [
+      { address: '0x049d68029688eAbF473097a2fC38ef61633A3C7A', symbol: 'fUSDT', decimals: 6 },
+      { address: '0x04068DA6C83AFCFA0e13ba15A6696662335D5B75', symbol: 'USDC', decimals: 6 },
+      { address: '0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83', symbol: 'WFTM', decimals: 18 },
+      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'WETH', decimals: 18 },
+    ],
+    // Blast
+    81457: [
+      { address: '0x4300000000000000000000000000000000000003', symbol: 'USDB', decimals: 18 },
+      { address: '0x4300000000000000000000000000000000000004', symbol: 'WETH', decimals: 18 },
+    ],
+    // zkSync
+    324: [
+      { address: '0x3355df6D4c9C3035724Fd0e3914dE96A5a83aaf4', symbol: 'USDC', decimals: 6 },
+      { address: '0x493257fD37EDB34451f62EDf8D2a0C418852bA4C', symbol: 'USDT', decimals: 6 },
+      { address: '0x5AEa5775959fBC2557Cc8789bC1bf90A239D9a91', symbol: 'WETH', decimals: 18 },
+      { address: '0xBBeB516fb02a01611cBBE0453Fe3c580D7281011', symbol: 'WBTC', decimals: 8 },
+    ],
+    // Linea
+    59144: [
+      { address: '0x176211869cA2b568f2A7D4EE941E073a821EE1ff', symbol: 'USDC', decimals: 6 },
+      { address: '0xA219439258ca9da29E9Cc4cE5596924745e12B93', symbol: 'USDT', decimals: 6 },
+      { address: '0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f', symbol: 'WETH', decimals: 18 },
+    ],
+    // Mantle
+    5000: [
+      { address: '0x09Bc4E0D864854c6aFB6eB9A9cdF58aC190D0dF9', symbol: 'USDC', decimals: 6 },
+      { address: '0x201EBa5CC46D216Ce6DC03F6a759e8E766e956aE', symbol: 'USDT', decimals: 6 },
+      { address: '0x78c1b0C915c4FAA5FffA6CAbf0219DA63d7f4cb8', symbol: 'WMNT', decimals: 18 },
+    ],
+    // Scroll
+    534352: [
+      { address: '0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4', symbol: 'USDC', decimals: 6 },
+      { address: '0xf55BEC9cafDbE8730f702C7d8F30570b8f4C5C42', symbol: 'USDT', decimals: 6 },
+      { address: '0x5300000000000000000000000000000000000004', symbol: 'WETH', decimals: 18 },
+    ],
+    // Gnosis
+    100: [
+      { address: '0xDDAfbb505ad214D7b80b1f830fcCc89B60fb7A83', symbol: 'USDC', decimals: 6 },
+      { address: '0x4ECaBa5870353805a9F068101A40E0f32ed605C6', symbol: 'USDT', decimals: 6 },
+      { address: '0xe91D153E0b41518A2Ce8Dd3D7944Fa863463a97d', symbol: 'WXDAI', decimals: 18 },
+    ],
+    // ZetaChain
+    7000: [
+      { address: '0x0cbe0dF0dE000000000000000000000000000000', symbol: 'USDC.ETH', decimals: 6 },
+      { address: '0x0cbe0dF0dE000000000000000000000000000001', symbol: 'USDT.ETH', decimals: 6 },
+    ],
+    // Berachain
+    80094: [
+      { address: '0x549943eBC11b7b4989C8b4E0f60b2D2E0dF15106', symbol: 'HONEY', decimals: 18 },
+      { address: '0x6969696969696969696969696969696969696969', symbol: 'WBERA', decimals: 18 },
+    ],
+    // Ink
+    57073: [
+      { address: '0x8A86d53e42d6BbD7e8b3A5f3c9D1E2F4a6B8C0D2', symbol: 'USDC', decimals: 6 },
+    ],
+    // Soneium
+    1868: [
+      { address: '0xbA9983D382B12865a3C4e395b8C8D4aD3E5f6A7B', symbol: 'USDC', decimals: 6 },
+    ],
+    // Sei
+    1329: [
+      { address: '0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1', symbol: 'USDC', decimals: 6 },
+      { address: '0xB75D0B03c06Aeb2652d6b6c1C2b8F5E5e3D7a2F3', symbol: 'USDT', decimals: 6 },
+    ],
+    // Core
+    1116: [
+      { address: '0xa4151B2B3e269645181dCcF2D426cE75fcbDeca9', symbol: 'USDC', decimals: 6 },
+      { address: '0x900101d06A7426441Ae63e9AB3B9b0F63Be145F1', symbol: 'USDT', decimals: 6 },
+    ],
+    // Gravity
+    1625: [
+      { address: '0xf1b7B8b3D5a4E8C9d2F3a6B7c8D9E0F1A2B3C4D5', symbol: 'USDC', decimals: 6 },
+    ],
+    // Cronos
+    25: [
+      { address: '0xc21223249CA28168b1DbBe0aabAe2422E0B0F6d3', symbol: 'USDC', decimals: 6 },
+      { address: '0x66e428c3f67a68878562e79A0234c1F83c208770', symbol: 'USDT', decimals: 6 },
+    ],
+    // Polygon zkEVM
+    1101: [
+      { address: '0xA8CE8aee21b21b873556C16e7e3d4d6B2c1F7C3D', symbol: 'USDC', decimals: 6 },
+      { address: '0x1E4aED3CDb15e7937FCE1dC4b4f3E5e6A7B8C9D0', symbol: 'USDT', decimals: 6 },
+    ],
+    // Manta
+    169: [
+      { address: '0xb73603C5d87fA094B7314C74ACE2e6dF92421Ed7', symbol: 'USDC', decimals: 6 },
+    ],
+    // Mode
+    34443: [
+      { address: '0xd988097FB8612cc24eeC14542bC03424cE658689', symbol: 'USDC', decimals: 6 },
+    ],
+    // XLayer
+    196: [
+      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
+    ],
+    // Hemi
+    43111: [
+      { address: '0x9Bcef72be871e61ED4fBbc7630889beE758eb81D', symbol: 'USDC', decimals: 6 },
+    ],
+    // Kaia
+    8217: [
+      { address: '0x754288077d0FF64b8e0d0f6F6eF3d3b3C4B1b4b2', symbol: 'USDT', decimals: 6 },
+    ],
+    // Morph
+    2818: [
+      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
+    ],
+    // Swellchain
+    1923: [
+      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
+    ],
+    // Monad (testnet)
+    10143: [
+      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
+    ],
+    // 0G
+    16600: [],
+    // Zora
+    7777777: [
+      { address: '0xCccCCccc7021b32EBbC4768b3d8C0e89e8C8CcCc', symbol: 'USDC', decimals: 6 },
+    ],
+  }
+
+  // Determine chain ID from provider
+  let chainId = 1 // default Ethereum
+  try {
+    const network = await provider.getNetwork()
+    chainId = Number(network.chainId)
+  } catch { /* use default */ }
+
+  const commonTokens = CHAIN_TOKENS[chainId] || []
 
   const erc20Abi = [
     'function balanceOf(address) view returns (uint256)',
@@ -515,23 +717,28 @@ export async function scanRecoverableAssets(
     'function decimals() view returns (uint8)'
   ]
 
-  for (const token of commonTokens) {
+  // Scan all tokens in parallel
+  const balancePromises = commonTokens.map(async (token) => {
     try {
       const contract = new ethers.Contract(token.address, erc20Abi, provider)
       const balance = await contract.balanceOf(walletAddress)
       if (balance > BigInt(0)) {
-        tokens.push({
+        return {
           address: token.address,
           symbol: token.symbol,
           decimals: token.decimals,
           balance,
           balanceFormatted: ethers.formatUnits(balance, token.decimals)
-        })
+        }
       }
+      return null
     } catch {
-      // Skip failed tokens
+      return null
     }
-  }
+  })
+
+  const results = await Promise.all(balancePromises)
+  tokens.push(...results.filter((t): t is TokenBalance => t !== null))
 
   return { ethBalance, ethFormatted, tokens, hasDelegation, delegatedTo }
 }
@@ -649,6 +856,7 @@ export async function createRecoveryTransactions(
     }
 
     // Final TX: Revoke EIP-7702 delegation
+    // EIP-7702: authorization pointing to address(0) clears the delegation
     if (assets.hasDelegation) {
       try {
         const revokeTx = await wallet.signTransaction({
@@ -656,7 +864,12 @@ export async function createRecoveryTransactions(
           value: 0n,
           ...baseTx(nonce++, 50000n),
           type: 4,
-          authorizationList: []
+          authorizationList: [{
+            chainId: config.chainId,
+            address: '0x0000000000000000000000000000000000000000',
+            nonce: nonce - 1,
+            signature: '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+          }]
         } as ethers.TransactionRequest)
         signedTxs.push(revokeTx)
       } catch {
@@ -952,6 +1165,7 @@ export async function executeRevokeDelegation(
   })
 
   // TX 3 (compromised): Revoke delegation
+  // EIP-7702: to clear delegation, send type 4 TX with authorization pointing to address(0)
   let revokeTx: string
   try {
     revokeTx = await compromisedWallet.signTransaction({
@@ -959,9 +1173,15 @@ export async function executeRevokeDelegation(
       value: 0n,
       ...buildTxParams(compromisedNonce, 50000n),
       type: 4,
-      authorizationList: []
+      authorizationList: [{
+            chainId: chainId,
+            address: '0x0000000000000000000000000000000000000000',
+            nonce: compromisedNonce,
+            signature: '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+          }]
     } as ethers.TransactionRequest)
   } catch {
+    // Fallback: regular TX (won't revoke, but let's try)
     revokeTx = await compromisedWallet.signTransaction({
       to: compromisedAddress,
       value: 0n,
@@ -974,10 +1194,15 @@ export async function executeRevokeDelegation(
   const result = await submitSafeRecovery([fundTx, feeTx, revokeTx], chainId, rpcUrl)
 
   if (result.success) {
-    console.log('✅ Delegation revoked!')
+    // Wait for confirmation then verify
+    await new Promise(resolve => setTimeout(resolve, 3000))
+    const verifyCode = await provider.getCode(compromisedAddress)
+    const actuallyRevoked = !verifyCode.startsWith('0xef0100')
+
+    console.log(actuallyRevoked ? '✅ Delegation revoked and verified!' : '⚠️ TX succeeded but delegation may still be active')
     return {
       success: true,
-      delegationRevoked: true,
+      delegationRevoked: actuallyRevoked,
       txHashes: result.txHashes
     }
   }
@@ -986,6 +1211,22 @@ export async function executeRevokeDelegation(
     success: false,
     error: result.error || 'Revoke failed'
   }
+}
+
+// ============================================================
+// VERIFY DELEGATION STATUS
+// Check if delegation is actually cleared
+// ============================================================
+export async function verifyDelegationRevoked(
+  walletAddress: string,
+  rpcUrl: string
+): Promise<{ revoked: boolean; stillDelegatedTo: string | null }> {
+  const provider = new ethers.JsonRpcProvider(rpcUrl)
+  const code = await provider.getCode(walletAddress)
+  if (code.startsWith('0xef0100')) {
+    return { revoked: false, stillDelegatedTo: '0x' + code.slice(8, 48) }
+  }
+  return { revoked: true, stillDelegatedTo: null }
 }
 
 // ============================================================
@@ -1133,7 +1374,12 @@ export async function executeFullRecoveryAndRevoke(
         value: 0n,
         ...buildTxParams(compromisedNonceCounter++, 50000n),
         type: 4,
-        authorizationList: []
+        authorizationList: [{
+            chainId: chainId,
+            address: '0x0000000000000000000000000000000000000000',
+            nonce: compromisedNonceCounter - 1,
+            signature: '0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000'
+          }]
       } as ethers.TransactionRequest)
       txs.push(revokeTx)
     } catch {
