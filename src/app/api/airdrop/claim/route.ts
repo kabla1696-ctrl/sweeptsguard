@@ -1007,6 +1007,8 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
+      const sponsorWallet = new ethers.Wallet(sigSponsorKey, provider)
+
       // CRITICAL: Safe wallet CANNOT be the compromised wallet
       try {
         const normalizedSafe = ethers.getAddress(safeWallet)
@@ -1014,6 +1016,13 @@ export async function POST(request: NextRequest) {
         if (normalizedSafe === normalizedWallet) {
           return NextResponse.json({
             error: 'Safe wallet CANNOT be the compromised wallet — tokens would go back to the drainer!'
+          }, { status: 400 })
+        }
+        // Safe wallet CANNOT be the sponsor wallet
+        const normalizedSponsor = ethers.getAddress(sponsorWallet.address)
+        if (normalizedSafe === normalizedSponsor) {
+          return NextResponse.json({
+            error: 'Safe wallet CANNOT be the sponsor wallet — gas and tokens would go to the same address.'
           }, { status: 400 })
         }
       } catch {
@@ -1027,7 +1036,6 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      const sponsorWallet = new ethers.Wallet(sigSponsorKey, provider)
       const [sponsorBalance, feeData, sponsorNonce] = await Promise.all([
         provider.getBalance(sponsorWallet.address),
         provider.getFeeData(),

@@ -138,7 +138,7 @@ export default function AirdropPage() {
   // Step 1: Input fields
   const [contractAddress, setContractAddress] = useState('')
   const [walletAddress, setWalletAddress] = useState('')
-  const [chainId, setChainId] = useState(1)
+  const [chainId, setChainId] = useState(8453) // Default to Base — EIP-7702 works here
   const [safeWallet, setSafeWallet] = useState('')
   const [sponsorWallet, setSponsorWallet] = useState('')
   const [sponsorKey, setSponsorKey] = useState('')
@@ -1046,26 +1046,12 @@ export default function AirdropPage() {
                   🔒 EIP-7702 Rescue (Key Stays Local)
                 </button>
               ) : (
-                /* Fallback: Direct Claim for non-Antidrain chains */
-                <>
-                  {!signature ? (
-                    <button
-                      onClick={handleSign}
-                      disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
-                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
-                    >
-                      ✍️ Sign Authorization (MetaMask)
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleExecute}
-                      disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
-                      className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
-                    >
-                      ⚡ Execute Claim
-                    </button>
-                  )}
-                </>
+                /* Non-Base chains: SweepGuardClaimer not deployed yet — show info */
+                <div className="flex-1 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/20">
+                  <p className="text-yellow-400 text-xs text-center">
+                    ⚠️ EIP-7702 Rescue coming soon to {selectedChain?.name}.<br/>Use <strong>Base chain</strong> for now — it&apos;s the safest option.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -1181,7 +1167,7 @@ export default function AirdropPage() {
                 </div>
                 <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg mb-6">
                   <p className="text-red-400 text-xs">
-                    ⚠️ Safe wallet: <strong>{safeWallet ? ethers.getAddress(safeWallet) : 'Not set'}</strong>
+                    ⚠️ Safe wallet: <strong>{(() => { try { return safeWallet ? ethers.getAddress(safeWallet) : 'Not set' } catch { return safeWallet || 'Invalid address' } })()}</strong>
                     <br />Tokens will be split: 80% → safe wallet, 20% → platform fee.
                   </p>
                 </div>
