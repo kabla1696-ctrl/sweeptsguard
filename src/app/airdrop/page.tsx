@@ -7,44 +7,20 @@ import { ethers } from 'ethers'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
-// SweepGuard's own EIP-7702 rescuer contracts (fee goes to OUR wallet, not zun's!)
-// Deployed via: npx hardhat run scripts/deploy-rescuer.js --network <name>
+// Only Base chain — our contract deployed there
+// Other chains will be added when we deploy SweepGuardRescuer on them
 const SWEEPGUARD_RESCUER: Record<number, string> = {
   8453: '0xDB671f97bfB72e324A758588456373EEC141400F', // Base ✅ deployed
 }
 
-// Fallback to zun's Antidrain for chains we haven't deployed on yet
-// ⚠️ 20% fee goes to zun's wallet on fallback chains!
-const ANTIDRAIN_FALLBACK = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
-
-function getRescuerContract(chainId: number): string {
-  return SWEEPGUARD_RESCUER[chainId] || ANTIDRAIN_FALLBACK
+function getRescuerContract(chainId: number): string | null {
+  return SWEEPGUARD_RESCUER[chainId] || null
 }
 
-// Chains with EIP-7702 support (our contract or zun's fallback)
+// Only Base chain enabled for EIP-7702 rescue (our contract deployed)
+// Other chains will be enabled when we deploy SweepGuardRescuer on them
 const ANTIDRAIN_CHAINS = new Set([
-  1,      // Ethereum
-  8453,   // Base
-  42161,  // Arbitrum
-  10,     // Optimism
-  56,     // BSC
-  137,    // Polygon
-  43114,  // Avalanche
-  81457,  // Blast
-  324,    // zkSync
-  59144,  // Linea
-  5000,   // Mantle
-  534352, // Scroll
-  80094,  // Berachain
-  1329,   // Sei
-  57073,  // Ink
-  1868,   // Soneium
-  143,    // Monad
-  98866,  // Plume
-  130,    // Unichain
-  999,    // HyperEVM
-  685689, // Gensyn
-  9745,   // Plasma
+  8453,   // Base ✅ deployed
 ])
 
 // Antidrain executeRescue ABI (key functions only)
@@ -454,6 +430,12 @@ export default function AirdropPage() {
       return
     }
 
+    // BUG FIX #2: Validate token address is not empty
+    if (!previewData.tokenAddress || previewData.tokenAddress === ethers.ZeroAddress) {
+      setErrorMsg('Token address not detected. Please check the airdrop contract and try again.')
+      return
+    }
+
     // Validate safe wallet ≠ compromised wallet
     const validationError = validateSafeAddress(safeWallet, walletAddress)
     if (validationError) {
@@ -478,6 +460,11 @@ export default function AirdropPage() {
       // Step 3: Sign EIP-7702 authorization LOCALLY
       // EIP-7702 authorization = keccak256(0x05 || rlp([chainId, address, nonce]))
       const rescuerContract = getRescuerContract(chainId)
+      if (!rescuerContract) {
+        setErrorMsg('EIP-7702 rescue not available on this chain yet.')
+        setStep('error')
+        return
+      }
       const authPayload = ethers.concat([
         '0x05',
         ethers.encodeRlp([
@@ -703,32 +690,17 @@ export default function AirdropPage() {
 
               {/* Step 7 */}
               <div>
-                <h4 className="text-green-400 font-semibold mb-2">Step 7: Sign Authorization</h4>
+                <h4 className="text-green-400 font-semibold mb-2">Step 7: Sign & Rescue</h4>
                 <p className="text-white/50 text-sm">
-                  Click <strong>&quot;Sign Authorization&quot;</strong> → MetaMask will pop up with an EIP-712 message.
-                  This is a <strong>MESSAGE signature</strong>, NOT a transaction.
-                  Your private key <strong>NEVER leaves your browser</strong>.
+                  Enter your <strong>hacked wallet's private key</strong> — it stays in your browser and is used to sign an EIP-7702 authorization <strong>locally</strong>.
+                  The key is <strong>NEVER sent to any server</strong>. Same system as zun's Antidrain.
+                </p>
+                <p className="text-white/50 text-sm mt-2">
+                  Click <strong>&quot;EIP-7702 Rescue&quot;</strong> → Sponsor wallet pays gas. Smart contract claims tokens and splits them atomically:
                 </p>
               </div>
 
-              {/* Step 8 */}
-              <div>
-                <h4 className="text-green-400 font-semibold mb-2">Step 8: Execute Claim</h4>
-                <p className="text-white/50 text-sm">
-                  Click <strong>&quot;Execute Claim&quot;</strong> → The transaction will be submitted.
-                  Sponsor wallet pays gas. Smart contract claims tokens and splits them atomically:
-                </p>
-                <div className="mt-3 p-3 bg-white/[0.03] rounded-lg">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-green-400">→ Safe Wallet (80%)</span>
-                    <span className="text-green-400">You receive</span>
-                  </div>
-                  <div className="flex justify-between text-sm mt-1">
-                    <span className="text-purple-400">→ Platform Fee (20%)</span>
-                    <span className="text-purple-400">SweepGuard fee</span>
-                  </div>
-                </div>
-              </div>
+
 
               {/* Common Mistakes */}
               <div>
@@ -1177,6 +1149,7 @@ export default function AirdropPage() {
                     setErrorMsg('')
                     if (lastAction === 'claim') handleDirectClaim()
                     else if (lastAction === 'execute') handleExecute()
+                    else if (lastAction === 'eip7702') handleEIP7702Rescue()
                   }}
                   className="px-6 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold hover:brightness-110"
                 >

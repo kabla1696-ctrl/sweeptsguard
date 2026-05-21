@@ -549,7 +549,8 @@ export async function POST(request: NextRequest) {
       }
 
       // Use sponsorAddress for balance check (no private key needed for preview)
-      const sponsorAddr = sponsorAddress || (sponsorPrivateKey ? new ethers.Wallet(sponsorPrivateKey).address : null)
+      // SECURITY: Never accept sponsorPrivateKey in preview action
+      const sponsorAddr = sponsorAddress ? ethers.getAddress(sponsorAddress) : null
 
       // P0-2: SCAM/HONEYPOT CONTRACT CHECK
       // Verify contract exists and has reasonable claim functionality before
@@ -1123,13 +1124,24 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Use SweepGuard's own contract if deployed, otherwise fallback to zun's Antidrain
-      // ⚠️ Fallback sends 20% fee to zun's wallet — deploy our contract on all chains ASAP!
+      // BUG FIX #2: Validate token address is not empty
+      if (!rescueToken || rescueToken === ethers.ZeroAddress) {
+        return NextResponse.json({
+          error: 'Token address required for EIP-7702 rescue. Run preview first to detect the token.'
+        }, { status: 400 })
+      }
+
+      // Only Base chain enabled — our contract deployed there
+      // Other chains will be enabled when we deploy SweepGuardRescuer on them
       const SWEEPGUARD_RESCUER_CONTRACTS: Record<number, string> = {
         8453: '0xDB671f97bfB72e324A758588456373EEC141400F', // Base ✅ deployed
       }
-      const ANTIDRAIN_FALLBACK = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
-      const antidrainAddress = SWEEPGUARD_RESCUER_CONTRACTS[chainId] || ANTIDRAIN_FALLBACK
+      const antidrainAddress = SWEEPGUARD_RESCUER_CONTRACTS[chainId]
+      if (!antidrainAddress) {
+        return NextResponse.json({
+          error: `EIP-7702 rescue not available on chain ${chainId} yet. Deploy SweepGuardRescuer on this chain first.`
+        }, { status: 400 })
+      }
       const antidrainCode = await provider.getCode(antidrainAddress)
       if (!antidrainCode || antidrainCode === '0x') {
         return NextResponse.json({
@@ -1236,7 +1248,7 @@ export async function POST(request: NextRequest) {
       try {
         const txResponse = await sponsorWallet.sendTransaction(eip7702Tx as ethers.TransactionRequest)
         txHash = txResponse.hash
-        const receipt = await txResponse.wait(1, 120000).catch(() => null)
+        const receipt = await txResponse.wait(1, 300000).catch(() => null)
         if (!receipt || receipt.status !== 1) {
           return NextResponse.json({
             error: `Transaction reverted. TX: ${txHash}`,
