@@ -729,76 +729,42 @@ export async function scanRecoverableAssets(
       { address: '0x549943eBC11b7b4989C8b4E0f60b2D2E0dF15106', symbol: 'HONEY', decimals: 18 },
       { address: '0x6969696969696969696969696969696969696969', symbol: 'WBERA', decimals: 18 },
     ],
-    // Ink
-    57073: [
-      { address: '0x8A86d53e42d6BbD7e8b3A5f3c9D1E2F4a6B8C0D2', symbol: 'USDC', decimals: 6 },
-    ],
-    // Soneium
-    1868: [
-      { address: '0xbA9983D382B12865a3C4e395b8C8D4aD3E5f6A7B', symbol: 'USDC', decimals: 6 },
-    ],
-    // Sei
-    1329: [
-      { address: '0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1', symbol: 'USDC', decimals: 6 },
-      { address: '0xB75D0B03c06Aeb2652d6b6c1C2b8F5E5e3D7a2F3', symbol: 'USDT', decimals: 6 },
-    ],
-    // Core
-    1116: [
-      { address: '0xa4151B2B3e269645181dCcF2D426cE75fcbDeca9', symbol: 'USDC', decimals: 6 },
-      { address: '0x900101d06A7426441Ae63e9AB3B9b0F63Be145F1', symbol: 'USDT', decimals: 6 },
-    ],
-    // Gravity
-    1625: [
-      { address: '0xf1b7B8b3D5a4E8C9d2F3a6B7c8D9E0F1A2B3C4D5', symbol: 'USDC', decimals: 6 },
-    ],
-    // Cronos
-    25: [
-      { address: '0xc21223249CA28168b1DbBe0aabAe2422E0B0F6d3', symbol: 'USDC', decimals: 6 },
-      { address: '0x66e428c3f67a68878562e79A0234c1F83c208770', symbol: 'USDT', decimals: 6 },
-    ],
-    // Polygon zkEVM
-    1101: [
-      { address: '0xA8CE8aee21b21b873556C16e7e3d4d6B2c1F7C3D', symbol: 'USDC', decimals: 6 },
-      { address: '0x1E4aED3CDb15e7937FCE1dC4b4f3E5e6A7B8C9D0', symbol: 'USDT', decimals: 6 },
-    ],
-    // Manta
-    169: [
-      { address: '0xb73603C5d87fA094B7314C74ACE2e6dF92421Ed7', symbol: 'USDC', decimals: 6 },
-    ],
-    // Mode
-    34443: [
-      { address: '0xd988097FB8612cc24eeC14542bC03424cE658689', symbol: 'USDC', decimals: 6 },
-    ],
-    // XLayer
-    196: [
-      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
-    ],
-    // Hemi
-    43111: [
-      { address: '0x9Bcef72be871e61ED4fBbc7630889beE758eb81D', symbol: 'USDC', decimals: 6 },
-    ],
-    // Kaia
+    // Ink — new chain, dynamic discovery will find tokens
+    57073: [],
+    // Soneium — new chain, dynamic discovery will find tokens
+    1868: [],
+    // Sei — dynamic discovery will find tokens
+    1329: [],
+    // Core — dynamic discovery will find tokens
+    1116: [],
+    // Gravity — dynamic discovery will find tokens
+    1625: [],
+    // Cronos — dynamic discovery will find tokens
+    25: [],
+    // Polygon zkEVM — dynamic discovery will find tokens
+    1101: [],
+    // Manta — dynamic discovery will find tokens
+    169: [],
+    // Mode — dynamic discovery will find tokens
+    34443: [],
+    // XLayer — native token OKB, no major stablecoins yet
+    196: [],
+    // Hemi — new chain, limited tokens
+    43111: [],
+    // Kaia — native token KAIA, USDT via Kaia bridge
     8217: [
-      { address: '0x754288077d0FF64b8e0d0f6F6eF3d3b3C4B1b4b2', symbol: 'USDT', decimals: 6 },
+      { address: '0xd077a400960e4fef08621b7f4d5e86c490b2ef95', symbol: 'USDT', decimals: 6 },
     ],
-    // Morph
-    2818: [
-      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
-    ],
-    // Swellchain
-    1923: [
-      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
-    ],
-    // Monad (testnet)
-    10143: [
-      { address: '0x74b23882a30290451A17c44f4F05243b6b58C76d', symbol: 'USDC', decimals: 6 },
-    ],
-    // 0G
+    // Morph — new chain, limited tokens
+    2818: [],
+    // Swellchain — new chain, limited tokens
+    1923: [],
+    // Monad (testnet) — testnet only
+    10143: [],
+    // 0G — new chain
     16600: [],
-    // Zora
-    7777777: [
-      { address: '0xCccCCccc7021b32EBbC4768b3d8C0e89e8C8CcCc', symbol: 'USDC', decimals: 6 },
-    ],
+    // Zora — no major stablecoins, NFT focused
+    7777777: [],
   }
 
   // Determine chain ID from provider
@@ -1155,13 +1121,14 @@ export async function submitSafeRecovery(
     }
 
     // For L2s with private sequencers: direct submission is safe
+    // Submit ALL TXs at once — NO delay between them (prevents front-running)
     if (PRIVATE_SEQUENCER_CHAINS.has(chainId)) {
-      for (const signedTx of signedTxs) {
+      const promises = signedTxs.map(async (signedTx) => {
         const tx = await provider.broadcastTransaction(signedTx)
-        txHashes.push(tx.hash)
-        await new Promise(resolve => setTimeout(resolve, 300))
-      }
-      return { success: true, txHashes }
+        return tx.hash
+      })
+      const hashes = await Promise.all(promises)
+      return { success: true, txHashes: hashes }
     }
 
     // For other chains with public mempool: try Flashbots first, then warn
@@ -1172,12 +1139,13 @@ export async function submitSafeRecovery(
 
     // Last resort: direct submission with warning
     console.log('⚠️ WARNING: Direct submission on public mempool chain — drainer may see pending TXs')
-    for (const signedTx of signedTxs) {
+    // Submit ALL TXs at once — NO delay between them
+    const promises = signedTxs.map(async (signedTx) => {
       const tx = await provider.broadcastTransaction(signedTx)
-      txHashes.push(tx.hash)
-      await new Promise(resolve => setTimeout(resolve, 300))
-    }
-    return { success: true, txHashes }
+      return tx.hash
+    })
+    const hashes = await Promise.all(promises)
+    return { success: true, txHashes: hashes }
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Submission failed'
     return { success: false, txHashes, error: errorMessage }
@@ -1353,13 +1321,20 @@ export async function executeRevokeDelegation(
     ...buildTxParams(sponsorNonce++, 21000n)
   })
 
-  // TX 2 (sponsor/safe wallet): $40 USDC on Base → platform wallet
-  // We need to send this on Base chain, not on target chain
-  // For now, we'll record it and handle cross-chain fee separately
-  // TODO: Implement cross-chain USDC transfer via bridge
-  // For now, charge in native token equivalent on target chain
+  // TX 2 (sponsor/safe wallet): $40 fee → platform wallet
+  // Charge in native gas token on target chain (ETH, BNB, MATIC, etc.)
+  // User must have enough native gas in Safe Wallet
   const ETH_PRICE_USD = parseFloat(process.env.ETH_PRICE_USD || '2500')
   const revokeFeeNative = ethers.parseEther((REVOKE_FEE_USDC / ETH_PRICE_USD).toFixed(18))
+
+  // Check if Safe Wallet has enough for gas + fee
+  const totalNeeded = finalGasNeeded + revokeFeeNative + ethers.parseEther('0.0001')
+  if (safeBalance < totalNeeded) {
+    return {
+      success: false,
+      error: `❌ Safe Wallet needs ${ethers.formatEther(totalNeeded)} ${gasToken} (gas + $${REVOKE_FEE_USDC} fee). Has: ${ethers.formatEther(safeBalance)} ${gasToken}. Please fund Safe Wallet with more ${gasToken}.`
+    }
+  }
 
   const feeTx = await sponsorWallet.signTransaction({
     to: PLATFORM_FEE_WALLET,
