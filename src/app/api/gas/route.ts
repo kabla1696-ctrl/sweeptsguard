@@ -7,6 +7,9 @@ export async function GET(request: NextRequest) {
   try {
     if (chainIdParam) {
       const chainId = parseInt(chainIdParam, 10)
+      if (isNaN(chainId)) {
+        return NextResponse.json({ error: 'chainId must be a valid number' }, { status: 400 })
+      }
       const gasPrice = await gasTracker.getGasPrice(chainId)
       if (!gasPrice) {
         return NextResponse.json({ error: 'Chain not supported' }, { status: 400 })

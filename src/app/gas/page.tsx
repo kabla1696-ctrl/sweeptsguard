@@ -21,16 +21,23 @@ export default function GasPage() {
   const [error, setError] = useState('')
 
   useEffect(() => {
+    const controller = new AbortController()
     const fetchGas = async () => {
       try {
-        const res = await fetch('/api/gas')
+        const res = await fetch('/api/gas', { signal: controller.signal })
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null) as { error?: string } | null
+          setError(errData?.error || `Request failed with status ${res.status}`)
+          return
+        }
         const data = await res.json() as { chains?: GasPrice[]; error?: string }
         if (data.error) {
           setError(data.error)
         } else {
           setGasPrices(data.chains || [])
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
         setError('Failed to fetch gas prices')
       } finally {
         setLoading(false)
@@ -38,7 +45,10 @@ export default function GasPage() {
     }
     fetchGas()
     const interval = setInterval(fetchGas, 15000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [])
 
   return (
@@ -64,6 +74,8 @@ export default function GasPage() {
 
         {loading ? (
           <div className="text-center py-12 text-white/30">Loading gas prices...</div>
+        ) : gasPrices.length === 0 && !error ? (
+          <div className="text-center py-12 text-white/30">No gas data available. Retrying...</div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
             {gasPrices.map(gas => (

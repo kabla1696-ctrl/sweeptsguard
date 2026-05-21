@@ -34,6 +34,10 @@ export async function GET(request: NextRequest) {
   const fromChain = parseInt(fromParam, 10)
   const toChain = parseInt(toParam, 10)
 
+  if (isNaN(fromChain) || isNaN(toChain)) {
+    return NextResponse.json({ error: 'from and to must be valid chain ID numbers' }, { status: 400 })
+  }
+
   const fromChainConfig = CHAINS[fromChain]
   const toChainConfig = CHAINS[toChain]
 
