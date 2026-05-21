@@ -3,6 +3,7 @@
 import { useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { isValidAddress } from '@/lib/validation'
 
 interface ReputationResult {
   address: string
@@ -27,12 +28,17 @@ function ReputationContent() {
   const [error, setError] = useState('')
 
   const checkReputation = useCallback(async (addr: string) => {
-    if (!addr) return
+    const trimmed = addr.trim()
+    if (!trimmed) return
+    if (!isValidAddress(trimmed)) {
+      setError('Invalid address format. Must be 0x followed by 40 hex characters.')
+      return
+    }
     setLoading(true)
     setError('')
     setResult(null)
     try {
-      const res = await fetch(`/api/reputation?address=${addr}`)
+      const res = await fetch(`/api/reputation?address=${trimmed}`)
       const data = await res.json() as ReputationResult & { error?: string }
       if (data.error) {
         setError(data.error)
@@ -48,7 +54,7 @@ function ReputationContent() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    checkReputation(address)
+    checkReputation(address.trim())
   }
 
   const getLevelColor = (level: string) => {

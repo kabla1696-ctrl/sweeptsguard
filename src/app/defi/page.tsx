@@ -3,6 +3,7 @@
 import { useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { isValidAddress, getExplorerUrl } from '@/lib/validation'
 
 interface DeFiPosition {
   protocol: string
@@ -31,12 +32,17 @@ function DeFiContent() {
   const [error, setError] = useState('')
 
   const fetchDeFi = useCallback(async (addr: string) => {
-    if (!addr) return
+    const trimmed = addr.trim()
+    if (!trimmed) return
+    if (!isValidAddress(trimmed)) {
+      setError('Invalid address format. Must be 0x followed by 40 hex characters.')
+      return
+    }
     setLoading(true)
     setError('')
     setData(null)
     try {
-      const res = await fetch(`/api/defi?address=${addr}`)
+      const res = await fetch(`/api/defi?address=${trimmed}`)
       const result = await res.json() as DeFiData & { error?: string }
       if (result.error) {
         setError(result.error)
@@ -52,7 +58,7 @@ function DeFiContent() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    fetchDeFi(address)
+    fetchDeFi(address.trim())
   }
 
   const getTypeIcon = (type: string) => {
@@ -114,7 +120,7 @@ function DeFiContent() {
               <p className="text-white/30 text-sm">{data.note}</p>
             )}
 
-            {data.positions.length > 0 ? (
+            {data.positions && data.positions.length > 0 ? (
               <div className="space-y-3">
                 {data.positions.map((pos, i) => (
                   <div key={i} className="p-5 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
@@ -130,9 +136,20 @@ function DeFiContent() {
                         <span className="text-xs text-white/30">Asset</span>
                         <p className="font-mono text-sm">{pos.asset}</p>
                       </div>
+                      <div className="p-2 bg-white/[0.02] rounded-lg col-span-2">
+                        <span className="text-xs text-white/30">Contract</span>
+                        <a
+                          href={getExplorerUrl(pos.chainId, pos.contractAddress)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-sm text-green-400 hover:text-green-300 truncate block"
+                        >
+                          {pos.contractAddress.slice(0, 10)}...{pos.contractAddress.slice(-8)}
+                        </a>
+                      </div>
                       <div className="p-2 bg-white/[0.02] rounded-lg">
                         <span className="text-xs text-white/30">Balance</span>
-                        <p className="font-mono text-sm">{parseFloat(pos.balance).toFixed(6)}</p>
+                        <p className="font-mono text-sm">{isNaN(parseFloat(pos.balance)) ? '0.000000' : parseFloat(pos.balance).toFixed(6)}</p>
                       </div>
                     </div>
                   </div>

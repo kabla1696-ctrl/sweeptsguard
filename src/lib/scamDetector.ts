@@ -29,18 +29,16 @@ export interface TokenAnalysis {
   liquidityLocked: boolean
 }
 
-// Suspicious function selectors
-const SUSPICIOUS_SELECTORS: Record<string, string> = {
-  '0xa9059cbb': 'transfer',
-  '0x23b872dd': 'transferFrom',
-  '0x095ea7b3': 'approve',
+// Suspicious function selectors (owner/admin patterns)
+const ADMIN_SELECTORS: Record<string, string> = {
   '0x395e4485': 'setFee',
   '0x8b7afe2e': 'setBlacklist',
   '0x4c1f5f4d': 'setMint',
   '0x8456cb59': 'pause',
   '0x3f4ba83a': 'unpause',
-  '0x70a08231': 'balanceOf',
-  '0x18160ddd': 'totalSupply',
+  '0x8da5cb5b': 'owner',
+  '0xf2fde38b': 'transferOwnership',
+  '0x715018a6': 'renounceOwnership',
 }
 
 export class ScamDetector {
@@ -73,15 +71,31 @@ export class ScamDetector {
       const isContract = code !== '0x'
 
       if (isContract) {
-        // Check for proxy patterns
+        // Check for proxy patterns (EIP-1967 minimal proxy is ~45 bytes)
         if (code.length < 200) {
           flags.push({ type: 'proxy', severity: 'warning', description: 'Minimal bytecode - likely proxy contract' })
           riskScore += 15
         }
 
-        // Check for selfdestruct
-        if (code.includes('ff')) {
+        // Check for selfdestruct opcode (0xff preceded by 0x60 SELFDESTRUCT)
+        // Look for the actual SELFDESTRUCT opcode sequence in bytecode
+        const hasSelfdestruct = /600[0-9a-f]600[0-9a-f]ff/.test(code.slice(2).toLowerCase()) ||
+          code.slice(2).toLowerCase().includes('ffff')
+        if (hasSelfdestruct) {
           flags.push({ type: 'selfdestruct', severity: 'warning', description: 'Contract contains selfdestruct opcode' })
+          riskScore += 10
+        }
+
+        // Check for admin/owner function selectors
+        const codeBytes = code.slice(2).toLowerCase()
+        const foundAdminFunctions: string[] = []
+        for (const [selector, name] of Object.entries(ADMIN_SELECTORS)) {
+          if (codeBytes.includes(selector.slice(2))) {
+            foundAdminFunctions.push(name)
+          }
+        }
+        if (foundAdminFunctions.length > 3) {
+          flags.push({ type: 'admin_functions', severity: 'warning', description: `Contract has many admin functions: ${foundAdminFunctions.join(', ')}` })
           riskScore += 10
         }
       }
@@ -145,13 +159,17 @@ export class ScamDetector {
       const code = await provider.getCode(tokenAddress)
       if (code === '0x') return defaultResult
 
-      const codeLower = code.toLowerCase()
+      const codeBytes = code.slice(2).toLowerCase()
 
-      // Check for suspicious patterns in bytecode
-      const hasBlacklist = codeLower.includes('blacklist') || codeLower.includes('isblacklisted')
-      const hasMint = codeLower.includes('mint') && codeLower.includes('onlyowner')
-      const hasPause = codeLower.includes('pause') && codeLower.includes('onlyowner')
-      const isProxy = code.length < 200 || codeLower.includes('delegatecall')
+      // Check for function selectors (not string matching - EVM bytecode doesn't contain readable strings)
+      // blacklist(address) = 0xe47d6060, isBlacklisted(address) = 0xfe575a87
+      const hasBlacklist = codeBytes.includes('e47d6060') || codeBytes.includes('fe575a87')
+      // mint(address,uint256) = 0x40c10f19
+      const hasMint = codeBytes.includes('40c10f19')
+      // pause() = 0x8456cb59
+      const hasPause = codeBytes.includes('8456cb59')
+      // delegatecall = opcode 0xf4
+      const isProxy = code.length < 200 || codeBytes.includes('f4')
 
       // Try to call common functions
       const contract = new ethers.Contract(tokenAddress, [

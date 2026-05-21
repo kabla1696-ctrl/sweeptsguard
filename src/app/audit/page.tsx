@@ -3,6 +3,7 @@
 import { useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { isValidAddress } from '@/lib/validation'
 
 interface AuditResult {
   address: string
@@ -25,12 +26,17 @@ function AuditContent() {
   const [error, setError] = useState('')
 
   const checkAudit = useCallback(async (addr: string) => {
-    if (!addr) return
+    const trimmed = addr.trim()
+    if (!trimmed) return
+    if (!isValidAddress(trimmed)) {
+      setError('Invalid address format. Must be 0x followed by 40 hex characters.')
+      return
+    }
     setLoading(true)
     setError('')
     setResult(null)
     try {
-      const res = await fetch(`/api/audit?address=${addr}`)
+      const res = await fetch(`/api/audit?address=${trimmed}`)
       const data = await res.json() as AuditResult & { error?: string }
       if (data.error) {
         setError(data.error)
@@ -46,7 +52,7 @@ function AuditContent() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    checkAudit(address)
+    checkAudit(address.trim())
   }
 
   return (

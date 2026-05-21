@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
   }
 
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    return NextResponse.json({ error: 'Invalid address format. Must be 0x + 40 hex characters.' }, { status: 400 })
+  }
+
   try {
     let chainIds: number[]
     if (chainIdParam) {

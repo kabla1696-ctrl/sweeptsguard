@@ -29,13 +29,24 @@ function PortfolioContent() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/
+
   const fetchPortfolio = useCallback(async (addr: string) => {
     if (!addr) return
+    if (!ADDRESS_REGEX.test(addr)) {
+      setError('Invalid address. Must be a valid Ethereum address (0x followed by 40 hex characters).')
+      return
+    }
     setLoading(true)
     setError('')
     setPortfolio(null)
     try {
-      const res = await fetch(`/api/portfolio?address=${addr}`)
+      const res = await fetch(`/api/portfolio?address=${encodeURIComponent(addr)}`)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null) as { error?: string } | null
+        setError(errData?.error || `Request failed with status ${res.status}`)
+        return
+      }
       const data = await res.json() as PortfolioData & { error?: string }
       if (data.error) {
         setError(data.error)
@@ -81,7 +92,7 @@ function PortfolioContent() {
           />
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !ADDRESS_REGEX.test(address)}
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
           >
             {loading ? 'Loading...' : '📊 Load'}

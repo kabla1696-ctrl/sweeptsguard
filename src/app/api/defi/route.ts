@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { CHAINS } from '@/lib/chains'
+import { isValidAddress } from '@/lib/validation'
 
 interface DeFiPosition {
   protocol: string
@@ -33,6 +34,10 @@ export async function GET(request: NextRequest) {
 
   if (!address) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
+  }
+
+  if (!isValidAddress(address)) {
+    return NextResponse.json({ error: 'Invalid address format. Must be 0x followed by 40 hex characters.' }, { status: 400 })
   }
 
   try {

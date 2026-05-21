@@ -22,17 +22,29 @@ export default function BridgePage() {
   const [toChain, setToChain] = useState(8453)
   const [result, setResult] = useState<BridgeResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const chains = Object.values(CHAINS)
 
   const handleSearch = async () => {
     setLoading(true)
+    setError('')
+    setResult(null)
     try {
       const res = await fetch(`/api/bridge?from=${fromChain}&to=${toChain}`)
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null) as { error?: string } | null
+        setError(errData?.error || `Request failed with status ${res.status}`)
+        return
+      }
       const data = await res.json() as BridgeResult & { error?: string }
-      setResult(data)
+      if (data.error) {
+        setError(data.error)
+      } else {
+        setResult(data)
+      }
     } catch {
-      // ignore
+      setError('Failed to fetch bridge route. Please check your connection and try again.')
     } finally {
       setLoading(false)
     }
@@ -89,6 +101,10 @@ export default function BridgePage() {
         >
           {loading ? 'Searching...' : '🔍 Find Bridge Route'}
         </button>
+
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>
+        )}
 
         {result && (
           <div className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl">

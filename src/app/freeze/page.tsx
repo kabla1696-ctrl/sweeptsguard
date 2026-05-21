@@ -102,17 +102,37 @@ export default function FreezePage() {
   const [selectedExchange, setSelectedExchange] = useState('Binance')
   const [template, setTemplate] = useState<FreezeTemplate | null>(null)
   const [copied, setCopied] = useState<'subject' | 'body' | null>(null)
+  const [validationError, setValidationError] = useState('')
+
+  const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+  const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/
 
   const handleGenerate = () => {
-    if (!walletAddress) return
+    setValidationError('')
+    if (!ADDRESS_RE.test(walletAddress)) {
+      setValidationError('Invalid wallet address. Must be 0x + 40 hex characters.')
+      return
+    }
+    if (txHash && !TX_HASH_RE.test(txHash)) {
+      setValidationError('Invalid transaction hash. Must be 0x + 64 hex characters.')
+      return
+    }
+    if (amount && (isNaN(Number(amount)) || Number(amount) < 0)) {
+      setValidationError('Amount must be a valid positive number.')
+      return
+    }
     const t = generateTemplate(selectedExchange, walletAddress, txHash, amount, asset)
     setTemplate(t)
   }
 
-  const handleCopy = (text: string, type: 'subject' | 'body') => {
-    navigator.clipboard.writeText(text)
-    setCopied(type)
-    setTimeout(() => setCopied(null), 2000)
+  const handleCopy = async (text: string, type: 'subject' | 'body') => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(type)
+      setTimeout(() => setCopied(null), 2000)
+    } catch {
+      // Fallback: select text for manual copy
+    }
   }
 
   return (
@@ -194,6 +214,9 @@ export default function FreezePage() {
                 />
               </div>
             </div>
+            {validationError && (
+              <p className="text-red-400 text-sm">{validationError}</p>
+            )}
             <button
               onClick={handleGenerate}
               disabled={!walletAddress}

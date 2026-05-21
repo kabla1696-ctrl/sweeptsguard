@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { isValidAddress } from '@/lib/validation'
 
 interface AuditResult {
   address: string
@@ -23,6 +24,10 @@ export async function GET(request: NextRequest) {
 
   if (!address) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
+  }
+
+  if (!isValidAddress(address)) {
+    return NextResponse.json({ error: 'Invalid address format. Must be 0x followed by 40 hex characters.' }, { status: 400 })
   }
 
   try {

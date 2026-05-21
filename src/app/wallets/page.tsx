@@ -17,8 +17,24 @@ export default function WalletsPage() {
     setWallets(manager.getAll())
   }, [])
 
+  const [validationError, setValidationError] = useState('')
+
+  const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+
   const addWallet = () => {
-    if (!newAddress || !newAddress.startsWith('0x')) return
+    setValidationError('')
+    if (!ADDRESS_RE.test(newAddress)) {
+      setValidationError('Invalid compromised address. Must be 0x + 40 hex characters.')
+      return
+    }
+    if (newSafeAddress && !ADDRESS_RE.test(newSafeAddress)) {
+      setValidationError('Invalid safe address. Must be 0x + 40 hex characters.')
+      return
+    }
+    if (newSafeAddress && newSafeAddress.toLowerCase() === newAddress.toLowerCase()) {
+      setValidationError('Safe address cannot be the same as the compromised address.')
+      return
+    }
     const manager = createWalletManager()
     const wallet = manager.add({
       address: newAddress,
@@ -92,9 +108,12 @@ export default function WalletsPage() {
               className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
             />
           </div>
+          {validationError && (
+            <p className="text-red-400 text-sm mb-3">{validationError}</p>
+          )}
           <button
             onClick={addWallet}
-            disabled={!newAddress || !newAddress.startsWith('0x')}
+            disabled={!newAddress}
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
           >
             ➕ Add Wallet

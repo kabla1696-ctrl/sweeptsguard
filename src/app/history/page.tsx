@@ -3,6 +3,7 @@
 import { useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { CHAINS } from '@/lib/chains'
 
 interface Transfer {
   hash: string
@@ -47,8 +48,14 @@ function HistoryContent() {
     }
   }, [])
 
+  const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!ADDRESS_RE.test(address)) {
+      setError('Invalid address. Must be 0x + 40 hex characters.')
+      return
+    }
     fetchHistory(address)
   }
 
@@ -102,11 +109,11 @@ function HistoryContent() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        tx.from.toLowerCase() === address.toLowerCase()
+                        tx.from?.toLowerCase() === address.toLowerCase()
                           ? 'bg-red-500/20 text-red-400'
                           : 'bg-green-500/20 text-green-400'
                       }`}>
-                        {tx.from.toLowerCase() === address.toLowerCase() ? 'OUT' : 'IN'}
+                        {tx.from?.toLowerCase() === address.toLowerCase() ? 'OUT' : 'IN'}
                       </span>
                       <span className="text-white/30 text-xs">{tx.chainName}</span>
                       {tx.isExchangeDeposit && (
@@ -119,13 +126,13 @@ function HistoryContent() {
                       )}
                     </div>
                     <p className="text-white/40 text-xs font-mono">
-                      {tx.from.slice(0, 10)}...{tx.from.slice(-6)} → {tx.to.slice(0, 10)}...{tx.to.slice(-6)}
+                      {tx.from?.slice(0, 10)}...{tx.from?.slice(-6)} → {tx.to?.slice(0, 10)}...{tx.to?.slice(-6)}
                     </p>
                   </div>
                   <div className="text-right">
                     <div className="font-mono text-sm">{parseFloat(tx.value).toFixed(6)} {tx.asset}</div>
                     <a
-                      href={`https://etherscan.io/tx/${tx.hash}`}
+                      href={`${CHAINS[tx.chainId]?.explorer ?? 'https://etherscan.io'}/tx/${tx.hash}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-green-400/50 text-xs hover:text-green-400"
