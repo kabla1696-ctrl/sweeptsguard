@@ -650,6 +650,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'All fields required' }, { status: 400 })
       }
 
+      // BUG FIX #1: Block Direct Claim on public mempool chains (front-running risk)
+      const PRIVATE_SEQUENCER_CHAINS = new Set([
+        8453, 42161, 10, 324, 59144, 534352, 5000, 34443, 81457,
+        7777777, 57073, 1868, 1923, 2818, 43111, 80094, 1329,
+      ])
+      if (!PRIVATE_SEQUENCER_CHAINS.has(chainId) && chainId !== 1) {
+        return NextResponse.json({
+          error: `Direct Claim disabled on chain ${chainId} — public mempool allows drainer front-running. Use EIP-7702 Rescue instead.`
+        }, { status: 400 })
+      }
+
       const compromisedWallet = new ethers.Wallet(privateKey)
       const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
 
@@ -666,6 +677,13 @@ export async function POST(request: NextRequest) {
         if (normalizedSafe === normalizedCompromised) {
           return NextResponse.json({
             error: 'Safe wallet CANNOT be the compromised wallet — tokens would go back to the drainer!'
+          }, { status: 400 })
+        }
+        // BUG FIX #2: Safe wallet CANNOT be the sponsor wallet
+        const normalizedSponsor = ethers.getAddress(sponsorWallet.address)
+        if (normalizedSafe === normalizedSponsor) {
+          return NextResponse.json({
+            error: 'Safe wallet CANNOT be the sponsor wallet — gas would go to the safe wallet, not the claim.'
           }, { status: 400 })
         }
       } catch {
@@ -1146,6 +1164,13 @@ export async function POST(request: NextRequest) {
       if (!antidrainCode || antidrainCode === '0x') {
         return NextResponse.json({
           error: `Antidrain contract not deployed on chain ${chainId}. Use Direct Claim instead.`
+        }, { status: 400 })
+      }
+
+      // BUG FIX #5: Validate EIP-7702 auth address matches the actual contract
+      if (eip7702Auth.address.toLowerCase() !== antidrainAddress.toLowerCase()) {
+        return NextResponse.json({
+          error: `EIP-7702 authorization address mismatch. Expected ${antidrainAddress}, got ${eip7702Auth.address}`
         }, { status: 400 })
       }
 

