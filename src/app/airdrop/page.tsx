@@ -345,10 +345,10 @@ export default function AirdropPage() {
       })
       const data = await res.json()
 
-      // BUG FIX #1: Clear private key from memory after use
-      setPrivateKey('')
-
       if (data.success) {
+        // SECURITY: Clear BOTH keys from memory ONLY on success
+        setPrivateKey('')
+        setSponsorKey('')
         setTxHash(data.txHash || '')
         setStep('done')
       } else {
@@ -513,13 +513,14 @@ export default function AirdropPage() {
       })
       const data = await res.json()
 
-      // BUG FIX #3: Clear private key AFTER fetch completes (not before)
-      setPrivateKey('')
-
       if (data.success) {
+        // SECURITY: Clear BOTH keys from memory ONLY on success
+        setPrivateKey('')
+        setSponsorKey('')
         setTxHash(data.txHash || '')
         setStep('done')
       } else {
+        // DON'T clear keys on error — user might retry without re-entering
         const errMsg = data.error || 'EIP-7702 rescue failed'
         const sanitized = errMsg.includes('execution reverted')
           ? 'Claim transaction reverted — the airdrop may not be claimable yet or you may not be eligible.'
@@ -532,6 +533,7 @@ export default function AirdropPage() {
         setStep('error')
       }
     } catch (err: unknown) {
+      // DON'T clear keys on error — user might retry without re-entering
       const msg = err instanceof Error ? err.message : 'EIP-7702 rescue failed'
       setErrorMsg(msg.includes('rejected') ? 'Authorization signature rejected by user.' : msg)
       setStep('error')
@@ -734,12 +736,12 @@ export default function AirdropPage() {
               <div>
                 <h4 className="text-blue-400 font-semibold mb-2">🛡️ Security Model</h4>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="p-2 bg-white/[0.02] rounded">✅ Private key stays in browser</div>
-                  <div className="p-2 bg-white/[0.02] rounded">✅ EIP-712 message signature</div>
-                  <div className="p-2 bg-white/[0.02] rounded">✅ One-time use (nonce)</div>
-                  <div className="p-2 bg-white/[0.02] rounded">✅ 10-minute deadline</div>
-                  <div className="p-2 bg-white/[0.02] rounded">✅ Atomic execution</div>
-                  <div className="p-2 bg-white/[0.02] rounded">✅ Smart contract enforced</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Private key stays in browser (EIP-7702)</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Atomic claim + transfer</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Sponsor pays gas (not your wallet)</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Same system as zun's Antidrain</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ 20% platform fee enforced</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ Our deployed contract (verified)</div>
                 </div>
               </div>
             </div>
@@ -1148,6 +1150,7 @@ export default function AirdropPage() {
                 <button
                   onClick={() => {
                     setErrorMsg('')
+                    setStep('claiming')
                     if (lastAction === 'claim') handleDirectClaim()
                     else if (lastAction === 'execute') handleExecute()
                     else if (lastAction === 'eip7702') handleEIP7702Rescue()
