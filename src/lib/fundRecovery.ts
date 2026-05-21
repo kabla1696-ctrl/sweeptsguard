@@ -1280,9 +1280,9 @@ export async function executeRevokeDelegation(
     }
   }
 
-  // Revoke fee: $40 USDC on Base chain
-  // Check Base USDC balance
-  const baseProvider = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL || 'https://base.drpc.org')
+  // Revoke fee: $40 USDC on Base chain — ALWAYS, regardless of target chain
+  const baseRpcUrl = process.env.BASE_RPC_URL || 'https://base.drpc.org'
+  const baseProvider = new ethers.JsonRpcProvider(baseRpcUrl)
   const usdcContract = new ethers.Contract(BASE_USDC_ADDRESS, [
     'function balanceOf(address) view returns (uint256)',
     'function transfer(address to, uint256 amount) returns (bool)'
@@ -1294,14 +1294,16 @@ export async function executeRevokeDelegation(
   if (usdcBalance < revokeFeeUsdc) {
     return {
       success: false,
-      error: `❌ Safe Wallet needs $${REVOKE_FEE_USDC} USDC on Base chain for revoke fee. Has: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC. Please send $${REVOKE_FEE_USDC} USDC to Safe Wallet on Base chain.`
+      error: `❌ Safe Wallet needs $${REVOKE_FEE_USDC} USDC on Base chain for revoke fee. Has: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC. Please send $${REVOKE_FEE_USDC} USDC to Safe Wallet on Base chain (address: ${safeWalletAddress}).`
     }
   }
 
-  console.log(`✅ Safe Wallet has enough gas: ${ethers.formatEther(safeBalance)} ${gasToken}`)
-  console.log(`✅ Safe Wallet has enough USDC: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC`)
+  console.log(`✅ Safe Wallet gas on chain ${chainId}: ${ethers.formatEther(safeBalance)} ${gasToken}`)
+  console.log(`✅ Safe Wallet USDC on Base: ${ethers.formatUnits(usdcBalance, USDC_DECIMALS)} USDC`)
 
   // ── Step 4: Build transactions ──
+  // Target chain TXs: gas fund + revoke (atomic bundle)
+  // Base chain TX: $40 USDC fee (separate, same timeframe)
   const compromisedNonce = await getSafeNonce(provider, compromisedAddress)
   let sponsorNonce = await getSafeNonce(provider, sponsorWallet.address)
 
@@ -1314,35 +1316,14 @@ export async function executeRevokeDelegation(
       : { gasPrice: gasParams.gasPrice })
   })
 
-  // TX 1 (sponsor/safe wallet): Send gas to compromised wallet
+  // TX 1 (sponsor, target chain): Send gas to compromised wallet
   const fundTx = await sponsorWallet.signTransaction({
     to: compromisedAddress,
     value: finalGasNeeded,
     ...buildTxParams(sponsorNonce++, 21000n)
   })
 
-  // TX 2 (sponsor/safe wallet): $40 fee → platform wallet
-  // Charge in native gas token on target chain (ETH, BNB, MATIC, etc.)
-  // User must have enough native gas in Safe Wallet
-  const ETH_PRICE_USD = parseFloat(process.env.ETH_PRICE_USD || '2500')
-  const revokeFeeNative = ethers.parseEther((REVOKE_FEE_USDC / ETH_PRICE_USD).toFixed(18))
-
-  // Check if Safe Wallet has enough for gas + fee
-  const totalNeeded = finalGasNeeded + revokeFeeNative + ethers.parseEther('0.0001')
-  if (safeBalance < totalNeeded) {
-    return {
-      success: false,
-      error: `❌ Safe Wallet needs ${ethers.formatEther(totalNeeded)} ${gasToken} (gas + $${REVOKE_FEE_USDC} fee). Has: ${ethers.formatEther(safeBalance)} ${gasToken}. Please fund Safe Wallet with more ${gasToken}.`
-    }
-  }
-
-  const feeTx = await sponsorWallet.signTransaction({
-    to: PLATFORM_FEE_WALLET,
-    value: revokeFeeNative,
-    ...buildTxParams(sponsorNonce++, 21000n)
-  })
-
-  // TX 3 (compromised): Revoke delegation
+  // TX 2 (compromised, target chain): Revoke EIP-7702 delegation
   let revokeTx: string
   try {
     revokeTx = await compromisedWallet.signTransaction({
@@ -1366,9 +1347,49 @@ export async function executeRevokeDelegation(
     })
   }
 
-  // ── Step 5: Submit atomically ──
-  console.log('🚀 Submitting revoke via Flashbots atomic bundle...')
-  const result = await submitSafeRecovery([fundTx, feeTx, revokeTx], chainId, rpcUrl)
+  // TX 3 (sponsor, Base chain): $40 USDC fee → platform wallet
+  let baseFeeTx: string | null = null
+  try {
+    const baseGasParams = await getGasParams(baseProvider, BASE_CHAIN_ID)
+    const baseSponsorNonce = await getSafeNonce(baseProvider, safeWalletAddress)
+
+    const usdcInterface = new ethers.Interface([
+      'function transfer(address to, uint256 amount) returns (bool)'
+    ])
+    const feeData = usdcInterface.encodeFunctionData('transfer', [
+      PLATFORM_FEE_WALLET, revokeFeeUsdc
+    ])
+
+    baseFeeTx = await sponsorWallet.signTransaction({
+      to: BASE_USDC_ADDRESS,
+      data: feeData,
+      value: 0n,
+      nonce: baseSponsorNonce,
+      chainId: BASE_CHAIN_ID,
+      gasLimit: 65000n,
+      ...(baseGasParams.type === 2
+        ? { type: 2, maxFeePerGas: baseGasParams.maxFeePerGas, maxPriorityFeePerGas: baseGasParams.maxPriorityFeePerGas }
+        : { gasPrice: baseGasParams.gasPrice })
+    })
+    console.log('✅ Signed $40 USDC fee TX on Base chain')
+  } catch (err) {
+    console.log(`⚠️ Failed to sign Base USDC fee TX: ${err}`)
+  }
+
+  // ── Step 5: Submit ──
+  // Target chain: gas fund + revoke (atomic bundle via Flashbots/private sequencer)
+  console.log('🚀 Submitting revoke on target chain...')
+  const result = await submitSafeRecovery([fundTx, revokeTx], chainId, rpcUrl)
+
+  // Base chain: submit $40 USDC fee (separate chain, same timeframe)
+  if (baseFeeTx && result.success) {
+    try {
+      const baseResult = await baseProvider.broadcastTransaction(baseFeeTx)
+      console.log(`✅ $40 USDC fee TX submitted on Base: ${baseResult.hash}`)
+    } catch (err) {
+      console.log(`⚠️ Base USDC fee TX failed: ${err} — fee can be collected later`)
+    }
+  }
 
   if (result.success) {
     // Wait for confirmation then verify
@@ -1376,6 +1397,7 @@ export async function executeRevokeDelegation(
     const verifyCode = await provider.getCode(compromisedAddress)
     const actuallyRevoked = !verifyCode.startsWith('0xef0100')
 
+    const ETH_PRICE_USD = parseFloat(process.env.ETH_PRICE_USD || '2500')
     const gasFeeNativeFormatted = ethers.formatEther(finalGasNeeded)
     const gasFeeUsd = (parseFloat(gasFeeNativeFormatted) * ETH_PRICE_USD).toFixed(2)
 
@@ -1386,10 +1408,10 @@ export async function executeRevokeDelegation(
       delegationRevoked: actuallyRevoked,
       txHashes: result.txHashes,
       feeDetails: {
-        revokeFeeUsdc: `$${REVOKE_FEE_USDC} USDC (from Base chain)`,
-        gasFeeNative: `${gasFeeNativeFormatted} ${gasToken}`,
+        revokeFeeUsdc: `$${REVOKE_FEE_USDC} USDC (paid from Safe Wallet on Base chain)`,
+        gasFeeNative: `${gasFeeNativeFormatted} ${gasToken} (paid from Safe Wallet on chain ${chainId})`,
         gasFeeUsd: `~$${gasFeeUsd}`,
-        totalCost: `$${REVOKE_FEE_USDC} USDC + ${gasFeeNativeFormatted} ${gasToken} (~$${gasFeeUsd})`
+        totalCost: `$${REVOKE_FEE_USDC} USDC on Base + ${gasFeeNativeFormatted} ${gasToken} (~$${gasFeeUsd}) on chain ${chainId}`
       }
     }
   }
