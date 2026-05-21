@@ -43,6 +43,43 @@ const BASE_CHAIN_ID = 8453
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const USDC_DECIMALS = 6
 
+// Block range limits per chain (to avoid RPC timeouts)
+const CHAIN_BLOCK_RANGES: Record<number, number> = {
+  1: 2000,       // Ethereum — strict limit
+  8453: 5000,    // Base
+  56: 5000,      // BNB
+  42161: 10000,  // Arbitrum
+  137: 5000,     // Polygon
+  10: 5000,      // Optimism
+  43114: 5000,   // Avalanche
+  250: 5000,     // Fantom
+  81457: 5000,   // Blast
+  324: 5000,     // zkSync
+  59144: 5000,   // Linea
+  5000: 5000,    // Mantle
+  534352: 5000,  // Scroll
+  100: 5000,     // Gnosis
+  7000: 5000,    // ZetaChain
+  80094: 5000,   // Berachain
+  57073: 5000,   // Ink
+  1868: 5000,    // Soneium
+  1329: 5000,    // Sei
+  1116: 5000,    // Core
+  1625: 5000,    // Gravity
+  25: 5000,      // Cronos
+  1101: 5000,    // Polygon zkEVM
+  169: 5000,     // Manta
+  34443: 5000,   // Mode
+  196: 5000,     // XLayer
+  43111: 5000,   // Hemi
+  8217: 5000,    // Kaia
+  2818: 5000,    // Morph
+  1923: 5000,    // Swellchain
+  10143: 5000,   // Monad
+  16600: 5000,   // 0G
+  7777777: 5000, // Zora
+}
+
 // ============================================================
 // REVOKE RULES / ToS
 // ============================================================
@@ -779,7 +816,7 @@ export async function scanRecoverableAssets(
     'function decimals() view returns (uint8)'
   ]
 
-  // Scan all tokens in parallel
+  // ── Step 1: Scan hardcoded popular tokens (fast path) ──
   const balancePromises = commonTokens.map(async (token) => {
     try {
       const contract = new ethers.Contract(token.address, erc20Abi, provider)
@@ -801,6 +838,84 @@ export async function scanRecoverableAssets(
 
   const results = await Promise.all(balancePromises)
   tokens.push(...results.filter((t): t is TokenBalance => t !== null))
+
+  // ── Step 2: Dynamic discovery — find ALL tokens via Transfer event logs ──
+  // ERC-20 Transfer event signature: Transfer(address indexed from, address indexed to, uint256 value)
+  const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+  // Pad wallet address to 32 bytes for topic filtering
+  const walletTopic = ethers.zeroPadValue(walletAddress, 32)
+
+  try {
+    // Get recent blocks (last ~50k blocks for most chains, or 2x maxBlockRange)
+    const maxBlockRange = CHAIN_BLOCK_RANGES[chainId] || 10000
+    const currentBlock = await provider.getBlockNumber()
+    const scanBlocks = Math.min(maxBlockRange * 2, 50000) // Scan up to 50k blocks
+    const fromBlock = Math.max(0, currentBlock - scanBlocks)
+
+    // Query Transfer events TO this wallet
+    const logs = await provider.getLogs({
+      fromBlock: fromBlock,
+      toBlock: currentBlock,
+      topics: [TRANSFER_TOPIC, null, walletTopic] // from=any, to=wallet
+    })
+
+    // Extract unique token addresses (excluding already scanned ones)
+    const knownAddresses = new Set(tokens.map(t => t.address.toLowerCase()))
+    const discoveredAddresses = new Set<string>()
+
+    for (const log of logs) {
+      const tokenAddr = log.address.toLowerCase()
+      if (!knownAddresses.has(tokenAddr)) {
+        discoveredAddresses.add(tokenAddr)
+      }
+    }
+
+    // Also check Transfer events FROM this wallet (tokens we sent)
+    const logsFrom = await provider.getLogs({
+      fromBlock: fromBlock,
+      toBlock: currentBlock,
+      topics: [TRANSFER_TOPIC, walletTopic, null] // from=wallet, to=any
+    })
+
+    for (const log of logsFrom) {
+      const tokenAddr = log.address.toLowerCase()
+      if (!knownAddresses.has(tokenAddr)) {
+        discoveredAddresses.add(tokenAddr)
+      }
+    }
+
+    console.log(`🔍 Discovered ${discoveredAddresses.size} additional tokens via Transfer events on chain ${chainId}`)
+
+    // Check balances for discovered tokens
+    const discoveredPromises = Array.from(discoveredAddresses).map(async (addr) => {
+      try {
+        const contract = new ethers.Contract(addr, erc20Abi, provider)
+        const [balance, symbol, decimals] = await Promise.all([
+          contract.balanceOf(walletAddress),
+          contract.symbol().catch(() => 'UNKNOWN'),
+          contract.decimals().catch(() => 18)
+        ])
+        if (balance > BigInt(0)) {
+          return {
+            address: addr,
+            symbol: symbol || 'UNKNOWN',
+            decimals: Number(decimals),
+            balance,
+            balanceFormatted: ethers.formatUnits(balance, decimals)
+          }
+        }
+        return null
+      } catch {
+        return null
+      }
+    })
+
+    const discoveredResults = await Promise.all(discoveredPromises)
+    tokens.push(...discoveredResults.filter((t): t is TokenBalance => t !== null))
+
+  } catch (err) {
+    console.log(`⚠️ Dynamic token discovery failed on chain ${chainId}: ${err}. Using known tokens only.`)
+  }
 
   return { ethBalance, ethFormatted, tokens, hasDelegation, delegatedTo }
 }
