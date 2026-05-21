@@ -7,11 +7,24 @@ import { ethers } from 'ethers'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
-// Antidrain contract — deployed on 18+ EVM chains by zun (whitehat)
-// This is the SAME contract used by the Antidrain extension/website
-const ANTIDRAIN_CONTRACT = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
+// SweepGuard's own EIP-7702 rescuer contracts (fee goes to OUR wallet, not zun's!)
+// Deployed via: npx hardhat run scripts/deploy-rescuer.js --network <name>
+const SWEEPGUARD_RESCUER: Record<number, string> = {
+  // TODO: Fill addresses after deployment
+  // 1: '0x...',     // Ethereum
+  // 8453: '0x...',  // Base
+  // 42161: '0x...', // Arbitrum
+}
 
-// Chains where Antidrain contract is deployed (verified on Etherscan)
+// Fallback to zun's Antidrain for chains we haven't deployed on yet
+// ⚠️ 20% fee goes to zun's wallet on fallback chains!
+const ANTIDRAIN_FALLBACK = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
+
+function getRescuerContract(chainId: number): string {
+  return SWEEPGUARD_RESCUER[chainId] || ANTIDRAIN_FALLBACK
+}
+
+// Chains with EIP-7702 support (our contract or zun's fallback)
 const ANTIDRAIN_CHAINS = new Set([
   1,      // Ethereum
   8453,   // Base
@@ -467,11 +480,12 @@ export default function AirdropPage() {
 
       // Step 3: Sign EIP-7702 authorization LOCALLY
       // EIP-7702 authorization = keccak256(0x05 || rlp([chainId, address, nonce]))
+      const rescuerContract = getRescuerContract(chainId)
       const authPayload = ethers.concat([
         '0x05',
         ethers.encodeRlp([
           ethers.toBeHex(chainId),
-          ANTIDRAIN_CONTRACT.toLowerCase(),
+          rescuerContract.toLowerCase(),
           ethers.toBeHex(nonce),
         ]),
       ])
@@ -479,7 +493,7 @@ export default function AirdropPage() {
       const sig = compromisedWallet.signingKey.sign(authHash)
       const auth = {
         chainId: chainId,
-        address: ANTIDRAIN_CONTRACT,
+        address: rescuerContract,
         nonce: nonce,
         yParity: sig.v - 27, // 0 or 1
         r: sig.r,

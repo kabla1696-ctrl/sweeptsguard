@@ -107,6 +107,72 @@ module.exports = {
       url: process.env.LINEA_RPC || "https://rpc.linea.build",
       accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
       chainId: 59144
+    },
+    // Mantle
+    mantle: {
+      url: process.env.MANTLE_RPC || "https://rpc.mantle.xyz",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 5000
+    },
+    // Scroll
+    scroll: {
+      url: process.env.SCROLL_RPC || "https://rpc.scroll.io",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 534352
+    },
+    // Berachain
+    berachain: {
+      url: process.env.BERA_RPC || "https://rpc.berachain.com",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 80094
+    },
+    // Sei
+    sei: {
+      url: process.env.SEI_RPC || "https://evm-rpc.sei-apis.com",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 1329
+    },
+    // Ink
+    ink: {
+      url: process.env.INK_RPC || "https://rpc-gel.inkonchain.com",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 57073
+    },
+    // Unichain
+    unichain: {
+      url: process.env.UNI_RPC || "https://mainnet.unichain.org",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 130
+    },
+    // Monad
+    monad: {
+      url: process.env.MONAD_RPC || "https://rpc.monad.xyz",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 143
+    },
+    // HyperEVM
+    hyperevm: {
+      url: process.env.HYPER_RPC || "https://rpc.hyperliquid.xyz/evm",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 999
+    },
+    // Plume
+    plume: {
+      url: process.env.PLUME_RPC || "https://rpc.plume.org",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 98866
+    },
+    // Gensyn
+    gensyn: {
+      url: process.env.GENSYN_RPC || "https://gensyn-mainnet.rpc.caldera.xyz/http",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 685689
+    },
+    // Plasma
+    plasma: {
+      url: process.env.PLASMA_RPC || "https://rpc.plasma.to",
+      accounts: process.env.DEPLOYER_KEY ? [process.env.DEPLOYER_KEY] : [],
+      chainId: 9745
     }
   },
   etherscan: {

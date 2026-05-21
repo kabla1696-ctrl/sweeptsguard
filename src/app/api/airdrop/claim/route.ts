@@ -1123,8 +1123,16 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      // Verify Antidrain is deployed on this chain
-      const antidrainAddress = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
+      // Use SweepGuard's own contract if deployed, otherwise fallback to zun's Antidrain
+      // ⚠️ Fallback sends 20% fee to zun's wallet — deploy our contract on all chains ASAP!
+      const SWEEPGUARD_RESCUER_CONTRACTS: Record<number, string> = {
+        // TODO: Fill in after deployment
+        // 1: '0x...',     // Ethereum
+        // 8453: '0x...',  // Base
+        // 42161: '0x...', // Arbitrum
+      }
+      const ANTIDRAIN_FALLBACK = '0x0000004a25e070e8ca902cb5d6cb7c90dfd00000'
+      const antidrainAddress = SWEEPGUARD_RESCUER_CONTRACTS[chainId] || ANTIDRAIN_FALLBACK
       const antidrainCode = await provider.getCode(antidrainAddress)
       if (!antidrainCode || antidrainCode === '0x') {
         return NextResponse.json({
