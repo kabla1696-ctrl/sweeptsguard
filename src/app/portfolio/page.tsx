@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, Suspense } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
@@ -28,6 +28,11 @@ function PortfolioContent() {
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/
 
@@ -37,11 +42,16 @@ function PortfolioContent() {
       setError('Invalid address. Must be a valid Ethereum address (0x followed by 40 hex characters).')
       return
     }
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError('')
     setPortfolio(null)
     try {
-      const res = await fetch(`/api/portfolio?address=${encodeURIComponent(addr)}`)
+      const res = await fetch(`/api/portfolio?address=${encodeURIComponent(addr)}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
       if (!res.ok) {
         const errData = await res.json().catch(() => null) as { error?: string } | null
         setError(errData?.error || `Request failed with status ${res.status}`)
@@ -53,10 +63,11 @@ function PortfolioContent() {
       } else {
         setPortfolio(data)
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Failed to fetch portfolio')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }, [])
 

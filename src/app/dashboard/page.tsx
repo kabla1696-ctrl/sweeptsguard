@@ -1,47 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-
-// Map chainId to explorer hostname
-function getExplorerForChain(chainId: number): string {
-  const explorers: Record<number, string> = {
-    1: 'etherscan.io',
-    8453: 'basescan.org',
-    56: 'bscscan.com',
-    42161: 'arbiscan.io',
-    137: 'polygonscan.com',
-    10: 'optimistic.etherscan.io',
-    43114: 'snowtrace.io',
-    250: 'ftmscan.com',
-    25: 'cronoscan.com',
-    81457: 'blastscan.io',
-    7777777: 'zorascan.xyz',
-    1101: 'zkevm.polygonscan.com',
-    169: 'pacific-explorer.manta.network',
-    324: 'explorer.zksync.io',
-    59144: 'lineascan.build',
-    5000: 'mantlescan.xyz',
-    34443: 'explorer.mode.network',
-    534352: 'scrollscan.com',
-    100: 'gnosisscan.io',
-    7000: 'zetascan.com',
-    1625: 'explorer.gravity.xyz',
-    1116: 'scan.coredao.org',
-    1329: 'seiscan.io',
-    80094: 'berascan.com',
-    57073: 'explorer.inkonchain.com',
-    196: 'www.oklink.com/xlayer',
-    43111: 'explorer.hemi.xyz',
-    8217: 'kaiascan.io',
-    1868: 'soneium.blockscout.com',
-    2818: 'explorer.morphl2.io',
-    1923: 'swellchainscan.io',
-    10143: 'testnet.monadexplorer.com',
-  }
-  return explorers[chainId] || 'etherscan.io'
-}
+import { getExplorerUrl } from '@/lib/validation'
 
 interface MonitorStatus {
   running: boolean
@@ -66,23 +28,47 @@ function DashboardContent() {
   const [status, setStatus] = useState<MonitorStatus | null>(null)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
   const [activeTab, setActiveTab] = useState<'setup' | 'alerts' | 'sweeps'>('setup')
+  const [setupError, setSetupError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Cleanup: abort in-flight fetches and clear keys on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort()
+      setPrivateKey('')
+    }
+  }, [])
+
+  const pollStatus = useCallback(async (signal?: AbortSignal) => {
+    if (!address) return
+    try {
+      const res = await fetch(`/api/monitor?address=${address}`, { signal })
+      const data = await res.json()
+      setStatus(data)
+      if (data.running) setMonitoring(true)
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
+      console.error('Failed to fetch status:', err)
+    }
+  }, [address])
 
   const startMonitoring = useCallback(async () => {
     if (!address || !safeAddress || !privateKey) return
 
     // Validate addresses
     if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
-      alert('Invalid compromised wallet address')
+      setSetupError('Invalid compromised wallet address')
       return
     }
     if (!/^0x[0-9a-fA-F]{40}$/.test(safeAddress)) {
-      alert('Invalid safe wallet address')
+      setSetupError('Invalid safe wallet address')
       return
     }
     if (safeAddress.toLowerCase() === address.toLowerCase()) {
-      alert('Safe wallet must be different from compromised wallet!')
+      setSetupError('Safe wallet must be different from compromised wallet!')
       return
     }
+    setSetupError('')
 
     try {
       const res = await fetch('/api/monitor', {
@@ -108,7 +94,7 @@ function DashboardContent() {
     } catch (err) {
       console.error('Failed to start monitoring:', err)
     }
-  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl])
+  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl, pollStatus])
 
   const stopMonitoring = useCallback(async () => {
     try {
@@ -125,22 +111,15 @@ function DashboardContent() {
     }
   }, [address])
 
-  const pollStatus = useCallback(async () => {
-    if (!address) return
-    try {
-      const res = await fetch(`/api/monitor?address=${address}`)
-      const data = await res.json()
-      setStatus(data)
-      if (data.running) setMonitoring(true)
-    } catch (err) {
-      console.error('Failed to fetch status:', err)
-    }
-  }, [address])
-
   useEffect(() => {
-    if (address) pollStatus()
-    const interval = setInterval(pollStatus, 15000) // BUG FIX: 5s → 15s
-    return () => clearInterval(interval)
+    const controller = new AbortController()
+    abortRef.current = controller
+    if (address) pollStatus(controller.signal)
+    const interval = setInterval(() => pollStatus(controller.signal), 15000)
+    return () => {
+      clearInterval(interval)
+      controller.abort()
+    }
   }, [address, pollStatus])
 
   return (
@@ -299,6 +278,12 @@ function DashboardContent() {
               </p>
             </div>
 
+            {setupError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+                {setupError}
+              </div>
+            )}
+
             <div className="flex gap-4">
               {!monitoring ? (
                 <button
@@ -317,7 +302,7 @@ function DashboardContent() {
                 </button>
               )}
               <button
-                onClick={pollStatus}
+                onClick={() => pollStatus()}
                 className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl hover:bg-white/[0.08] transition-all"
               >
                 🔄 Refresh
@@ -381,7 +366,7 @@ function DashboardContent() {
                         <div className="font-mono text-sm">{sweep.amount}</div>
                         {sweep.txHash && (
                           <a
-                            href={`https://${getExplorerForChain(sweep.chainId || 1)}/tx/${sweep.txHash}`}
+                            href={getExplorerUrl(sweep.chainId || 1, sweep.txHash, 'tx')}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-green-400/50 text-xs hover:text-green-400"

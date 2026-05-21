@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { CHAINS } from '@/lib/chains'
 
@@ -23,15 +23,25 @@ export default function BridgePage() {
   const [result, setResult] = useState<BridgeResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const chains = Object.values(CHAINS)
 
   const handleSearch = async () => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError('')
     setResult(null)
     try {
-      const res = await fetch(`/api/bridge?from=${fromChain}&to=${toChain}`)
+      const res = await fetch(`/api/bridge?from=${fromChain}&to=${toChain}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
       if (!res.ok) {
         const errData = await res.json().catch(() => null) as { error?: string } | null
         setError(errData?.error || `Request failed with status ${res.status}`)
@@ -43,10 +53,11 @@ export default function BridgePage() {
       } else {
         setResult(data)
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Failed to fetch bridge route. Please check your connection and try again.')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }
 

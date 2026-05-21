@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
 
@@ -23,6 +23,11 @@ export default function TrackerPage() {
   const [tracking, setTracking] = useState(false)
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const trackFunds = async () => {
     if (!address) { setError('Please enter a wallet address'); return }
@@ -32,12 +37,17 @@ export default function TrackerPage() {
       setError('Invalid EVM address format'); return
     }
 
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setTracking(true)
     setError('')
     setTransfers([])
 
     try {
-      const res = await fetch(`/api/track?address=${address}`)
+      const res = await fetch(`/api/track?address=${address}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
       const data = await res.json()
 
       if (data.error) {
@@ -45,10 +55,11 @@ export default function TrackerPage() {
       } else {
         setTransfers(data.transfers || [])
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Failed to track funds. Please try again.')
     } finally {
-      setTracking(false)
+      if (!controller.signal.aborted) setTracking(false)
     }
   }
 
@@ -73,7 +84,7 @@ export default function TrackerPage() {
       'Fantom': 'https://ftmscan.com',
       'Cronos': 'https://cronoscan.com',
       'Blast': 'https://blastscan.io',
-      'Zora': 'https://zorascan.xyz',
+      'Zora': 'https://explorer.zora.energy',
       'Polygon zkEVM': 'https://zkevm.polygonscan.com',
       'Manta Pacific': 'https://pacific-explorer.manta.network',
       'zkSync Era': 'https://explorer.zksync.io',
@@ -82,10 +93,10 @@ export default function TrackerPage() {
       'Mode': 'https://explorer.mode.network',
       'Scroll': 'https://scrollscan.com',
       'Gnosis': 'https://gnosisscan.io',
-      'ZetaChain': 'https://zetascan.com',
+      'ZetaChain': 'https://zetachain.blockscout.com',
       'Gravity': 'https://explorer.gravity.xyz',
       'Core': 'https://scan.coredao.org',
-      'Sei': 'https://seiscan.io',
+      'Sei': 'https://seitrace.com',
       'Berachain': 'https://berascan.com',
       'Ink': 'https://explorer.inkonchain.com',
       'XLayer': 'https://www.oklink.com/xlayer',

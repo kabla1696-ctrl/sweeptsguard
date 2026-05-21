@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CHAINS } from '@/lib/chains'
@@ -28,23 +28,34 @@ function HistoryContent() {
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const fetchHistory = useCallback(async (addr: string) => {
     if (!addr) return
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError('')
     try {
-      const res = await fetch(`/api/history?address=${addr}`)
+      const res = await fetch(`/api/history?address=${addr}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
       const data = await res.json() as { transfers?: Transfer[]; error?: string }
       if (data.error) {
         setError(data.error)
       } else {
         setTransfers(data.transfers || [])
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Failed to fetch history')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }, [])
 

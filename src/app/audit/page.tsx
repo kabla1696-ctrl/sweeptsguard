@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, Suspense } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { isValidAddress } from '@/lib/validation'
@@ -24,6 +24,11 @@ function AuditContent() {
   const [result, setResult] = useState<AuditResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const checkAudit = useCallback(async (addr: string) => {
     const trimmed = addr.trim()
@@ -32,21 +37,27 @@ function AuditContent() {
       setError('Invalid address format. Must be 0x followed by 40 hex characters.')
       return
     }
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setLoading(true)
     setError('')
     setResult(null)
     try {
-      const res = await fetch(`/api/audit?address=${trimmed}`)
+      const res = await fetch(`/api/audit?address=${trimmed}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
       const data = await res.json() as AuditResult & { error?: string }
       if (data.error) {
         setError(data.error)
       } else {
         setResult(data)
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Check failed')
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }, [])
 

@@ -1,48 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-
-// Map chainId to explorer hostname
-function getExplorerForChain(chainId: number): string {
-  const explorers: Record<number, string> = {
-    1: 'etherscan.io',
-    8453: 'basescan.org',
-    56: 'bscscan.com',
-    42161: 'arbiscan.io',
-    137: 'polygonscan.com',
-    10: 'optimistic.etherscan.io',
-    43114: 'snowtrace.io',
-    250: 'ftmscan.com',
-    25: 'cronoscan.com',
-    81457: 'blastscan.io',
-    7777777: 'zorascan.xyz',
-    1101: 'zkevm.polygonscan.com',
-    169: 'pacific-explorer.manta.network',
-    324: 'explorer.zksync.io',
-    59144: 'lineascan.build',
-    5000: 'mantlescan.xyz',
-    34443: 'explorer.mode.network',
-    534352: 'scrollscan.com',
-    100: 'gnosisscan.io',
-    7000: 'zetascan.com',
-    1625: 'explorer.gravity.xyz',
-    1116: 'scan.coredao.org',
-    1329: 'seiscan.io',
-    80094: 'berascan.com',
-    57073: 'explorer.inkonchain.com',
-    196: 'www.oklink.com/xlayer',
-    43111: 'explorer.hemi.xyz',
-    8217: 'kaiascan.io',
-    1868: 'soneium.blockscout.com',
-    2818: 'explorer.morphl2.io',
-    1923: 'swellchainscan.io',
-    10143: 'testnet.monadexplorer.com',
-    0: 'chainscan.0g.ai',
-  }
-  return explorers[chainId] || 'etherscan.io'
-}
+import { getExplorerUrl } from '@/lib/validation'
 
 interface ScanResult {
   address: string
@@ -79,6 +40,12 @@ function ScanContent() {
   const [scanning, setScanning] = useState(false)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState('')
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Cleanup: abort any in-flight fetch on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort() }
+  }, [])
 
   const scanWallet = useCallback(async (addr: string) => {
     if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
@@ -86,18 +53,26 @@ function ScanContent() {
       return
     }
 
+    // Abort previous in-flight request
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setScanning(true)
     setError('')
     setResult(null)
 
     try {
-      const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 60000) // 60s timeout
       
       const res = await fetch(`/api/scan?address=${addr}`, {
         signal: controller.signal
       })
       clearTimeout(timeoutId)
+
+      // Don't update state if this request was superseded
+      if (controller.signal.aborted) return
+
       const data = await res.json()
 
       if (data.error) {
@@ -106,13 +81,14 @@ function ScanContent() {
         setResult(data)
       }
     } catch (err: unknown) {
+      if (controller.signal.aborted) return
       if (err instanceof Error && err.name === 'AbortError') {
         setError('Scan timed out after 60 seconds. Some chains may be slow. Try again.')
       } else {
         setError('Failed to scan wallet. Please try again.')
       }
     } finally {
-      setScanning(false)
+      if (!controller.signal.aborted) setScanning(false)
     }
   }, [])
 
@@ -321,7 +297,7 @@ function ScanContent() {
                           </p>
                         </div>
                         <a
-                          href={`https://${getExplorerForChain(call.chainId)}/tx/${call.txHash}`}
+                          href={getExplorerUrl(call.chainId, call.txHash, 'tx')}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-red-400 text-xs hover:underline"
@@ -384,7 +360,7 @@ function ScanContent() {
                           </p>
                         </div>
                         <a
-                          href={`https://${getExplorerForChain(tx.chainId)}/tx/${tx.txHash}`}
+                          href={getExplorerUrl(tx.chainId, tx.txHash, 'tx')}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-green-400 text-xs hover:underline"
