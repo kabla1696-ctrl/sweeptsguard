@@ -201,27 +201,32 @@ export default function SocialRecoveryPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-purple-500/[0.03] rounded-full blur-[100px]" />
+      </div>
+
       {/* Nav */}
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-green-400 transition-colors">Dashboard</Link>
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-12">
         {/* Header */}
-        <div className="flex items-start gap-3 mb-10">
-          <span className="text-4xl">🤝</span>
-          <div>
-            <h1 className="text-3xl font-bold">Social Recovery Network</h1>
-            <p className="text-white/40">Trusted guardians, Shamir&apos;s Secret Sharing, and multi-sig recovery</p>
-          </div>
+        <div className="mb-10">
+          <h1 className="text-4xl md:text-5xl font-black mb-2">
+            🤝 Social <span className="bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">Recovery</span>
+          </h1>
+          <p className="text-gray-500 text-lg">Trusted guardians, Shamir&apos;s Secret Sharing, and multi-sig recovery</p>
         </div>
 
         {/* Init / Wallet Input */}
