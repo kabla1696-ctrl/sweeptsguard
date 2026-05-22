@@ -882,7 +882,7 @@ export default async function DocSectionPage({ params }: PageProps) {
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-6 py-10">
+      <div className="relative z-10 max-w-3xl mx-auto px-6 py-10">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-zinc-500 mb-6">
           <Link href="/docs" className="hover:text-white transition">Docs</Link>

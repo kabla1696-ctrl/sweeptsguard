@@ -123,7 +123,7 @@ export default function BotPage() {
         <Link href="/dashboard" className="text-sm text-zinc-400 hover:text-white transition">← Dashboard</Link>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-10">
         <h1 className="text-3xl font-bold mb-2">🤖 Telegram Alert Bot</h1>
         <p className="text-zinc-400 mb-8">Get real-time alerts for wallet activity, drainer movements, and more — right in Telegram.</p>
 

@@ -162,7 +162,7 @@ export default function ApiDocsPage() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-12">
           <h1 className="text-3xl md:text-4xl font-bold mb-4">

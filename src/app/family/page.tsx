@@ -120,7 +120,7 @@ export default function FamilyProtectionPage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-6 py-12 relative z-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12 relative z-10">
         {/* Header */}
         <div className="flex items-start justify-between mb-10">
           <div>

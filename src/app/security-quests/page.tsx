@@ -127,7 +127,7 @@ export default function SecurityQuestsPage() {
         </div>
       )}
 
-      <div className="max-w-5xl mx-auto px-6 py-12">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">

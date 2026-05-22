@@ -189,7 +189,7 @@ export default function LandingPage() {
 
       {/* Stats Section */}
       <section className="relative z-10 px-6 pb-24">
-        <div className="max-w-4xl mx-auto">
+        <div className="relative z-10 max-w-4xl mx-auto">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {stats.map((stat) => (
               <div

@@ -36,7 +36,7 @@ export default function OfflinePage() {
         <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-gray-500/[0.04] rounded-full blur-[120px]" />
         <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-white-500/[0.03] rounded-full blur-[100px]" />
       </div>
-      <div className="max-w-md text-center">
+      <div className="relative z-10 max-w-md text-center">
         {/* Icon */}
         <div className="text-6xl mb-6">🛡️</div>
 

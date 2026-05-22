@@ -110,7 +110,7 @@ export default async function BlogPostPage({ params }: PageProps) {
         <Link href="/blog" className="text-sm text-zinc-400 hover:text-white transition">← Blog</Link>
       </nav>
 
-      <article className="max-w-3xl mx-auto px-6 py-10">
+      <article className="relative z-10 max-w-3xl mx-auto px-6 py-10">
         {/* Header */}
         <header className="mb-10">
           <div className="flex flex-wrap gap-2 mb-4">

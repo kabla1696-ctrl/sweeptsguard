@@ -92,7 +92,7 @@ export default function DiscordPage() {
         <Link href="/dashboard" className="text-sm text-zinc-400 hover:text-white transition">← Dashboard</Link>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-10">
         <h1 className="text-3xl font-bold mb-2">💜 Discord Alert Bot</h1>
         <p className="text-zinc-400 mb-8">Get real-time wallet alerts right in your Discord server with rich embeds and slash commands.</p>
 

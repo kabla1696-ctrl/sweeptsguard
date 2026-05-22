@@ -81,7 +81,7 @@ export default function DocsPage() {
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-10">
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-10">
         {/* Header */}
         <div className="mb-10">
           <h1 className="text-4xl font-bold mb-3">📚 Documentation</h1>

@@ -90,7 +90,7 @@ function ScamCheckContent() {
         </div>
       </nav>
 
-      <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="relative z-10 max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">AI Scam Detection</h1>
         <p className="text-white/40 mb-8">Analyze transaction patterns and detect potential scams</p>
 

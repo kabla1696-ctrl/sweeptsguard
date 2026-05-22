@@ -109,7 +109,7 @@ export default function ContractVerifyPage() {
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="flex items-start gap-3 mb-10">
           <span className="text-4xl">🔍</span>

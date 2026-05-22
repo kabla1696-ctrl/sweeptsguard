@@ -102,7 +102,7 @@ export default function ApprovalsPage() {
         </div>
       </nav>
 
-      <div className="max-w-5xl mx-auto px-6 py-12 relative z-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12 relative z-10">
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] text-xs font-medium mb-6">

@@ -215,7 +215,7 @@ export default function Home() {
 
       {/* Navigation */}
       <nav className="relative z-50">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="relative z-10 max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3 group">
             <div className="relative">
