@@ -583,9 +583,15 @@ export default function AirdropPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/3 w-[500px] h-[500px] bg-yellow-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-green-500/[0.03] rounded-full blur-[100px]" />
+      </div>
+
       {/* Nav */}
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
@@ -593,18 +599,20 @@ export default function AirdropPage() {
           </span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
+          <Link href="/tracker" className="text-sm text-white/50 hover:text-green-400 transition-colors">Tracker</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-green-400 transition-colors">Dashboard</Link>
         </div>
       </nav>
 
-      <div className="max-w-2xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">🎯 Airdrop Claimer</h1>
-        <p className="text-white/40 mb-8">Claim airdrops from compromised wallet → 80% safe wallet, 20% platform fee</p>
+      <div className="relative z-10 max-w-2xl mx-auto px-6 py-12">
+        <h1 className="text-4xl md:text-5xl font-black mb-2">
+          🎯 Airdrop <span className="bg-gradient-to-r from-yellow-400 to-green-400 bg-clip-text text-transparent">Claimer</span>
+        </h1>
+        <p className="text-gray-500 text-lg mb-8">Claim airdrops from compromised wallet → 80% safe wallet, 20% platform fee</p>
 
         {/* Security Badge */}
-        <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl mb-6">
+        <div className="p-4 bg-green-500/[0.06] border border-green-500/15 rounded-xl mb-6 backdrop-blur-sm">
           <p className="text-green-400 text-sm">
             🔒 <strong>Two Claim Modes</strong> —
             <strong className="text-green-400"> EIP-7702 Rescue</strong>: Key NEVER leaves browser, sponsor pays gas, atomic batch. Works on {ANTIDRAIN_CHAINS.size}+ chains (recommended! ✅).
