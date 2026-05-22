@@ -134,11 +134,11 @@ export default function LandingPage() {
           </span>
         </Link>
         <div className="hidden md:flex items-center gap-6">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/recover" className="text-sm text-white/50 hover:text-white transition-colors">Recover</Link>
-          <Link href="/airdrop" className="text-sm text-white/50 hover:text-white transition-colors">Airdrop</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/referral" className="text-sm text-white/50 hover:text-white transition-colors">Referral</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
+          <Link href="/recover" className="text-sm text-white/50 hover:text-green-400 transition-colors">Recover</Link>
+          <Link href="/airdrop" className="text-sm text-white/50 hover:text-green-400 transition-colors">Airdrop</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-green-400 transition-colors">Dashboard</Link>
+          <Link href="/referral" className="text-sm text-white/50 hover:text-green-400 transition-colors">Referral</Link>
           <Link
             href="/scan"
             className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg text-sm font-semibold hover:from-green-500 hover:to-emerald-500 transition-all"

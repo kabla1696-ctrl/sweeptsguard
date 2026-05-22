@@ -751,7 +751,7 @@ export default function SolanaPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">
+        <div className="min-h-screen bg-[#030305] flex items-center justify-center text-white/30">
           <div className="inline-flex items-center gap-3">
             <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />

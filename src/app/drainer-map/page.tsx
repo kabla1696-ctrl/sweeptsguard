@@ -101,7 +101,7 @@ export default function DrainerMapPage() {
             <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-green-400 animate-pulse' : 'bg-white/20'}`} />
             <button
               onClick={() => setAutoRefresh(!autoRefresh)}
-              className="text-xs text-white/40 hover:text-white transition-colors"
+              className="text-xs text-white/40 hover:text-green-400 transition-colors"
             >
               {autoRefresh ? 'Live' : 'Paused'}
             </button>

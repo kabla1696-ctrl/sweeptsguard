@@ -141,7 +141,7 @@ export default function ApiDocsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
       {/* Nav */}
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
@@ -151,8 +151,8 @@ export default function ApiDocsPage() {
           </span>
         </Link>
         <div className="flex items-center gap-4">
-          <Link href="/" className="text-sm text-white/50 hover:text-white transition-colors">Home</Link>
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/" className="text-sm text-white/50 hover:text-green-400 transition-colors">Home</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
           <a href="/docs/API.md" target="_blank" className="text-sm text-violet-400/70 hover:text-violet-400 transition-colors">Full Docs</a>
         </div>
       </nav>

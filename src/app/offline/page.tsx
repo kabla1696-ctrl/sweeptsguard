@@ -30,7 +30,7 @@ export default function OfflinePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center px-6">
+    <main className="min-h-screen bg-[#030305] text-white flex items-center justify-center px-6">
       <div className="max-w-md text-center">
         {/* Icon */}
         <div className="text-6xl mb-6">🛡️</div>

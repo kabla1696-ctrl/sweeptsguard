@@ -108,7 +108,7 @@ export default function BotPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
       {/* Nav */}
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">

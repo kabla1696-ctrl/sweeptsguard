@@ -83,7 +83,7 @@ function DeFiContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
@@ -183,7 +183,7 @@ function DeFiContent() {
 
 export default function DeFiPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#030305] flex items-center justify-center text-white/30">Loading...</div>}>
       <DeFiContent />
     </Suspense>
   )

@@ -101,15 +101,15 @@ export default function SecurityQuestsPage() {
   const totalPoints = user?.totalPoints ?? 0
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/audit-bot" className="text-sm text-white/50 hover:text-white transition-colors">Audit Bot</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-green-400 transition-colors">Dashboard</Link>
+          <Link href="/audit-bot" className="text-sm text-white/50 hover:text-green-400 transition-colors">Audit Bot</Link>
         </div>
       </nav>
 

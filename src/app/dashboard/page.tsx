@@ -568,7 +568,7 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-[#030305] flex items-center justify-center text-white/30">Loading...</div>}>
       <DashboardContent />
     </Suspense>
   )

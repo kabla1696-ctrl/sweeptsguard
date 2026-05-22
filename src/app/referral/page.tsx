@@ -129,9 +129,9 @@ export default function ReferralPage() {
           </span>
         </Link>
         <div className="hidden md:flex items-center gap-6">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/landing" className="text-sm text-white/50 hover:text-white transition-colors">Landing</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
+          <Link href="/landing" className="text-sm text-white/50 hover:text-green-400 transition-colors">Landing</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-green-400 transition-colors">Dashboard</Link>
         </div>
       </nav>
 

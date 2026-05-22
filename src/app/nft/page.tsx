@@ -149,7 +149,7 @@ function NFTContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
       {/* Nav */}
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
@@ -159,8 +159,8 @@ function NFTContent() {
           </span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/recover" className="text-sm text-white/50 hover:text-white transition-colors">Recover</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
+          <Link href="/recover" className="text-sm text-white/50 hover:text-green-400 transition-colors">Recover</Link>
           <Link href="/nft" className="text-sm text-green-400 font-semibold">NFT Rescue</Link>
         </div>
       </nav>
@@ -418,7 +418,7 @@ function NFTContent() {
 export default function NFTPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">
+      <div className="min-h-screen bg-[#030305] flex items-center justify-center text-white/30">
         <div className="inline-flex items-center gap-3">
           <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />

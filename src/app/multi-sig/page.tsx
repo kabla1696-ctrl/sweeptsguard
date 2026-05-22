@@ -97,7 +97,7 @@ export default function MultiSigRecoveryPage() {
           <span className="text-xl font-bold bg-gradient-to-r from-[#00ff87] to-[#00e5ff] bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-green-400 transition-colors">Dashboard</Link>
           <Link href="/multi-sig" className="text-sm text-[#00e5ff] font-medium">Multi-Sig Recovery</Link>
         </div>
       </nav>
