@@ -14,6 +14,46 @@ import {
   type AdminStats,
 } from '@/lib/referral'
 
+// ── Analytics Types ────────────────────────────────────────────────────────
+interface AnalyticsOverview {
+  totalVisitors: number
+  totalPageViews: number
+  activeVisitors: number
+  topPages: { path: string; views: number }[]
+  topCountries: { country: string; visitors: number }[]
+  visitorsByHour: { hour: string; count: number }[]
+  visitorsByDay: { date: string; count: number }[]
+}
+
+interface RealtimeData {
+  onlineNow: number
+  recentVisits: { path: string; country: string; timestamp: number }[]
+  currentPageViews: { path: string; count: number }[]
+}
+
+interface CountryData {
+  countries: { country: string; totalVisits: number; uniqueVisitors: number; topPages: string[] }[]
+  worldMap: Record<string, number>
+}
+
+function countryToFlag(code: string): string {
+  if (!code || code === 'unknown' || code.length !== 2) return '🌍'
+  const codePoints = code.toUpperCase().split('').map(c => 127397 + c.charCodeAt(0))
+  return String.fromCodePoint(...codePoints)
+}
+
+function timeAgo(timestamp: number): string {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000)
+  if (seconds < 5) return 'just now'
+  if (seconds < 60) return `${seconds}s ago`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
 const ADMIN_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 
 export default function AdminPage() {
@@ -31,7 +71,11 @@ export default function AdminPage() {
   const [referrers, setReferrers] = useState<ReferrerEntry[]>([])
   const [claims, setClaims] = useState<ClaimRecord[]>([])
   const [payouts, setPayouts] = useState<PayoutRecord[]>([])
-  const [activeTab, setActiveTab] = useState<'overview' | 'referrers' | 'claims' | 'payouts'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'referrers' | 'claims' | 'payouts' | 'analytics'>('overview')
+  const [analyticsOverview, setAnalyticsOverview] = useState<AnalyticsOverview | null>(null)
+  const [realtimeData, setRealtimeData] = useState<RealtimeData | null>(null)
+  const [countryData, setCountryData] = useState<CountryData | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = useState(false)
   const [payoutModal, setPayoutModal] = useState<{ code: string; amount: number } | null>(null)
   const [txHash, setTxHash] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -50,6 +94,25 @@ export default function AdminPage() {
       setPayouts(storedPayouts)
     } catch (err) {
       console.error('[Admin] Failed to load data:', err)
+    }
+  }, [])
+
+  const loadAnalytics = useCallback(async () => {
+    try {
+      setAnalyticsLoading(true)
+      const headers = { 'x-wallet-address': ADMIN_WALLET }
+      const [overview, realtime, countries] = await Promise.all([
+        fetch('/api/admin/analytics/overview', { headers }).then(r => r.json()),
+        fetch('/api/admin/analytics/realtime', { headers }).then(r => r.json()),
+        fetch('/api/admin/analytics/countries', { headers }).then(r => r.json()),
+      ])
+      setAnalyticsOverview(overview)
+      setRealtimeData(realtime)
+      setCountryData(countries)
+    } catch (err) {
+      console.error('[Admin] Failed to load analytics:', err)
+    } finally {
+      setAnalyticsLoading(false)
     }
   }, [])
 
@@ -75,6 +138,14 @@ export default function AdminPage() {
     }
     init()
   }, [loadData])
+
+  // Auto-refresh analytics every 30s when tab is active
+  useEffect(() => {
+    if (activeTab !== 'analytics' || !isAdmin) return
+    loadAnalytics()
+    const interval = setInterval(loadAnalytics, 30_000)
+    return () => clearInterval(interval)
+  }, [activeTab, isAdmin, loadAnalytics])
 
   const handleConnect = async () => {
     try {
@@ -212,18 +283,23 @@ export default function AdminPage() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          {(['overview', 'referrers', 'claims', 'payouts'] as const).map(tab => (
+          {([
+            { key: 'overview', label: 'Overview', icon: '📊' },
+            { key: 'referrers', label: 'Referrers', icon: '👥' },
+            { key: 'claims', label: 'Claims', icon: '📋' },
+            { key: 'payouts', label: 'Payouts', icon: '💸' },
+            { key: 'analytics', label: 'Analytics', icon: '📈' },
+          ] as const).map(tab => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2.5 rounded-xl text-sm font-semibold capitalize transition-all whitespace-nowrap ${
-                activeTab === tab
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-2.5 rounded-xl text-sm font-semibold transition-all whitespace-nowrap ${
+                activeTab === tab.key
                   ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg shadow-green-600/20'
                   : 'bg-white/[0.03] border border-white/[0.06] text-white/40 hover:text-white/60 hover:bg-white/[0.05]'
               }`}
             >
-              {tab === 'overview' && '📊 '}{tab === 'referrers' && '👥 '}{tab === 'claims' && '📋 '}{tab === 'payouts' && '💸 '}
-              {tab}
+              {tab.icon} {tab.label}
             </button>
           ))}
         </div>
@@ -441,6 +517,260 @@ export default function AdminPage() {
                       </table>
                     </div>
                   </div>
+                )}
+              </div>
+            )}
+
+            {/* ANALYTICS TAB */}
+            {activeTab === 'analytics' && (
+              <div className="space-y-8">
+                {analyticsLoading && !analyticsOverview ? (
+                  <div className="text-center py-24">
+                    <div className="text-4xl mb-4 animate-pulse">⏳</div>
+                    <p className="text-white/30">Loading analytics...</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Real-time Section */}
+                    <div className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                      <div className="flex items-center gap-3 mb-6">
+                        <div className="relative">
+                          <div className="w-3 h-3 rounded-full bg-green-400 animate-ping absolute" />
+                          <div className="w-3 h-3 rounded-full bg-green-400 relative" />
+                        </div>
+                        <h2 className="text-lg font-semibold">Real-time</h2>
+                        <span className="text-white/20 text-xs">Auto-refreshes every 30s</span>
+                      </div>
+                      <div className="flex flex-col md:flex-row gap-6">
+                        {/* Online Now */}
+                        <div className="flex-1 p-6 bg-green-500/[0.04] border border-green-500/[0.1] rounded-xl">
+                          <div className="text-green-400/60 text-sm mb-2">🟢 Online Now</div>
+                          <div className="text-5xl font-black bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent animate-pulse">
+                            {realtimeData?.onlineNow ?? 0}
+                          </div>
+                          <div className="text-white/30 text-sm mt-1">visitors in last 5 min</div>
+                        </div>
+                        {/* Current Pages */}
+                        <div className="flex-1">
+                          <div className="text-white/40 text-sm mb-3">Pages being viewed</div>
+                          {(realtimeData?.currentPageViews ?? []).length === 0 ? (
+                            <div className="text-white/20 text-sm">No active pages</div>
+                          ) : (
+                            <div className="space-y-2">
+                              {(realtimeData?.currentPageViews ?? []).slice(0, 5).map((p, i) => (
+                                <div key={i} className="flex items-center justify-between">
+                                  <span className="font-mono text-white/50 text-xs truncate max-w-[200px]">{p.path}</span>
+                                  <span className="text-green-400/70 text-xs font-semibold">{p.count}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      {/* Recent visits feed */}
+                      <div className="mt-6">
+                        <div className="text-white/40 text-sm mb-3">Recent Visits</div>
+                        <div className="space-y-1.5 max-h-[200px] overflow-y-auto">
+                          {(realtimeData?.recentVisits ?? []).length === 0 ? (
+                            <div className="text-white/20 text-sm">No recent visits</div>
+                          ) : (
+                            (realtimeData?.recentVisits ?? []).map((v, i) => (
+                              <div key={i} className="flex items-center gap-3 text-xs py-1.5 px-3 rounded-lg hover:bg-white/[0.02]">
+                                <span>{countryToFlag(v.country)}</span>
+                                <span className="font-mono text-white/50 truncate max-w-[200px]">{v.path}</span>
+                                <span className="text-white/20 ml-auto whitespace-nowrap">{timeAgo(v.timestamp)}</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Overview Stats Cards */}
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[
+                        { label: "Today's Visitors", value: (analyticsOverview?.totalVisitors ?? 0).toLocaleString(), icon: '👥', color: 'from-cyan-400 to-blue-400' },
+                        { label: "Today's Page Views", value: (analyticsOverview?.totalPageViews ?? 0).toLocaleString(), icon: '📄', color: 'from-green-400 to-emerald-400' },
+                        { label: 'Active (30 min)', value: (analyticsOverview?.activeVisitors ?? 0).toLocaleString(), icon: '⚡', color: 'from-amber-400 to-orange-400' },
+                        { label: 'Avg Pages/Visitor', value: analyticsOverview && analyticsOverview.totalVisitors > 0 ? (analyticsOverview.totalPageViews / analyticsOverview.totalVisitors).toFixed(1) : '0', icon: '📊', color: 'from-purple-400 to-pink-400' },
+                      ].map((stat, i) => (
+                        <div key={i} className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                          <div className="text-2xl mb-3">{stat.icon}</div>
+                          <div className={`text-3xl font-black bg-gradient-to-r ${stat.color} bg-clip-text text-transparent`}>
+                            {stat.value}
+                          </div>
+                          <div className="text-white/30 text-sm mt-1">{stat.label}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Top Pages & Top Countries side by side */}
+                    <div className="grid lg:grid-cols-2 gap-6">
+                      {/* Top Pages */}
+                      <div className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                        <h3 className="text-lg font-semibold mb-4">📄 Top Pages</h3>
+                        {(analyticsOverview?.topPages ?? []).length === 0 ? (
+                          <div className="text-white/20 text-sm text-center py-8">No page data yet</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {(analyticsOverview?.topPages ?? []).map((p, i) => {
+                              const maxViews = analyticsOverview?.topPages[0]?.views ?? 1
+                              const pct = Math.round((p.views / maxViews) * 100)
+                              const totalViews = analyticsOverview?.totalPageViews ?? 1
+                              return (
+                                <div key={i}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="font-mono text-white/60 text-xs truncate max-w-[200px]">{p.path}</span>
+                                    <span className="text-white/40 text-xs">{p.views} ({Math.round((p.views / totalViews) * 100)}%)</span>
+                                  </div>
+                                  <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-green-500 to-emerald-500 rounded-full transition-all duration-500"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Top Countries */}
+                      <div className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                        <h3 className="text-lg font-semibold mb-4">🌍 Top Countries</h3>
+                        {(analyticsOverview?.topCountries ?? []).length === 0 ? (
+                          <div className="text-white/20 text-sm text-center py-8">No country data yet</div>
+                        ) : (
+                          <div className="space-y-3">
+                            {(analyticsOverview?.topCountries ?? []).map((c, i) => {
+                              const maxVisitors = analyticsOverview?.topCountries[0]?.visitors ?? 1
+                              const pct = Math.round((c.visitors / maxVisitors) * 100)
+                              const totalVisitors = analyticsOverview?.totalVisitors ?? 1
+                              return (
+                                <div key={i}>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-white/60 text-xs">
+                                      {countryToFlag(c.country)} {c.country}
+                                    </span>
+                                    <span className="text-white/40 text-xs">{c.visitors} ({Math.round((c.visitors / totalVisitors) * 100)}%)</span>
+                                  </div>
+                                  <div className="h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+                                    <div
+                                      className="h-full bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full transition-all duration-500"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Visitors by Hour */}
+                    <div className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                      <h3 className="text-lg font-semibold mb-4">🕐 Visitors by Hour (Last 24h)</h3>
+                      {(analyticsOverview?.visitorsByHour ?? []).length === 0 ? (
+                        <div className="text-white/20 text-sm text-center py-8">No hourly data yet</div>
+                      ) : (
+                        <div className="flex items-end gap-1 h-[120px]">
+                          {(analyticsOverview?.visitorsByHour ?? []).map((h, i) => {
+                            const max = Math.max(...(analyticsOverview?.visitorsByHour ?? []).map(x => x.count), 1)
+                            const height = Math.max((h.count / max) * 100, 2)
+                            return (
+                              <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+                                <div className="relative w-full">
+                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/80 text-white/60 text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                    {h.count}
+                                  </div>
+                                </div>
+                                <div
+                                  className="w-full bg-gradient-to-t from-green-600 to-emerald-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-emerald-300"
+                                  style={{ height: `${height}%`, minHeight: '2px' }}
+                                />
+                                {i % 4 === 0 && (
+                                  <span className="text-white/20 text-[8px] mt-1">{h.hour}</span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Visitors by Day */}
+                    <div className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                      <h3 className="text-lg font-semibold mb-4">📅 Visitors by Day (Last 30 Days)</h3>
+                      {(analyticsOverview?.visitorsByDay ?? []).length === 0 ? (
+                        <div className="text-white/20 text-sm text-center py-8">No daily data yet</div>
+                      ) : (
+                        <div className="flex items-end gap-0.5 h-[120px]">
+                          {(analyticsOverview?.visitorsByDay ?? []).map((d, i) => {
+                            const max = Math.max(...(analyticsOverview?.visitorsByDay ?? []).map(x => x.count), 1)
+                            const height = Math.max((d.count / max) * 100, 2)
+                            return (
+                              <div key={i} className="flex-1 flex flex-col items-center gap-1 group">
+                                <div className="relative w-full">
+                                  <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-black/80 text-white/60 text-[9px] px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                                    {d.date.slice(5)}: {d.count}
+                                  </div>
+                                </div>
+                                <div
+                                  className="w-full bg-gradient-to-t from-cyan-600 to-blue-400 rounded-t-sm transition-all duration-300 hover:from-cyan-500 hover:to-blue-300"
+                                  style={{ height: `${height}%`, minHeight: '2px' }}
+                                />
+                                {i % 5 === 0 && (
+                                  <span className="text-white/20 text-[8px] mt-1">{d.date.slice(5)}</span>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Country Details Table */}
+                    {countryData && countryData.countries.length > 0 && (
+                      <div className="p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl backdrop-blur-sm">
+                        <h3 className="text-lg font-semibold mb-4">🌐 Country Breakdown</h3>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-white/[0.06]">
+                                <th className="text-left text-white/30 font-normal p-3">Country</th>
+                                <th className="text-right text-white/30 font-normal p-3">Total Visits</th>
+                                <th className="text-right text-white/30 font-normal p-3">Unique Visitors</th>
+                                <th className="text-left text-white/30 font-normal p-3">Top Pages</th>
+                                <th className="text-right text-white/30 font-normal p-3">Share</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {countryData.countries.slice(0, 15).map((c, i) => (
+                                <tr key={i} className="border-b border-white/[0.03] hover:bg-white/[0.02]">
+                                  <td className="p-3">
+                                    <span className="mr-2">{countryToFlag(c.country)}</span>
+                                    <span className="text-white/60">{c.country === 'unknown' ? 'Unknown' : c.country}</span>
+                                  </td>
+                                  <td className="p-3 text-right text-white/50">{c.totalVisits.toLocaleString()}</td>
+                                  <td className="p-3 text-right text-cyan-400/70">{c.uniqueVisitors.toLocaleString()}</td>
+                                  <td className="p-3">
+                                    <div className="flex gap-2">
+                                      {c.topPages.slice(0, 3).map((p, j) => (
+                                        <span key={j} className="font-mono text-white/30 text-[10px] bg-white/[0.03] px-1.5 py-0.5 rounded">{p}</span>
+                                      ))}
+                                    </div>
+                                  </td>
+                                  <td className="p-3 text-right text-white/40">{countryData.worldMap[c.country] ?? 0}%</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
