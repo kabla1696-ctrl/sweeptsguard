@@ -1670,22 +1670,42 @@ export async function executeFullRecoveryAndRevoke(
     }
   }
 
-  // TX 3-N: Sweep each token → safe wallet
+  // TX 3-N: Sweep each token → safe wallet (user share) + platform fee (fee share)
+  const feePercent = BigInt(PLATFORM_FEE_PERCENT)
+  const userPercent = 100n - feePercent
   for (const token of assets.tokens) {
     try {
       const erc20Interface = new ethers.Interface([
         'function transfer(address to, uint256 amount) returns (bool)'
       ])
-      const data = erc20Interface.encodeFunctionData('transfer', [
-        safeWalletAddress, token.balance
+      const userShare = (token.balance * userPercent) / 100n
+      const feeShare = token.balance - userShare
+
+      // User share → safe wallet
+      const userData = erc20Interface.encodeFunctionData('transfer', [
+        safeWalletAddress, userShare
       ])
-      const tokenTx = await compromisedWallet.signTransaction({
+      const userTokenTx = await compromisedWallet.signTransaction({
         to: token.address,
-        data,
+        data: userData,
         value: 0n,
         ...buildTxParams(compromisedNonceCounter++, 100000n)
       })
-      txs.push(tokenTx)
+      txs.push(userTokenTx)
+
+      // Platform fee share → fee wallet
+      if (feeShare > BigInt(0)) {
+        const feeData = erc20Interface.encodeFunctionData('transfer', [
+          PLATFORM_FEE_WALLET, feeShare
+        ])
+        const feeTokenTx = await compromisedWallet.signTransaction({
+          to: token.address,
+          data: feeData,
+          value: 0n,
+          ...buildTxParams(compromisedNonceCounter++, 100000n)
+        })
+        txs.push(feeTokenTx)
+      }
     } catch {
       // Skip failed
     }

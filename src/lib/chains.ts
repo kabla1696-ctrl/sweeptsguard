@@ -369,8 +369,8 @@ export const CHAINS: Record<number, ChainConfig> = {
     nativeCurrency: 'MON',
     icon: '🟣'
   },
-  0: {
-    id: 0,
+  16600: {
+    id: 16600,
     name: '0G',
     shortName: '0G',
     rpc: 'https://evm.0g.ai',
@@ -381,7 +381,7 @@ export const CHAINS: Record<number, ChainConfig> = {
   }
 }
 
-export const DEFAULT_CHAINS = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144, 5000, 34443, 534352, 100, 7000, 1625, 1116, 1329, 80094, 57073, 196, 43111, 8217, 1868, 2818, 1923, 10143]
+export const DEFAULT_CHAINS = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144, 5000, 34443, 534352, 100, 7000, 1625, 1116, 1329, 80094, 57073, 196, 43111, 8217, 1868, 2818, 1923, 10143, 16600]
 
 export function getChain(id: number): ChainConfig | undefined {
   return CHAINS[id]

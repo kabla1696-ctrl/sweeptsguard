@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, Suspense } from 'react'
+import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { getExplorerUrl } from '@/lib/validation'
 
@@ -43,6 +43,15 @@ function NFTContent() {
   const [sweepResults, setSweepResults] = useState<SweepResult[]>([])
   const [privateKey, setPrivateKey] = useState('')
   const [showGuide, setShowGuide] = useState(true)
+  const abortRef = useRef<AbortController | null>(null)
+
+  // Clear private key from memory on unmount
+  useEffect(() => {
+    return () => {
+      setPrivateKey('')
+      abortRef.current?.abort()
+    }
+  }, [])
 
   const chains = [...new Set(nfts.map(n => n.chainId))].sort((a, b) => a - b)
   const filteredNfts = selectedChain ? nfts.filter(n => n.chainId === selectedChain) : nfts
@@ -59,24 +68,30 @@ function NFTContent() {
       return
     }
 
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+
     setScanning(true)
     setError('')
     setNfts([])
     setSweepResults([])
 
     try {
-      const res = await fetch(`/api/nft?address=${addr}`)
-      const data = await res.json()
+      const res = await fetch(`/api/nft?address=${addr}`, { signal: controller.signal })
+      if (controller.signal.aborted) return
+      const data = await res.json() as { nfts?: NFTItem[]; error?: string }
 
       if (data.error) {
         setError(data.error)
       } else {
         setNfts(data.nfts || [])
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Failed to scan NFTs. Please try again.')
     } finally {
-      setScanning(false)
+      if (!controller.signal.aborted) setScanning(false)
     }
   }, [])
 
@@ -88,6 +103,12 @@ function NFTContent() {
   const sweepChain = async (chainId: number) => {
     if (!privateKey || !safeAddress) {
       setError('Please provide both private key and safe wallet address')
+      return
+    }
+
+    // Validate safe wallet ≠ compromised wallet
+    if (safeAddress.toLowerCase() === address.toLowerCase()) {
+      setError('Safe wallet CANNOT be the compromised wallet — NFTs would go back to the drainer!')
       return
     }
 
@@ -106,12 +127,14 @@ function NFTContent() {
           privateKey
         })
       })
-      const data = await res.json()
+      const data = await res.json() as { transfers?: SweepResult[]; error?: string }
 
       if (data.error && !data.transfers) {
         setError(data.error)
       } else {
         setSweepResults(data.transfers || [])
+        // Clear private key after successful sweep
+        setPrivateKey('')
       }
     } catch {
       setError('Failed to sweep NFTs')
