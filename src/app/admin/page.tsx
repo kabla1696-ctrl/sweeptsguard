@@ -140,10 +140,10 @@ export default function AdminPage() {
               const timestamp = Date.now()
               const message = `SweepGuard Admin Access\nTimestamp: ${timestamp}`
               try {
-                const signature = await eth.request({
+                const signature = (await eth.request({
                   method: 'personal_sign',
                   params: [message, wallet],
-                })
+                })) as unknown as string
                 setAdminAuth({ wallet, signature, timestamp })
                 setIsAdmin(true)
               } catch {
@@ -189,10 +189,10 @@ export default function AdminPage() {
           const message = `SweepGuard Admin Access\nTimestamp: ${timestamp}`
 
           try {
-            const signature = await eth.request({
+            const signature = (await eth.request({
               method: 'personal_sign',
               params: [message, wallet],
-            })
+            })) as unknown as string
 
             setAdminAuth({ wallet, signature, timestamp })
             setIsAdmin(true)

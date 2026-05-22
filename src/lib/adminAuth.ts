@@ -63,5 +63,6 @@ export function requireAdmin(request: Request): { authorized: boolean; error?: s
   if (!auth) {
     return { authorized: false, error: 'Missing admin authentication headers' }
   }
-  return verifyAdminSignature(auth)
+  const result = verifyAdminSignature(auth)
+  return { authorized: result.valid, error: result.error }
 }
