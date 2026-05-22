@@ -127,7 +127,6 @@ export default function AdminPage() {
     async function init() {
       setLoading(true)
       try {
-        // Check for ethereum provider
         if (typeof window !== 'undefined' && (window as unknown as { ethereum?: { request: (args: { method: string; params?: string[] }) => Promise<string[]> } }).ethereum) {
           const eth = (window as unknown as { ethereum: { request: (args: { method: string; params?: string[] }) => Promise<string[]> } }).ethereum
           const accounts = await eth.request({ method: 'eth_accounts' })
@@ -136,7 +135,21 @@ export default function AdminPage() {
             setConnectedWallet(wallet)
 
             if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
-              // Auto-sign if already connected
+              // Only auto-sign once (not on re-renders)
+              const existing = sessionStorage.getItem('sg-admin-auth')
+              if (existing) {
+                try {
+                  const parsed = JSON.parse(existing)
+                  // Reuse if less than 5 min old
+                  if (Date.now() - parsed.timestamp < 300000) {
+                    setAdminAuth(parsed)
+                    setIsAdmin(true)
+                    setLoading(false)
+                    return
+                  }
+                } catch { /* ok */ }
+              }
+
               const timestamp = Date.now()
               const message = `SweepGuard Admin Access\nTimestamp: ${timestamp}`
               try {
@@ -144,7 +157,9 @@ export default function AdminPage() {
                   method: 'personal_sign',
                   params: [message, wallet],
                 })) as unknown as string
-                setAdminAuth({ wallet, signature, timestamp })
+                const auth = { wallet, signature, timestamp }
+                sessionStorage.setItem('sg-admin-auth', JSON.stringify(auth))
+                setAdminAuth(auth)
                 setIsAdmin(true)
               } catch {
                 setAuthError('Signature required for admin access')
@@ -155,11 +170,15 @@ export default function AdminPage() {
       } catch {
         // No wallet connected
       }
-      await loadData()
       setLoading(false)
     }
     init()
-  }, [loadData])
+  }, []) // Only run once on mount
+
+  // Load data when adminAuth changes
+  useEffect(() => {
+    if (adminAuth) loadData()
+  }, [adminAuth, loadData])
 
   // Auto-refresh analytics every 30s when tab is active
   useEffect(() => {
