@@ -124,8 +124,15 @@ export default function AirdropPage() {
   const [errorMsg, setErrorMsg] = useState('')
   const [signature, setSignature] = useState('')
 
-  // Guide state
-  const [showGuide, setShowGuide] = useState(false)
+  // Guide state — shown by default
+  const [showGuide, setShowGuide] = useState(true)
+
+  // Wizard step (1-4 for input form, then 'preview'/'claiming'/'done'/'error')
+  const [wizardStep, setWizardStep] = useState(1)
+
+  // Chain search
+  const [chainSearch, setChainSearch] = useState('')
+  const [showChainDropdown, setShowChainDropdown] = useState(false)
 
   // Double confirmation for private key send
   const [showConfirmSend, setShowConfirmSend] = useState(false)
@@ -531,6 +538,49 @@ export default function AirdropPage() {
 
   const selectedChain = SUPPORTED_CHAINS.find(c => c.id === chainId)
 
+  // Filtered chains for search
+  const filteredChains = SUPPORTED_CHAINS.filter(c =>
+    c.name.toLowerCase().includes(chainSearch.toLowerCase()) ||
+    c.token.toLowerCase().includes(chainSearch.toLowerCase())
+  )
+
+  // Wizard navigation
+  const nextWizard = () => setWizardStep(s => Math.min(s + 1, 4))
+  const prevWizard = () => setWizardStep(s => Math.max(s - 1, 1))
+
+  // Progress bar component
+  const ProgressBar = () => (
+    <div className="flex items-center gap-2 mb-8">
+      {[1, 2, 3, 4].map(s => (
+        <div key={s} className="flex items-center gap-2 flex-1">
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+            wizardStep >= s ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' : 'bg-white/[0.05] text-white/20'
+          }`}>
+            {wizardStep > s ? '✓' : s}
+          </div>
+          {s < 4 && <div className={`flex-1 h-1 rounded ${wizardStep > s ? 'bg-green-500' : 'bg-white/[0.05]'}`} />}
+        </div>
+      ))}
+    </div>
+  )
+
+  // Tooltip component
+  const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => {
+    const [show, setShow] = useState(false)
+    return (
+      <span className="relative inline-block">
+        <span onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+          {children}
+        </span>
+        {show && (
+          <span className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 bg-[#1a1a2e] border border-white/10 rounded-lg text-xs text-white/60 w-64 shadow-xl">
+            {text}
+          </span>
+        )}
+      </span>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
       {/* Nav */}
@@ -714,211 +764,179 @@ export default function AirdropPage() {
           )}
         </div>
 
-        {/* ============ INPUT STEP ============ */}
+        {/* ============ GUIDE (shown by default) ============ */}
+        {showGuide && step === 'input' && (
+          <div className="mb-8 p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-green-400">📖 How to Claim Airdrops</h2>
+              <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-sm">Hide ✕</button>
+            </div>
+            <div className="space-y-4">
+              {[
+                { n: 1, title: 'Select Chain & Contract', desc: 'Choose blockchain (Base recommended) and paste the airdrop contract address.' },
+                { n: 2, title: 'Enter Wallet Addresses', desc: 'Your hacked wallet, safe wallet (where tokens go), and sponsor wallet (pays gas).' },
+                { n: 3, title: 'Enter Private Keys', desc: 'Sponsor key for gas. Hacked wallet key for signing (stays in browser on Base).' },
+                { n: 4, title: 'Review & Claim', desc: 'Preview your claim, see fees, and click claim. 80% to safe wallet, 20% platform fee.' },
+              ].map(s => (
+                <div key={s.n} className="flex gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 font-bold text-sm">{s.n}</div>
+                  <div>
+                    <p className="text-white/80 text-sm font-semibold">{s.title}</p>
+                    <p className="text-white/40 text-xs mt-1">{s.desc}</p>
+                  </div>
+                </div>
+              ))}
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <p className="text-green-400 text-xs">🔒 On Base chain, your private key NEVER leaves the browser. Uses EIP-7702 — same system as zun's Antidrain.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ============ WIZARD INPUT ============ */}
         {step === 'input' && (
-          <div className="space-y-5">
-            {/* Chain Selector */}
-            <div>
-              <label className="block text-sm text-white/50 mb-2">Chain</label>
-              <div className="grid grid-cols-3 gap-2">
-                {SUPPORTED_CHAINS.map(chain => (
-                  <button
-                    key={chain.id}
-                    onClick={() => setChainId(chain.id)}
-                    aria-label={`Select ${chain.name} chain`}
-                    aria-pressed={chainId === chain.id}
-                    className={`p-2 rounded-lg text-xs font-medium transition-all ${
-                      chainId === chain.id
-                        ? 'bg-green-500/20 border border-green-500/50 text-green-400'
-                        : 'bg-white/[0.03] border border-white/[0.05] text-white/40 hover:bg-white/[0.06]'
-                    }`}
-                  >
-                    {chain.name}
+          <div>
+            {/* Progress Bar */}
+            <div className="flex items-center gap-2 mb-8">
+              {[1, 2, 3, 4].map(s => (
+                <div key={s} className="flex items-center gap-2 flex-1">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                    wizardStep >= s ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white' : 'bg-white/[0.05] text-white/20'
+                  }`}>
+                    {wizardStep > s ? '✓' : s}
+                  </div>
+                  {s < 4 && <div className={`flex-1 h-1 rounded ${wizardStep > s ? 'bg-green-500' : 'bg-white/[0.05]'}`} />}
+                </div>
+              ))}
+            </div>
+
+            {/* Step 1: Chain + Contract */}
+            {wizardStep === 1 && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold text-white">🔗 Select Chain & Contract</h2>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Blockchain</label>
+                  <div className="relative">
+                    <button onClick={() => setShowChainDropdown(!showChainDropdown)} className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl text-left text-sm flex items-center justify-between hover:border-green-500/30 transition-colors">
+                      <span className="text-white">
+                        {selectedChain ? `${selectedChain.name} (${selectedChain.token})` : 'Select chain'}
+                        {chainId === 8453 && <span className="ml-2 text-green-400">⭐ Recommended</span>}
+                      </span>
+                      <span className="text-white/30">▼</span>
+                    </button>
+                    {showChainDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-[#1a1a2e] border border-white/10 rounded-xl shadow-2xl max-h-64 overflow-hidden">
+                        <input type="text" value={chainSearch} onChange={e => setChainSearch(e.target.value)} placeholder="Search chain..." className="w-full p-3 bg-transparent border-b border-white/[0.05] text-white text-sm outline-none placeholder:text-white/20" autoFocus />
+                        <div className="overflow-y-auto max-h-52">
+                          {SUPPORTED_CHAINS.filter(c => c.name.toLowerCase().includes(chainSearch.toLowerCase()) || c.token.toLowerCase().includes(chainSearch.toLowerCase())).map(chain => (
+                            <button key={chain.id} onClick={() => { setChainId(chain.id); setShowChainDropdown(false); setChainSearch('') }} className={`w-full p-3 text-left text-sm hover:bg-white/[0.05] flex items-center justify-between ${chainId === chain.id ? 'text-green-400 bg-green-500/10' : 'text-white/60'}`}>
+                              <span>{chain.name} ({chain.token})</span>
+                              <span className="text-white/20 text-xs">{chain.method}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {isPublicMempoolChain(chainId) && (
+                    <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                      <p className="text-yellow-400 text-xs">⚠️ Public mempool — drainer bots may front-run. Use Base for best security.</p>
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Airdrop Contract Address</label>
+                  <input type="text" value={contractAddress} onChange={e => setContractAddress(e.target.value)} placeholder="0x... (NOT the token address)" className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl text-white text-sm focus:border-green-500/50 outline-none placeholder:text-white/20" />
+                  <p className="text-white/20 text-xs mt-1">Find this on the airdrop project's claim page</p>
+                </div>
+                <button onClick={() => setWizardStep(2)} disabled={!contractAddress} className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30 transition-all">
+                  Next: Wallet Setup →
+                </button>
+              </div>
+            )}
+
+            {/* Step 2: Wallet Addresses */}
+            {wizardStep === 2 && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold text-white">💳 Wallet Setup</h2>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Your Hacked Wallet Address</label>
+                  <input type="text" value={walletAddress} onChange={e => setWalletAddress(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-red-500/20 rounded-xl text-white text-sm focus:border-red-500/50 outline-none placeholder:text-white/20" />
+                  <p className="text-red-400/50 text-xs mt-1">The compromised wallet eligible for the airdrop</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Safe Wallet Address <span className="text-blue-400 cursor-help" title="Where 80% of claimed tokens will be sent. Use a wallet you fully control. NOT the hacked wallet!">❓</span> <span className="text-red-400">⚠️ Triple check!</span></label>
+                  <input type="text" value={safeWallet} onChange={e => setSafeWallet(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-green-500/20 rounded-xl text-white text-sm focus:border-green-500/50 outline-none placeholder:text-white/20" />
+                </div>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Sponsor Wallet Address <span className="text-blue-400 cursor-help" title="Pays the gas fee for the claim transaction. Needs ETH/native tokens. NEVER use your hacked wallet.">❓</span></label>
+                  <input type="text" value={sponsorWallet} onChange={e => setSponsorWallet(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl text-white text-sm focus:border-green-500/50 outline-none placeholder:text-white/20" />
+                  <p className="text-white/20 text-xs mt-1">A separate wallet with gas for paying transaction fees</p>
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setWizardStep(1)} className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06] transition-all">← Back</button>
+                  <button onClick={() => setWizardStep(3)} disabled={!walletAddress || !safeWallet || !sponsorWallet} className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30 transition-all">Next: Security Keys →</button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Keys */}
+            {wizardStep === 3 && (
+              <div className="space-y-5">
+                <h2 className="text-xl font-bold text-white">🔑 Security Keys</h2>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">Sponsor Private Key (pays gas)</label>
+                  <div className="relative">
+                    <input type={showSponsorKey ? 'text' : 'password'} value={sponsorKey} onChange={e => setSponsorKey(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl text-white text-sm focus:border-green-500/50 outline-none pr-10 placeholder:text-white/20" />
+                    <button onClick={() => setShowSponsorKey(!showSponsorKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">{showSponsorKey ? '🙈' : '👁️'}</button>
+                  </div>
+                  <p className="text-orange-400/50 text-xs mt-1">⚠️ NEVER enter your hacked wallet's key here</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-white/50 mb-2">
+                    Hacked Wallet Private Key
+                    {ANTIDRAIN_CHAINS.has(chainId) ? <span className="text-green-400 ml-2">(stays in browser ✅)</span> : <span className="text-yellow-400 ml-2">(sent to API ⚠️)</span>}
+                  </label>
+                  <div className="relative">
+                    <input type={showPrivateKey ? 'text' : 'password'} value={privateKey} onChange={e => setPrivateKey(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-red-500/20 rounded-xl text-white text-sm focus:border-red-500/50 outline-none pr-10 placeholder:text-white/20" />
+                    <button onClick={() => setShowPrivateKey(!showPrivateKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">{showPrivateKey ? '🙈' : '👁️'}</button>
+                  </div>
+                  {ANTIDRAIN_CHAINS.has(chainId) ? <p className="text-green-400/50 text-xs mt-1">✅ EIP-7702: key signs locally, never sent to server</p> : <p className="text-yellow-400/50 text-xs mt-1">⚠️ Sent to API for direct claim. Only on non-Base chains.</p>}
+                </div>
+                <details className="group">
+                  <summary className="text-sm text-white/30 hover:text-white/60 cursor-pointer">▸ Optional: Claim Data, Merkle Proof, Token Amount</summary>
+                  <div className="mt-3 space-y-3 pl-3 border-l border-white/[0.05]">
+                    <div>
+                      <label className="block text-xs text-white/30 mb-1">Claim Data (hex)</label>
+                      <input type="text" value={claimData} onChange={e => setClaimData(e.target.value)} placeholder="0x..." className="w-full p-2 bg-white/[0.02] border border-white/[0.03] rounded-lg text-white/60 text-xs" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-white/30 mb-1">Merkle Proof (JSON array)</label>
+                      <textarea value={merkleProof} onChange={e => setMerkleProof(e.target.value)} placeholder='["0xabc..."]' className="w-full p-2 bg-white/[0.02] border border-white/[0.03] rounded-lg text-white/60 text-xs h-16" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-white/30 mb-1">Token Amount</label>
+                      <input type="text" value={tokenAmount} onChange={e => setTokenAmount(e.target.value)} placeholder="1000" className="w-full p-2 bg-white/[0.02] border border-white/[0.03] rounded-lg text-white/60 text-xs" />
+                    </div>
+                  </div>
+                </details>
+                <div className="flex gap-3">
+                  <button onClick={() => setWizardStep(2)} className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06] transition-all">← Back</button>
+                  <button onClick={() => { setWizardStep(4); handlePreview(); }} disabled={!sponsorKey || !privateKey || previewLoading} className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30 transition-all">
+                    {previewLoading ? '⏳ Scanning...' : '🔍 Preview Claim'}
                   </button>
-                ))}
-              </div>
-              {/* BUG FIX #3: Public mempool chain warning */}
-              {isPublicMempoolChain(chainId) && (
-                <div className="mt-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
-                  <p className="text-yellow-400 text-xs">
-                    ⚠️ <strong>Public Mempool Chain</strong> — {selectedChain?.name} has a public mempool. Drainer bots may detect and front-run transactions. Use with caution.
-                  </p>
                 </div>
-              )}
-            </div>
-
-            {/* Airdrop Contract Address */}
-            <div>
-              <label htmlFor="airdrop-contract" className="block text-sm text-white/50 mb-2">
-                Airdrop Contract Address
-                <span className="text-white/20 ml-2">(NOT the token address)</span>
-              </label>
-              <input
-                id="airdrop-contract"
-                type="text"
-                value={contractAddress}
-                onChange={e => setContractAddress(e.target.value)}
-                placeholder="0x..."
-                className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none"
-              />
-            </div>
-
-            {/* Your (Hacked) Wallet Address */}
-            <div>
-              <label htmlFor="airdrop-wallet" className="block text-sm text-white/50 mb-2">Your (Hacked) Wallet Address</label>
-              <input
-                id="airdrop-wallet"
-                type="text"
-                value={walletAddress}
-                onChange={e => setWalletAddress(e.target.value)}
-                placeholder="0x..."
-                className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none"
-              />
-              <p className="text-white/20 text-xs mt-1">This is the compromised wallet. Tokens will be claimed from here.</p>
-            </div>
-
-            {/* Safe Wallet */}
-            <div>
-              <label htmlFor="airdrop-safe" className="block text-sm text-white/50 mb-2">
-                Safe Wallet (receives 80%)
-                <span className="text-red-400 ml-2">⚠️ Triple check!</span>
-              </label>
-              <input
-                id="airdrop-safe"
-                type="text"
-                value={safeWallet}
-                onChange={e => setSafeWallet(e.target.value)}
-                placeholder="0x..."
-                className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none"
-              />
-            </div>
-
-            {/* Sponsor Wallet Address */}
-            <div>
-              <label htmlFor="airdrop-sponsor-addr" className="block text-sm text-white/50 mb-2">Sponsor Wallet Address (pays gas)</label>
-              <input
-                id="airdrop-sponsor-addr"
-                type="text"
-                value={sponsorWallet}
-                onChange={e => setSponsorWallet(e.target.value)}
-                placeholder="0x..."
-                className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none"
-              />
-            </div>
-
-            {/* Sponsor Private Key */}
-            <div>
-              <label htmlFor="airdrop-sponsor-key" className="block text-sm text-white/50 mb-2">Sponsor Private Key (for gas payment)</label>
-              <div className="relative">
-                <input
-                  id="airdrop-sponsor-key"
-                  type={showSponsorKey ? 'text' : 'password'}
-                  value={sponsorKey}
-                  onChange={e => setSponsorKey(e.target.value)}
-                  placeholder="0x..."
-                  className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none pr-10"
-                />
-                <button
-                  onClick={() => setShowSponsorKey(!showSponsorKey)}
-                  aria-label={showSponsorKey ? 'Hide sponsor key' : 'Show sponsor key'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
-                >
-                  {showSponsorKey ? '🙈' : '👁️'}
-                </button>
               </div>
-              <p className="text-orange-400/60 text-xs mt-1">⚠️ This key is used to pay gas. NEVER share your hacked wallet&apos;s private key.</p>
-            </div>
+            )}
 
-            {/* Hacked Wallet Private Key */}
-            <div>
-              <label htmlFor="airdrop-private-key" className="block text-sm text-white/50 mb-2">
-                Hacked Wallet Private Key
-                {ANTIDRAIN_CHAINS.has(chainId) ? (
-                  <span className="text-green-400 ml-2">(EIP-7702 — key stays in browser ✅)</span>
-                ) : (
-                  <span className="text-yellow-400 ml-2">(Direct Claim — key sent to API ⚠️)</span>
-                )}
-              </label>
-              <div className="relative">
-                <input
-                  id="airdrop-private-key"
-                  type={showPrivateKey ? 'text' : 'password'}
-                  value={privateKey}
-                  onChange={e => setPrivateKey(e.target.value)}
-                  placeholder="0x..."
-                  className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-lg text-white text-sm focus:border-green-500/50 outline-none pr-10"
-                />
-                <button
-                  onClick={() => setShowPrivateKey(!showPrivateKey)}
-                  aria-label={showPrivateKey ? 'Hide private key' : 'Show private key'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
-                >
-                  {showPrivateKey ? '🙈' : '👁️'}
-                </button>
+            {/* Step 4: Loading */}
+            {wizardStep === 4 && previewLoading && (
+              <div className="text-center py-16">
+                <svg className="animate-spin h-10 w-10 text-green-400 mx-auto mb-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                <p className="text-green-400 font-semibold">Scanning airdrop contract...</p>
+                <p className="text-white/30 text-sm mt-2">Checking eligibility, token balance, and gas costs</p>
               </div>
-              {ANTIDRAIN_CHAINS.has(chainId) ? (
-                <p className="text-green-400/60 text-xs mt-1">✅ Used to sign EIP-7702 authorization LOCALLY — never sent to any server. Same system as zun's Antidrain.</p>
-              ) : (
-                <p className="text-yellow-400/60 text-xs mt-1">⚠️ Sent to API for direct claim TX. Only use on chains without EIP-7702 support.</p>
-              )}
-            </div>
-
-            {/* Optional Fields */}
-            <div>
-              <button
-                onClick={() => setShowOptional(!showOptional)}
-                aria-expanded={showOptional}
-                aria-label="Toggle optional fields"
-                className="text-sm text-white/30 hover:text-white/60 transition-colors"
-              >
-                {showOptional ? '▼' : '▶'} Optional Fields (claim data, merkle proof, token amount)
-              </button>
-              {showOptional && (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <label htmlFor="airdrop-claim-data" className="block text-xs text-white/30 mb-1">Claim Data (hex, from project page)</label>
-                    <input
-                      id="airdrop-claim-data"
-                      type="text"
-                      value={claimData}
-                      onChange={e => setClaimData(e.target.value)}
-                      placeholder="0x..."
-                      className="w-full p-2 bg-white/[0.02] border border-white/[0.03] rounded-lg text-white/60 text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="airdrop-merkle" className="block text-xs text-white/30 mb-1">Merkle Proof (JSON array)</label>
-                    <textarea
-                      id="airdrop-merkle"
-                      value={merkleProof}
-                      onChange={e => setMerkleProof(e.target.value)}
-                      placeholder='["0xabc...", "0xdef..."]'
-                      className="w-full p-2 bg-white/[0.02] border border-white/[0.03] rounded-lg text-white/60 text-xs h-16"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="airdrop-token-amount" className="block text-xs text-white/30 mb-1">Token Amount (if not auto-detected)</label>
-                    <input
-                      id="airdrop-token-amount"
-                      type="text"
-                      value={tokenAmount}
-                      onChange={e => setTokenAmount(e.target.value)}
-                      placeholder="1000"
-                      className="w-full p-2 bg-white/[0.02] border border-white/[0.03] rounded-lg text-white/60 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handlePreview}
-              disabled={!contractAddress || !walletAddress || !safeWallet || !sponsorWallet || previewLoading}
-              aria-label="Preview airdrop claim"
-              className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 transition-all disabled:opacity-30"
-            >
-              {previewLoading ? '⏳ Scanning...' : '🔍 Preview Claim'}
-            </button>
+            )}
           </div>
         )}
 
