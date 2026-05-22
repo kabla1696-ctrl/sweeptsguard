@@ -1,14 +1,13 @@
 export default function SessionsLoading() {
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
+    <main className="min-h-screen bg-gradient-to-b from-[#050507] via-[#0a0a0f] to-[#050507] text-white flex items-center justify-center">
       <div className="text-center">
-        <div className="inline-flex items-center gap-3 text-blue-400">
-          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-          Loading Session Manager...
+        <div className="relative">
+          <div className="w-16 h-16 border-2 border-[#00e5ff]/20 rounded-full animate-spin">
+            <div className="absolute top-0 left-0 w-16 h-16 border-2 border-transparent border-t-[#00e5ff] rounded-full animate-spin" />
+          </div>
         </div>
+        <p className="mt-6 text-white/40 text-sm animate-pulse">Loading Sessions...</p>
       </div>
     </main>
   )
