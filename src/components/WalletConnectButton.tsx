@@ -11,11 +11,12 @@ export default function WalletConnectButton({ onConnect, onDisconnect }: WalletC
   const [connected, setConnected] = useState(false)
   const [address, setAddress] = useState('')
   const [connecting, setConnecting] = useState(false)
+  const [error, setError] = useState('')
 
   const handleConnect = async () => {
     setConnecting(true)
+    setError('')
     try {
-      // Check if MetaMask or other wallet is available
       if (typeof window !== 'undefined' && window.ethereum) {
         const accounts = await (window.ethereum as { request: (args: { method: string }) => Promise<string[]> }).request({
           method: 'eth_requestAccounts'
@@ -26,10 +27,10 @@ export default function WalletConnectButton({ onConnect, onDisconnect }: WalletC
           onConnect?.(accounts[0])
         }
       } else {
-        alert('Please install MetaMask or another Web3 wallet')
+        setError('Please install MetaMask or another Web3 wallet')
       }
-    } catch (err) {
-      console.error('Connection failed:', err)
+    } catch {
+      setError('Wallet connection failed. Please try again.')
     } finally {
       setConnecting(false)
     }
@@ -38,6 +39,7 @@ export default function WalletConnectButton({ onConnect, onDisconnect }: WalletC
   const handleDisconnect = () => {
     setConnected(false)
     setAddress('')
+    setError('')
     onDisconnect?.()
   }
 
@@ -49,6 +51,7 @@ export default function WalletConnectButton({ onConnect, onDisconnect }: WalletC
         </span>
         <button
           onClick={handleDisconnect}
+          aria-label="Disconnect wallet"
           className="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 bg-red-500/10 rounded-lg border border-red-500/20 transition-colors"
         >
           Disconnect
@@ -58,12 +61,18 @@ export default function WalletConnectButton({ onConnect, onDisconnect }: WalletC
   }
 
   return (
-    <button
-      onClick={handleConnect}
-      disabled={connecting}
-      className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm hover:from-green-500 hover:to-emerald-500 transition-all disabled:opacity-50"
-    >
-      {connecting ? 'Connecting...' : '🔗 Connect Wallet'}
-    </button>
+    <div>
+      <button
+        onClick={handleConnect}
+        disabled={connecting}
+        aria-label="Connect Web3 wallet"
+        className="px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm hover:from-green-500 hover:to-emerald-500 transition-all disabled:opacity-50"
+      >
+        {connecting ? 'Connecting...' : '🔗 Connect Wallet'}
+      </button>
+      {error && (
+        <p className="text-red-400 text-xs mt-1">{error}</p>
+      )}
+    </div>
   )
 }

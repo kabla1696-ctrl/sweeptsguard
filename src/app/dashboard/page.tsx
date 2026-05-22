@@ -48,7 +48,7 @@ function DashboardContent() {
       if (data.running) setMonitoring(true)
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      console.error('Failed to fetch status:', err)
+      // Status fetch failed - will retry on next interval
     }
   }, [address])
 
@@ -92,7 +92,7 @@ function DashboardContent() {
         pollStatus()
       }
     } catch (err) {
-      console.error('Failed to start monitoring:', err)
+      setSetupError('Failed to start monitoring. Please try again.')
     }
   }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl, pollStatus])
 
@@ -107,7 +107,7 @@ function DashboardContent() {
       // BUG FIX: Clear private key from state when stopping
       setPrivateKey('')
     } catch (err) {
-      console.error('Failed to stop monitoring:', err)
+      // Stop monitoring failed - UI state already updated
     }
   }, [address])
 
@@ -159,6 +159,9 @@ function DashboardContent() {
           {(['setup', 'alerts', 'sweeps'] as const).map((tab) => (
             <button
               key={tab}
+              role="tab"
+              aria-selected={activeTab === tab}
+              aria-label={`${tab.charAt(0).toUpperCase() + tab.slice(1)} tab`}
               onClick={() => setActiveTab(tab)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 activeTab === tab
@@ -219,6 +222,7 @@ function DashboardContent() {
                   className="w-full px-4 py-3 pr-20 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
                 />
                 <button
+                  aria-label={showPrivateKey ? 'Hide private key' : 'Show private key'}
                   onClick={() => setShowPrivateKey(!showPrivateKey)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
                 >
@@ -289,6 +293,7 @@ function DashboardContent() {
                 <button
                   onClick={startMonitoring}
                   disabled={!address || !safeAddress || !privateKey}
+                  aria-label="Start wallet protection"
                   className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
                 >
                   🛡️ Start Protection
@@ -296,6 +301,7 @@ function DashboardContent() {
               ) : (
                 <button
                   onClick={stopMonitoring}
+                  aria-label="Stop monitoring"
                   className="px-8 py-3 bg-red-600/20 border border-red-500/30 rounded-xl font-semibold text-red-400 hover:bg-red-600/30 transition-all"
                 >
                   Stop Monitoring
@@ -303,6 +309,7 @@ function DashboardContent() {
               )}
               <button
                 onClick={() => pollStatus()}
+                aria-label="Refresh status"
                 className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl hover:bg-white/[0.08] transition-all"
               >
                 🔄 Refresh

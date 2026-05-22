@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, executeFullRecoveryAndRevoke, executePermitSweep } from '@/lib/fundRecovery'
 import { isKnownDrainer } from '@/lib/draindb'
 import { ethers } from 'ethers'
-import { sanitizeErrorMessage } from '@/lib/validation'
+import { sanitizeErrorMessage, getExplorerBaseUrl } from '@/lib/validation'
 
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const USDC_DECIMALS = 6
@@ -96,24 +96,8 @@ export async function POST(request: NextRequest) {
     1923: 'Swellchain', 10143: 'Monad', 16600: '0G'
   }
 
-  // Explorer base URLs per chain
-  const explorerUrls: Record<number, string> = {
-    1: 'https://etherscan.io', 8453: 'https://basescan.org', 56: 'https://bscscan.com',
-    42161: 'https://arbiscan.io', 137: 'https://polygonscan.com', 10: 'https://optimistic.etherscan.io',
-    43114: 'https://snowtrace.io', 250: 'https://ftmscan.com', 25: 'https://cronoscan.com',
-    81457: 'https://blastscan.io', 7777777: 'https://explorer.zora.energy', 1101: 'https://zkevm.polygonscan.com',
-    169: 'https://pacific-explorer.manta.network', 324: 'https://explorer.zksync.io',
-    59144: 'https://lineascan.build', 5000: 'https://mantlescan.xyz', 34443: 'https://explorer.mode.network',
-    534352: 'https://scrollscan.com', 100: 'https://gnosisscan.io', 7000: 'https://explorer.zetachain.com',
-    1625: 'https://explorer.gravity.xyz', 1116: 'https://scan.coredao.org', 1329: 'https://seitrace.com',
-    80094: 'https://berascan.com', 57073: 'https://explorer.inkonchain.com', 196: 'https://www.okx.com/explorer/xlayer',
-    43111: 'https://explorer.hemi.xyz', 8217: 'https://kaiascan.io', 1868: 'https://soneium.blockscout.com',
-    2818: 'https://explorer.morphl2.io', 1923: 'https://swellscan.io', 10143: 'https://testnet.monadexplorer.com',
-    16600: 'https://evm.0g.ai'
-  }
-
   // All supported chains
-  const ALL_CHAINS = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144, 5000, 34443, 534352, 100, 7000, 1625, 1116, 1329, 80094, 57073, 196, 43111, 8217, 1868, 2818, 1923, 10143, 16600]
+  const ALL_CHAINS = [1, 8453, 56, 42161, 137, 10, 43114, 250, 25, 81457, 7777777, 1101, 169, 324, 59144, 5000, 34443, 534352, 100, 7000, 1625, 1116, 1329, 80094, 57073, 196, 43111, 8217, 1868, 2818, 1923, 10143, 0]
 
   switch (action) {
     case 'scan': {
@@ -164,7 +148,7 @@ export async function POST(request: NextRequest) {
               return {
                 chainId: cid,
                 chainName: chainNames[cid] || `Chain ${cid}`,
-                explorerUrl: explorerUrls[cid] || `https://etherscan.io`,
+                explorerUrl: getExplorerBaseUrl(cid),
                 gasToken: gasTokenNames[cid] || 'ETH',
                 ethBalance: chainAssets.ethBalance.toString(),
                 ethFormatted: chainAssets.ethFormatted,
@@ -330,7 +314,7 @@ export async function POST(request: NextRequest) {
             ...permitResult,
             strategy: 'permit-sweep',
             message: 'Tokens recovered via permit — drainer had no chance to intercept',
-            explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io',
+            explorerUrl: getExplorerBaseUrl(targetChain),
             amountRecovered: amountStr || 'Check safe wallet'
           })
         }
@@ -360,7 +344,7 @@ export async function POST(request: NextRequest) {
           message: result.success
             ? 'Funds recovered via atomic bundle — submitted in single block'
             : 'Recovery failed. Check sponsor wallet balance and try again.',
-          explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io',
+          explorerUrl: getExplorerBaseUrl(targetChain),
           amountRecovered: amountStr || 'Check safe wallet'
         })
       } catch (err: unknown) {
@@ -387,7 +371,7 @@ export async function POST(request: NextRequest) {
         )
         return NextResponse.json({
           ...result,
-          explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
+          explorerUrl: getExplorerBaseUrl(targetChain)
         })
       } catch (err: unknown) {
         return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Revoke failed' }, { status: 500 })
@@ -462,7 +446,7 @@ export async function POST(request: NextRequest) {
               isDrainer: chain.isDrainer,
               success: result.success,
               txHashes: result.txHashes,
-              explorerUrl: explorerUrls[chain.chainId] || 'https://etherscan.io',
+              explorerUrl: getExplorerBaseUrl(chain.chainId),
               error: result.error
             }
           } catch (err: unknown) {
@@ -473,7 +457,7 @@ export async function POST(request: NextRequest) {
               isDrainer: chain.isDrainer,
               success: false,
               txHashes: [],
-              explorerUrl: explorerUrls[chain.chainId] || 'https://etherscan.io',
+              explorerUrl: getExplorerBaseUrl(chain.chainId),
               error: err instanceof Error ? err.message : 'Revoke failed'
             }
           }
@@ -531,7 +515,7 @@ export async function POST(request: NextRequest) {
         )
         return NextResponse.json({
           ...result,
-          explorerUrl: explorerUrls[targetChain] || 'https://etherscan.io'
+          explorerUrl: getExplorerBaseUrl(targetChain)
         })
       } catch (err: unknown) {
         return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Recovery failed' }, { status: 500 })

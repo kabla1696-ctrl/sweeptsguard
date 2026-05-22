@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { CHAINS } from '@/lib/chains'
+import { isValidAddress } from '@/lib/validation'
 
 interface Transfer {
   hash: string
@@ -59,11 +60,9 @@ function HistoryContent() {
     }
   }, [])
 
-  const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!ADDRESS_RE.test(address)) {
+    if (!isValidAddress(address)) {
       setError('Invalid address. Must be 0x + 40 hex characters.')
       return
     }
@@ -98,6 +97,7 @@ function HistoryContent() {
           <button
             type="submit"
             disabled={loading}
+            aria-label="Fetch transaction history"
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
           >
             {loading ? 'Loading...' : 'Fetch History'}

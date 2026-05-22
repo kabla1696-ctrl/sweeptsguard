@@ -1,3 +1,5 @@
+import { isValidAddress } from '@/lib/validation'
+
 // Multi-Wallet Manager - localStorage based
 export interface ManagedWallet {
   id: string
@@ -48,14 +50,12 @@ export class WalletManager {
     return this.wallets.find(w => w.id === id)
   }
 
-  private static ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
-
   add(wallet: Omit<ManagedWallet, 'id' | 'addedAt'>): ManagedWallet {
-    if (!WalletManager.ADDRESS_RE.test(wallet.address)) {
+    if (!isValidAddress(wallet.address)) {
       throw new Error('Invalid compromised address format')
     }
     if (wallet.safeAddress) {
-      if (!WalletManager.ADDRESS_RE.test(wallet.safeAddress)) {
+      if (!isValidAddress(wallet.safeAddress)) {
         throw new Error('Invalid safe address format')
       }
       if (wallet.safeAddress.toLowerCase() === wallet.address.toLowerCase()) {

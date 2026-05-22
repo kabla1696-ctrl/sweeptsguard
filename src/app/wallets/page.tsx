@@ -62,7 +62,15 @@ export default function WalletsPage() {
   }
 
   if (!mounted) {
-    return <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">Loading...</div>
+    return <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+      <div className="inline-flex items-center gap-3 text-white/30">
+        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Loading...
+      </div>
+    </div>
   }
 
   return (
@@ -114,6 +122,7 @@ export default function WalletsPage() {
           <button
             onClick={addWallet}
             disabled={!newAddress}
+            aria-label="Add wallet to manager"
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
           >
             ➕ Add Wallet
@@ -154,7 +163,8 @@ export default function WalletsPage() {
                     {!wallet.isActive && (
                       <button
                         onClick={() => setActive(wallet.id)}
-                        className="px-3 py-1.5 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors"
+                        aria-label="Set wallet as active"
+                      className="px-3 py-1.5 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors"
                       >
                         Set Active
                       </button>
@@ -167,6 +177,7 @@ export default function WalletsPage() {
                     </Link>
                     <button
                       onClick={() => removeWallet(wallet.id)}
+                      aria-label={`Remove wallet ${wallet.label}`}
                       className="px-3 py-1.5 text-xs bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
                     >
                       Remove

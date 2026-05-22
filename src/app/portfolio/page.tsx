@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { isValidAddress } from '@/lib/validation'
 
 interface PortfolioAsset {
   type: string
@@ -34,11 +35,9 @@ function PortfolioContent() {
     return () => { abortRef.current?.abort() }
   }, [])
 
-  const ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/
-
   const fetchPortfolio = useCallback(async (addr: string) => {
     if (!addr) return
-    if (!ADDRESS_REGEX.test(addr)) {
+    if (!isValidAddress(addr)) {
       setError('Invalid address. Must be a valid Ethereum address (0x followed by 40 hex characters).')
       return
     }
@@ -103,7 +102,8 @@ function PortfolioContent() {
           />
           <button
             type="submit"
-            disabled={loading || !ADDRESS_REGEX.test(address)}
+            disabled={loading || !isValidAddress(address)}
+            aria-label="Load portfolio"
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
           >
             {loading ? 'Loading...' : '📊 Load'}

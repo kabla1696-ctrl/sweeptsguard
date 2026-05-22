@@ -27,6 +27,9 @@ export default function LanguageSwitcher() {
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
+        aria-label="Select language"
+        aria-expanded={open}
+        aria-haspopup="listbox"
         className="px-3 py-1.5 bg-white/[0.05] border border-white/[0.1] rounded-lg text-xs text-white/50 hover:text-white transition-colors"
       >
         🌐 {LOCALES[current].nativeName}

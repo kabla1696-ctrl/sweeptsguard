@@ -108,6 +108,7 @@ export default function BridgePage() {
         <button
           onClick={handleSearch}
           disabled={loading || fromChain === toChain}
+          aria-label="Find bridge route"
           className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 mb-8"
         >
           {loading ? 'Searching...' : '🔍 Find Bridge Route'}

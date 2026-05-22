@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scanner } from '@/lib/scanner'
 import { DEFAULT_CHAINS } from '@/lib/chains'
-import { sanitizeErrorMessage } from '@/lib/validation'
+import { sanitizeErrorMessage, isValidAddress } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
 
-  if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+  if (!address || !isValidAddress(address)) {
     return NextResponse.json({ error: 'Invalid EVM address' }, { status: 400 })
   }
 

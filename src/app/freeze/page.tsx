@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { isValidAddress, isValidTxHash } from '@/lib/validation'
 
 interface FreezeTemplate {
   exchange: string
@@ -104,16 +105,13 @@ export default function FreezePage() {
   const [copied, setCopied] = useState<'subject' | 'body' | null>(null)
   const [validationError, setValidationError] = useState('')
 
-  const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
-  const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/
-
   const handleGenerate = () => {
     setValidationError('')
-    if (!ADDRESS_RE.test(walletAddress)) {
+    if (!isValidAddress(walletAddress)) {
       setValidationError('Invalid wallet address. Must be 0x + 40 hex characters.')
       return
     }
-    if (txHash && !TX_HASH_RE.test(txHash)) {
+    if (txHash && !isValidTxHash(txHash)) {
       setValidationError('Invalid transaction hash. Must be 0x + 64 hex characters.')
       return
     }
@@ -161,6 +159,8 @@ export default function FreezePage() {
                   <button
                     key={ex}
                     onClick={() => setSelectedExchange(ex)}
+                    aria-label={`Select ${ex} exchange`}
+                    aria-pressed={selectedExchange === ex}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                       selectedExchange === ex
                         ? 'bg-green-600 text-white'
@@ -220,6 +220,7 @@ export default function FreezePage() {
             <button
               onClick={handleGenerate}
               disabled={!walletAddress}
+              aria-label="Generate freeze request template"
               className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
             >
               📧 Generate Freeze Request
@@ -235,6 +236,7 @@ export default function FreezePage() {
                     <span className="text-xs text-white/30">Subject</span>
                     <button
                       onClick={() => handleCopy(template.subject, 'subject')}
+                      aria-label="Copy email subject to clipboard"
                       className="text-xs text-green-400 hover:text-green-300"
                     >
                       {copied === 'subject' ? '✅ Copied!' : '📋 Copy'}
@@ -247,6 +249,7 @@ export default function FreezePage() {
                     <span className="text-xs text-white/30">Body</span>
                     <button
                       onClick={() => handleCopy(template.body, 'body')}
+                      aria-label="Copy email body to clipboard"
                       className="text-xs text-green-400 hover:text-green-300"
                     >
                       {copied === 'body' ? '✅ Copied!' : '📋 Copy'}

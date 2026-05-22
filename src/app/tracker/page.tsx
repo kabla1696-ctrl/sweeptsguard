@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
+import { getExplorerBaseUrl } from '@/lib/validation'
 
 interface Transfer {
   hash: string
@@ -10,6 +11,7 @@ interface Transfer {
   to: string
   value: string
   asset: string
+  chainId: number
   chainName: string
   timestamp: number
   isExchangeDeposit: boolean
@@ -72,44 +74,8 @@ export default function TrackerPage() {
     return new Date(timestamp).toLocaleString()
   }
 
-  const getExplorerUrl = (chainName: string, hash: string) => {
-    const explorers: Record<string, string> = {
-      'Ethereum': 'https://etherscan.io',
-      'Base': 'https://basescan.org',
-      'BNB Chain': 'https://bscscan.com',
-      'Arbitrum': 'https://arbiscan.io',
-      'Polygon': 'https://polygonscan.com',
-      'Optimism': 'https://optimistic.etherscan.io',
-      'Avalanche': 'https://snowtrace.io',
-      'Fantom': 'https://ftmscan.com',
-      'Cronos': 'https://cronoscan.com',
-      'Blast': 'https://blastscan.io',
-      'Zora': 'https://explorer.zora.energy',
-      'Polygon zkEVM': 'https://zkevm.polygonscan.com',
-      'Manta Pacific': 'https://pacific-explorer.manta.network',
-      'zkSync Era': 'https://explorer.zksync.io',
-      'Linea': 'https://lineascan.build',
-      'Mantle': 'https://mantlescan.xyz',
-      'Mode': 'https://explorer.mode.network',
-      'Scroll': 'https://scrollscan.com',
-      'Gnosis': 'https://gnosisscan.io',
-      'ZetaChain': 'https://zetachain.blockscout.com',
-      'Gravity': 'https://explorer.gravity.xyz',
-      'Core': 'https://scan.coredao.org',
-      'Sei': 'https://seitrace.com',
-      'Berachain': 'https://berascan.com',
-      'Ink': 'https://explorer.inkonchain.com',
-      'XLayer': 'https://www.oklink.com/xlayer',
-      'Hemi': 'https://explorer.hemi.xyz',
-      'Kaia': 'https://kaiascan.io',
-      'Soneium': 'https://soneium.blockscout.com',
-      'Morph': 'https://explorer.morphl2.io',
-      'Swellchain': 'https://swellchainscan.io',
-      'Monad Testnet': 'https://testnet.monadexplorer.com',
-      '0G': 'https://chainscan.0g.ai'
-    }
-    const base = explorers[chainName] || 'https://etherscan.io'
-    return `${base}/tx/${hash}`
+  const getExplorerUrl = (chainId: number, hash: string) => {
+    return `${getExplorerBaseUrl(chainId)}/tx/${hash}`
   }
 
   return (
@@ -144,6 +110,7 @@ export default function TrackerPage() {
           <button
             type="submit"
             disabled={tracking}
+            aria-label="Track fund movements"
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
           >
             {tracking ? 'Tracking...' : 'Track Funds'}
@@ -221,7 +188,7 @@ export default function TrackerPage() {
 
                     <div className="text-right">
                       <a
-                        href={getExplorerUrl(transfer.chainName, transfer.hash)}
+                        href={getExplorerUrl(transfer.chainId, transfer.hash)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="text-green-400/50 text-xs hover:text-green-400 font-mono"

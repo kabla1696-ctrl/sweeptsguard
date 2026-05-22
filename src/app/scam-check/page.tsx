@@ -100,6 +100,7 @@ function ScamCheckContent() {
           <button
             type="submit"
             disabled={loading}
+            aria-label="Check for scam indicators"
             className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
           >
             {loading ? 'Analyzing...' : '🔍 Check'}

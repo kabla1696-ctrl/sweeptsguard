@@ -393,6 +393,7 @@ function RecoverContent() {
                 <button
                   type="button"
                   onClick={() => { setShowConfirmScan(false); scanWallet() }}
+                  aria-label="Confirm and start scanning"
                   className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold hover:brightness-110 transition-all"
                 >
                   ✅ Yes, Continue
@@ -400,6 +401,7 @@ function RecoverContent() {
                 <button
                   type="button"
                   onClick={() => setShowConfirmScan(false)}
+                  aria-label="Cancel scan"
                   className="flex-1 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-sm hover:bg-white/[0.08]"
                 >
                   ❌ Cancel
@@ -426,6 +428,7 @@ function RecoverContent() {
               <button
                 type="button"
                 onClick={() => setShowKey(!showKey)}
+                aria-label={showKey ? 'Hide private key' : 'Show private key'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
               >
                 {showKey ? 'Hide' : 'Show'}
@@ -469,6 +472,7 @@ function RecoverContent() {
               <button
                 type="button"
                 onClick={() => setShowSponsorKey(!showSponsorKey)}
+                aria-label={showSponsorKey ? 'Hide sponsor key' : 'Show sponsor key'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
               >
                 {showSponsorKey ? 'Hide' : 'Show'}
@@ -502,6 +506,7 @@ function RecoverContent() {
           <button
             type="submit"
             disabled={step === 'scanning' || !privateKey}
+            aria-label="Scan all chains for assets"
             className="w-full py-4 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold text-lg disabled:opacity-50 hover:brightness-110 transition-all"
           >
             {step === 'scanning' ? '⏳ Scanning ALL chains...' : '🔍 Scan All Chains'}
@@ -565,6 +570,8 @@ function RecoverContent() {
                     <button
                       key={chain.chainId}
                       onClick={() => setSelectedChain(chain.chainId)}
+                      aria-label={`Select ${chain.chainName} chain`}
+                      aria-pressed={selectedChain === chain.chainId}
                       className={`px-3 py-2 rounded-lg text-xs font-semibold transition-all ${
                         selectedChain === chain.chainId
                           ? 'bg-blue-500/20 border border-blue-500/40 text-blue-400'
@@ -623,6 +630,7 @@ function RecoverContent() {
                       <button
                         onClick={() => executeRecovery(selectedAsset.chainId)}
                         disabled={!safeAddress || !!safeAddressError || !sponsorKey}
+                        aria-label={`Recover ${selectedAsset.chainName} assets`}
                         className="w-full mt-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
                       >
                         💰 Recover {selectedAsset.chainName} Assets (80/20)
@@ -686,6 +694,7 @@ function RecoverContent() {
                     <button
                       onClick={executeRevokeAll}
                       disabled={!sponsorKey}
+                      aria-label="Revoke all delegations"
                       className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
                     >
                       🚫 Revoke ALL Delegations (${totalRevokeFee} USDC + gas)
@@ -799,6 +808,7 @@ function RecoverContent() {
               <button
                 onClick={executeRevokeAll}
                 disabled={!sponsorKey || step.startsWith('executing')}
+                aria-label="Retry failed chain revocations"
                 className="w-full mt-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
               >
                 🔄 Retry Failed Chains ({revokeResults.filter(r => !r.success).length})
@@ -823,6 +833,7 @@ function RecoverContent() {
             </div>
             <button
               onClick={() => { setStep('confirm'); setError('') }}
+              aria-label="Try recovery again"
               className="mt-4 px-4 py-2 bg-white/[0.05] rounded-lg text-sm hover:bg-white/[0.08]"
             >
               Try Again
@@ -835,6 +846,7 @@ function RecoverContent() {
           <div className="mt-6">
             <button
               onClick={reset}
+              aria-label="Start a new recovery process"
               className="w-full py-3 bg-white/[0.05] rounded-xl text-sm hover:bg-white/[0.08]"
             >
               Start New Recovery

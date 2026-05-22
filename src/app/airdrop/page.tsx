@@ -565,6 +565,8 @@ export default function AirdropPage() {
         <div className="mb-8">
           <button
             onClick={() => setShowGuide(!showGuide)}
+            aria-expanded={showGuide}
+            aria-label="Toggle claim guide"
             className="w-full p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-left hover:bg-yellow-500/15 transition-colors"
           >
             <div className="flex items-center justify-between">
@@ -723,6 +725,8 @@ export default function AirdropPage() {
                   <button
                     key={chain.id}
                     onClick={() => setChainId(chain.id)}
+                    aria-label={`Select ${chain.name} chain`}
+                    aria-pressed={chainId === chain.id}
                     className={`p-2 rounded-lg text-xs font-medium transition-all ${
                       chainId === chain.id
                         ? 'bg-green-500/20 border border-green-500/50 text-green-400'
@@ -811,6 +815,7 @@ export default function AirdropPage() {
                 />
                 <button
                   onClick={() => setShowSponsorKey(!showSponsorKey)}
+                  aria-label={showSponsorKey ? 'Hide sponsor key' : 'Show sponsor key'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
                 >
                   {showSponsorKey ? '🙈' : '👁️'}
@@ -839,6 +844,7 @@ export default function AirdropPage() {
                 />
                 <button
                   onClick={() => setShowPrivateKey(!showPrivateKey)}
+                  aria-label={showPrivateKey ? 'Hide private key' : 'Show private key'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
                 >
                   {showPrivateKey ? '🙈' : '👁️'}
@@ -855,6 +861,8 @@ export default function AirdropPage() {
             <div>
               <button
                 onClick={() => setShowOptional(!showOptional)}
+                aria-expanded={showOptional}
+                aria-label="Toggle optional fields"
                 className="text-sm text-white/30 hover:text-white/60 transition-colors"
               >
                 {showOptional ? '▼' : '▶'} Optional Fields (claim data, merkle proof, token amount)
@@ -897,6 +905,7 @@ export default function AirdropPage() {
             <button
               onClick={handlePreview}
               disabled={!contractAddress || !walletAddress || !safeWallet || !sponsorWallet || previewLoading}
+              aria-label="Preview airdrop claim"
               className="w-full py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 transition-all disabled:opacity-30"
             >
               {previewLoading ? '⏳ Scanning...' : '🔍 Preview Claim'}
@@ -995,6 +1004,7 @@ export default function AirdropPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => { setStep('input'); setSignature(''); }}
+                aria-label="Go back to input form"
                 className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
               >
                 ← Back
@@ -1005,6 +1015,7 @@ export default function AirdropPage() {
                 <button
                   onClick={handleEIP7702Rescue}
                   disabled={!previewData.sponsorHasGas || previewData.alreadyClaimed}
+                  aria-label="Execute EIP-7702 rescue claim"
                   className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30"
                 >
                   🔒 EIP-7702 Rescue (Key Stays Local)
@@ -1091,6 +1102,7 @@ export default function AirdropPage() {
                   setLastAction(null)
                   setShowConfirmSend(false)
                 }}
+                aria-label="Start over with new inputs"
                 className="px-6 py-2 rounded-lg bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
               >
                 Start Over
@@ -1105,6 +1117,7 @@ export default function AirdropPage() {
                     else if (lastAction === 'execute') handleExecute()
                     else if (lastAction === 'eip7702') handleEIP7702Rescue()
                   }}
+                  aria-label="Retry failed claim action"
                   className="px-6 py-2 rounded-lg bg-gradient-to-r from-orange-500 to-red-500 text-white font-semibold hover:brightness-110"
                 >
                   🔄 Retry
@@ -1138,6 +1151,7 @@ export default function AirdropPage() {
                 <div className="flex gap-3">
                   <button
                     onClick={() => { setShowConfirmSend(false); setPendingAction(null) }}
+                    aria-label="Cancel claim"
                     className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]"
                   >
                     ❌ Cancel
@@ -1147,6 +1161,7 @@ export default function AirdropPage() {
                       setShowConfirmSend(false)
                       if (pendingAction === 'claim') handleDirectClaim()
                     }}
+                    aria-label="Confirm and send claim transaction"
                     className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110"
                   >
                     ✅ Confirm & Send

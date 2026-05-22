@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { scanner } from '@/lib/scanner'
 import { CHAINS } from '@/lib/chains'
-import { sanitizeErrorMessage } from '@/lib/validation'
-
-const ADDRESS_REGEX = /^0x[0-9a-fA-F]{40}$/
+import { sanitizeErrorMessage, isValidAddress } from '@/lib/validation'
 
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get('address')
@@ -12,7 +10,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Address required' }, { status: 400 })
   }
 
-  if (!ADDRESS_REGEX.test(address)) {
+  if (!isValidAddress(address)) {
     return NextResponse.json({ error: 'Invalid address format. Must be 0x followed by 40 hex characters.' }, { status: 400 })
   }
 

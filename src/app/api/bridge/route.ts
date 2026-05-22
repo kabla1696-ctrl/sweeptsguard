@@ -24,8 +24,9 @@ const BRIDGE_ROUTES: Record<string, { bridge: string; url: string }> = {
 }
 
 export async function GET(request: NextRequest) {
-  const fromParam = request.nextUrl.searchParams.get('from')
-  const toParam = request.nextUrl.searchParams.get('to')
+  try {
+    const fromParam = request.nextUrl.searchParams.get('from')
+    const toParam = request.nextUrl.searchParams.get('to')
 
   if (!fromParam || !toParam) {
     return NextResponse.json({ error: 'from and to chain IDs required' }, { status: 400 })
@@ -73,5 +74,9 @@ export async function GET(request: NextRequest) {
     bridgeUrl: route.url
   }
 
-  return NextResponse.json(quote)
+    return NextResponse.json(quote)
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Bridge lookup failed'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
 }
