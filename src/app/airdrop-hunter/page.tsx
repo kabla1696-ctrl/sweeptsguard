@@ -89,22 +89,30 @@ export default function AirdropHunterPage() {
   const categories = ['all', 'defi', 'layer2', 'nft', 'gaming', 'infrastructure', 'social']
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+    <main className="min-h-screen bg-[#030305] text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-pink-500/[0.03] rounded-full blur-[100px]" />
+      </div>
+
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/airdrop" className="text-sm text-white/50 hover:text-white">Airdrops</Link>
-          <Link href="/airdrop-hunter" className="text-sm text-green-400 font-medium">Airdrop Hunter Pro</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Dashboard</Link>
+          <Link href="/airdrop" className="text-sm text-white/50 hover:text-purple-400">Airdrops</Link>
+          <Link href="/airdrop-hunter" className="text-sm text-purple-400 font-medium">Airdrop Hunter Pro</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-purple-400">Dashboard</Link>
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">🎁 Airdrop Hunter Pro</h1>
-        <p className="text-white/40 mb-8">Auto-detect eligible airdrops, claim guides, value estimates, and notifications</p>
+      <div className="relative z-10 max-w-6xl mx-auto px-6 py-12">
+        <h1 className="text-4xl md:text-5xl font-black mb-2">
+          🎁 Airdrop Hunter <span className="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">Pro</span>
+        </h1>
+        <p className="text-gray-500 text-lg mb-8">Auto-detect eligible airdrops, claim guides, value estimates, and notifications</p>
 
         {/* Guide */}
         {showGuide && (
