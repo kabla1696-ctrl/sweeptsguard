@@ -749,11 +749,12 @@ export default function AirdropPage() {
 
             {/* Airdrop Contract Address */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">
+              <label htmlFor="airdrop-contract" className="block text-sm text-white/50 mb-2">
                 Airdrop Contract Address
                 <span className="text-white/20 ml-2">(NOT the token address)</span>
               </label>
               <input
+                id="airdrop-contract"
                 type="text"
                 value={contractAddress}
                 onChange={e => setContractAddress(e.target.value)}
@@ -764,8 +765,9 @@ export default function AirdropPage() {
 
             {/* Your (Hacked) Wallet Address */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">Your (Hacked) Wallet Address</label>
+              <label htmlFor="airdrop-wallet" className="block text-sm text-white/50 mb-2">Your (Hacked) Wallet Address</label>
               <input
+                id="airdrop-wallet"
                 type="text"
                 value={walletAddress}
                 onChange={e => setWalletAddress(e.target.value)}
@@ -777,11 +779,12 @@ export default function AirdropPage() {
 
             {/* Safe Wallet */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">
+              <label htmlFor="airdrop-safe" className="block text-sm text-white/50 mb-2">
                 Safe Wallet (receives 80%)
                 <span className="text-red-400 ml-2">⚠️ Triple check!</span>
               </label>
               <input
+                id="airdrop-safe"
                 type="text"
                 value={safeWallet}
                 onChange={e => setSafeWallet(e.target.value)}
@@ -792,8 +795,9 @@ export default function AirdropPage() {
 
             {/* Sponsor Wallet Address */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">Sponsor Wallet Address (pays gas)</label>
+              <label htmlFor="airdrop-sponsor-addr" className="block text-sm text-white/50 mb-2">Sponsor Wallet Address (pays gas)</label>
               <input
+                id="airdrop-sponsor-addr"
                 type="text"
                 value={sponsorWallet}
                 onChange={e => setSponsorWallet(e.target.value)}
@@ -804,9 +808,10 @@ export default function AirdropPage() {
 
             {/* Sponsor Private Key */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">Sponsor Private Key (for gas payment)</label>
+              <label htmlFor="airdrop-sponsor-key" className="block text-sm text-white/50 mb-2">Sponsor Private Key (for gas payment)</label>
               <div className="relative">
                 <input
+                  id="airdrop-sponsor-key"
                   type={showSponsorKey ? 'text' : 'password'}
                   value={sponsorKey}
                   onChange={e => setSponsorKey(e.target.value)}
@@ -826,7 +831,7 @@ export default function AirdropPage() {
 
             {/* Hacked Wallet Private Key */}
             <div>
-              <label className="block text-sm text-white/50 mb-2">
+              <label htmlFor="airdrop-private-key" className="block text-sm text-white/50 mb-2">
                 Hacked Wallet Private Key
                 {ANTIDRAIN_CHAINS.has(chainId) ? (
                   <span className="text-green-400 ml-2">(EIP-7702 — key stays in browser ✅)</span>
@@ -836,6 +841,7 @@ export default function AirdropPage() {
               </label>
               <div className="relative">
                 <input
+                  id="airdrop-private-key"
                   type={showPrivateKey ? 'text' : 'password'}
                   value={privateKey}
                   onChange={e => setPrivateKey(e.target.value)}
@@ -870,8 +876,9 @@ export default function AirdropPage() {
               {showOptional && (
                 <div className="mt-3 space-y-3">
                   <div>
-                    <label className="block text-xs text-white/30 mb-1">Claim Data (hex, from project page)</label>
+                    <label htmlFor="airdrop-claim-data" className="block text-xs text-white/30 mb-1">Claim Data (hex, from project page)</label>
                     <input
+                      id="airdrop-claim-data"
                       type="text"
                       value={claimData}
                       onChange={e => setClaimData(e.target.value)}
@@ -880,8 +887,9 @@ export default function AirdropPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-white/30 mb-1">Merkle Proof (JSON array)</label>
+                    <label htmlFor="airdrop-merkle" className="block text-xs text-white/30 mb-1">Merkle Proof (JSON array)</label>
                     <textarea
+                      id="airdrop-merkle"
                       value={merkleProof}
                       onChange={e => setMerkleProof(e.target.value)}
                       placeholder='["0xabc...", "0xdef..."]'
@@ -889,8 +897,9 @@ export default function AirdropPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-white/30 mb-1">Token Amount (if not auto-detected)</label>
+                    <label htmlFor="airdrop-token-amount" className="block text-xs text-white/30 mb-1">Token Amount (if not auto-detected)</label>
                     <input
+                      id="airdrop-token-amount"
                       type="text"
                       value={tokenAmount}
                       onChange={e => setTokenAmount(e.target.value)}

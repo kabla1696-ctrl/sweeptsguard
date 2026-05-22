@@ -184,10 +184,11 @@ function DashboardContent() {
           <div className="space-y-6">
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                <label htmlFor="compromised-wallet" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
                   Compromised Wallet
                 </label>
                 <input
+                  id="compromised-wallet"
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
@@ -196,10 +197,11 @@ function DashboardContent() {
                 />
               </div>
               <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+                <label htmlFor="safe-wallet" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
                   Safe Wallet (Sweep To)
                 </label>
                 <input
+                  id="safe-wallet"
                   type="text"
                   value={safeAddress}
                   onChange={(e) => setSafeAddress(e.target.value)}
@@ -210,11 +212,12 @@ function DashboardContent() {
             </div>
 
             <div>
-              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+              <label htmlFor="private-key" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
                 Private Key (for compromised wallet)
               </label>
               <div className="relative">
                 <input
+                  id="private-key"
                   type={showPrivateKey ? 'text' : 'password'}
                   value={privateKey}
                   onChange={(e) => setPrivateKey(e.target.value)}
@@ -236,8 +239,9 @@ function DashboardContent() {
               <div className="space-y-4">
                 <div className="grid md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs text-white/30 mb-1 block">Telegram Bot Token</label>
+                    <label htmlFor="tg-bot-token" className="text-xs text-white/30 mb-1 block">Telegram Bot Token</label>
                     <input
+                      id="tg-bot-token"
                       type="text"
                       value={telegramBotToken}
                       onChange={(e) => setTelegramBotToken(e.target.value)}
@@ -246,8 +250,9 @@ function DashboardContent() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-white/30 mb-1 block">Telegram Chat ID</label>
+                    <label htmlFor="tg-chat-id" className="text-xs text-white/30 mb-1 block">Telegram Chat ID</label>
                     <input
+                      id="tg-chat-id"
                       type="text"
                       value={telegramChatId}
                       onChange={(e) => setTelegramChatId(e.target.value)}
@@ -257,8 +262,9 @@ function DashboardContent() {
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-white/30 mb-1 block">Discord Webhook URL</label>
+                  <label htmlFor="discord-webhook" className="text-xs text-white/30 mb-1 block">Discord Webhook URL</label>
                   <input
+                    id="discord-webhook"
                     type="text"
                     value={discordWebhookUrl}
                     onChange={(e) => setDiscordWebhookUrl(e.target.value)}
@@ -267,8 +273,9 @@ function DashboardContent() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-white/30 mb-1 block">Slack Webhook URL</label>
+                  <label htmlFor="slack-webhook" className="text-xs text-white/30 mb-1 block">Slack Webhook URL</label>
                   <input
+                    id="slack-webhook"
                     type="text"
                     value={slackWebhookUrl}
                     onChange={(e) => setSlackWebhookUrl(e.target.value)}

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8b5cf6"/>
+      <stop offset="100%" style="stop-color:#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff"/>
+      <stop offset="100%" style="stop-color:#e0e7ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="url(#bg)"/>
+  <!-- Shield shape -->
+  <path d="M256 80 L400 160 L400 280 C400 360 340 420 256 460 C172 420 112 360 112 280 L112 160 Z" 
+        fill="none" stroke="url(#shield)" stroke-width="24" stroke-linejoin="round"/>
+  <!-- Inner shield fill -->
+  <path d="M256 120 L370 185 L370 280 C370 345 320 395 256 425 C192 395 142 345 142 280 L142 185 Z" 
+        fill="rgba(255,255,255,0.1)"/>
+  <!-- Checkmark / sweep arrow -->
+  <path d="M180 270 L230 320 L340 200" fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Small sweep lines -->
+  <line x1="200" y1="350" x2="310" y2="350" stroke="rgba(255,255,255,0.4)" stroke-width="8" stroke-linecap="round"/>
+  <line x1="220" y1="380" x2="290" y2="380" stroke="rgba(255,255,255,0.25)" stroke-width="8" stroke-linecap="round"/>
+</svg>

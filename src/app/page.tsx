@@ -1,10 +1,32 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 export default function Home() {
   const [walletAddress, setWalletAddress] = useState('')
+  const [canInstall, setCanInstall] = useState(false)
+  const [isStandalone, setIsStandalone] = useState(false)
+
+  useEffect(() => {
+    // Detect if running as PWA
+    const standalone = window.matchMedia('(display-mode: standalone)').matches ||
+      (window.navigator as Record<string, unknown>).standalone === true
+    setIsStandalone(standalone)
+
+    // Listen for install availability
+    const handler = () => setCanInstall(true)
+    window.addEventListener('pwa-installable', handler)
+    return () => window.removeEventListener('pwa-installable', handler)
+  }, [])
+
+  const handleInstall = async () => {
+    const win = window as Record<string, unknown>
+    if (typeof win.__pwaInstall === 'function') {
+      const result = await (win.__pwaInstall as () => Promise<string>)()
+      if (result === 'accepted') setCanInstall(false)
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white relative overflow-hidden">
@@ -44,6 +66,16 @@ export default function Home() {
 
       {/* Hero */}
       <div className="relative z-10 flex flex-col items-center justify-center px-6 pt-20 md:pt-32">
+        {/* Install App Button */}
+        {!isStandalone && canInstall && (
+          <button
+            onClick={handleInstall}
+            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-violet-500/10 border border-violet-500/20 text-violet-400 text-xs font-medium mb-4 hover:bg-violet-500/20 transition-all cursor-pointer"
+          >
+            📱 Install SweepGuard App
+          </button>
+        )}
+
         {/* Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-medium mb-8">
           <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />

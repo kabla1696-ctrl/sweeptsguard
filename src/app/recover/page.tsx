@@ -414,11 +414,12 @@ function RecoverContent() {
         {/* Input Form */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">
           <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+            <label htmlFor="recover-private-key" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
               🔴 Compromised Wallet Private Key
             </label>
             <div className="relative">
               <input
+                id="recover-private-key"
                 type={showKey ? 'text' : 'password'}
                 value={privateKey}
                 onChange={(e) => setPrivateKey(e.target.value)}
@@ -438,10 +439,11 @@ function RecoverContent() {
           </div>
 
           <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+            <label htmlFor="recover-safe-address" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
               🟢 Safe Wallet Address
             </label>
             <input
+              id="recover-safe-address"
               type="text"
               value={safeAddress}
               onChange={(e) => { setSafeAddress(e.target.value); validateSafeAddress(e.target.value) }}
@@ -458,11 +460,12 @@ function RecoverContent() {
           </div>
 
           <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
+            <label htmlFor="recover-sponsor-key" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
               💰 Sponsor Wallet Private Key (for gas + fees)
             </label>
             <div className="relative">
               <input
+                id="recover-sponsor-key"
                 type={showSponsorKey ? 'text' : 'password'}
                 value={sponsorKey}
                 onChange={(e) => setSponsorKey(e.target.value)}

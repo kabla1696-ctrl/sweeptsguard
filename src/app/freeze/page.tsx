@@ -173,8 +173,9 @@ export default function FreezePage() {
               </div>
             </div>
             <div>
-              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Compromised Wallet</label>
+              <label htmlFor="compromised-wallet-freeze" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Compromised Wallet</label>
               <input
+                id="compromised-wallet-freeze"
                 type="text"
                 value={walletAddress}
                 onChange={e => setWalletAddress(e.target.value)}
@@ -183,8 +184,9 @@ export default function FreezePage() {
               />
             </div>
             <div>
-              <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Transaction Hash</label>
+              <label htmlFor="tx-hash-freeze" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Transaction Hash</label>
               <input
+                id="tx-hash-freeze"
                 type="text"
                 value={txHash}
                 onChange={e => setTxHash(e.target.value)}
@@ -194,8 +196,9 @@ export default function FreezePage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Amount</label>
+                <label htmlFor="amount-freeze" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Amount</label>
                 <input
+                  id="amount-freeze"
                   type="text"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
@@ -204,8 +207,9 @@ export default function FreezePage() {
                 />
               </div>
               <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Asset</label>
+                <label htmlFor="asset-freeze" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Asset</label>
                 <input
+                  id="asset-freeze"
                   type="text"
                   value={asset}
                   onChange={e => setAsset(e.target.value)}

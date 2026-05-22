@@ -99,6 +99,7 @@ export default function WalletsPage() {
               value={newAddress}
               onChange={e => setNewAddress(e.target.value)}
               placeholder="Compromised address (0x...)"
+              aria-label="Compromised wallet address"
               className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
             />
             <input
@@ -106,6 +107,7 @@ export default function WalletsPage() {
               value={newSafeAddress}
               onChange={e => setNewSafeAddress(e.target.value)}
               placeholder="Safe address (0x...)"
+              aria-label="Safe wallet address"
               className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
             />
             <input
@@ -113,6 +115,7 @@ export default function WalletsPage() {
               value={newLabel}
               onChange={e => setNewLabel(e.target.value)}
               placeholder="Label (optional)"
+              aria-label="Wallet label"
               className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
             />
           </div>

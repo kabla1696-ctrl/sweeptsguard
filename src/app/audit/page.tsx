@@ -89,6 +89,7 @@ function AuditContent() {
             value={address}
             onChange={e => setAddress(e.target.value)}
             placeholder="Enter contract address (0x...)"
+            aria-label="Contract address to audit"
             className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
           />
           <button

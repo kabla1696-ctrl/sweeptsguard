@@ -80,8 +80,9 @@ export default function BridgePage() {
 
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">From Chain</label>
+            <label htmlFor="from-chain" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">From Chain</label>
             <select
+              id="from-chain"
               value={fromChain}
               onChange={e => setFromChain(Number(e.target.value))}
               className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
@@ -92,8 +93,9 @@ export default function BridgePage() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">To Chain</label>
+            <label htmlFor="to-chain" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">To Chain</label>
             <select
+              id="to-chain"
               value={toChain}
               onChange={e => setToChain(Number(e.target.value))}
               className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
