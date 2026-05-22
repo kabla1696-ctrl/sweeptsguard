@@ -278,6 +278,8 @@ async function submitViaJito(
   // Try each Jito endpoint
   for (const endpoint of JITO_ENDPOINTS) {
     try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 10_000) // 10s timeout per endpoint
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -287,13 +289,25 @@ async function submitViaJito(
           method: 'sendTransaction',
           params: [serialized, { encoding: 'base64' }],
         }),
+        signal: controller.signal,
       })
+      clearTimeout(timeout)
+
+      if (!response.ok) {
+        console.warn(`Jito endpoint ${endpoint} returned HTTP ${response.status}`)
+        continue
+      }
 
       const data = await response.json()
       if (data.result) {
         return { success: true, signature: data.result }
       }
-    } catch {
+      if (data.error) {
+        console.warn(`Jito endpoint ${endpoint} returned error: ${data.error.message || JSON.stringify(data.error)}`)
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown error'
+      console.warn(`Jito endpoint ${endpoint} failed: ${msg}`)
       continue
     }
   }
@@ -443,13 +457,16 @@ export async function recoverSolanaFunds(
       signature = jitoResult.signature
     } else {
       // Fallback to public RPC with high priority fee
-      console.warn('Jito failed, falling back to public RPC')
+      // SECURITY WARNING: Transaction will be visible in public mempool
+      console.warn('⚠️ Jito private submission failed — falling back to PUBLIC RPC. Transaction is now visible to drainer bots!')
+      // Clone the transaction to avoid stale signatures from submitViaJito
+      const fallbackTx = Transaction.from(transaction.serialize({ requireAllSignatures: false }))
       const { blockhash } = await connection.getLatestBlockhash('confirmed')
-      transaction.recentBlockhash = blockhash
-      transaction.feePayer = compromisedPubkey
+      fallbackTx.recentBlockhash = blockhash
+      fallbackTx.feePayer = compromisedPubkey
       signature = await sendAndConfirmTransaction(
         connection,
-        transaction,
+        fallbackTx,
         [compromisedKeypair],
         { commitment: 'confirmed' }
       )

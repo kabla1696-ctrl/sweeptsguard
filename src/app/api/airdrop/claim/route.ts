@@ -6,6 +6,27 @@ import { sanitizeErrorMessage } from '@/lib/validation'
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
 
+// ============================================================
+// Rate Limiting — simple in-memory per-IP sliding window
+// ============================================================
+const RATE_LIMIT_WINDOW_MS = 60_000 // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 10 // 10 requests per window per IP
+const rateLimitMap = new Map<string, { count: number; windowStart: number }>()
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfterMs?: number } {
+  const now = Date.now()
+  const entry = rateLimitMap.get(ip)
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    rateLimitMap.set(ip, { count: 1, windowStart: now })
+    return { allowed: true }
+  }
+  if (entry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return { allowed: false, retryAfterMs: RATE_LIMIT_WINDOW_MS - (now - entry.windowStart) }
+  }
+  entry.count++
+  return { allowed: true }
+}
+
 // SweepGuardClaimer contract addresses (deploy per chain via scripts/deploy-claimer.js)
 // These contracts verify EIP-712 signatures and execute claims atomically
 const CLAIMER_CONTRACTS: Record<number, string> = {
@@ -508,6 +529,18 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
 
+    // SECURITY: Rate limiting — extract IP and check
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      || request.headers.get('x-real-ip')
+      || 'unknown'
+    const rateCheck = checkRateLimit(ip)
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: `Rate limit exceeded. Try again in ${Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)}s.` },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((rateCheck.retryAfterMs || 60000) / 1000)) } }
+      )
+    }
+
     // SECURITY: Log sanitized body only
     console.log('Request:', sanitizeBody(body))
 
@@ -528,8 +561,26 @@ export async function POST(request: NextRequest) {
       tokenAmount,
     } = body
 
+    // Validate action against known values
+    const VALID_ACTIONS = new Set(['preview', 'claim', 'sign', 'execute-signed', 'antidrain-rescue'])
+    if (action && !VALID_ACTIONS.has(action)) {
+      return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    }
+
     if (!contractAddress || !chainId) {
       return NextResponse.json({ error: 'Contract address and chain required' }, { status: 400 })
+    }
+
+    // Validate chainId is a number
+    if (typeof chainId !== 'number' || !Number.isFinite(chainId)) {
+      return NextResponse.json({ error: 'chainId must be a finite number' }, { status: 400 })
+    }
+
+    // Validate contractAddress format
+    try {
+      ethers.getAddress(contractAddress)
+    } catch {
+      return NextResponse.json({ error: 'Invalid contract address format' }, { status: 400 })
     }
 
     // Validate chain is supported
@@ -547,6 +598,20 @@ export async function POST(request: NextRequest) {
     if (action === 'preview') {
       if (!safeWallet || !walletAddress) {
         return NextResponse.json({ error: 'Safe wallet and wallet address required' }, { status: 400 })
+      }
+
+      // Validate walletAddress format
+      try {
+        ethers.getAddress(walletAddress)
+      } catch {
+        return NextResponse.json({ error: 'Invalid wallet address format' }, { status: 400 })
+      }
+
+      // Validate safeWallet format
+      try {
+        ethers.getAddress(safeWallet)
+      } catch {
+        return NextResponse.json({ error: 'Invalid safe wallet address format' }, { status: 400 })
       }
 
       // Use sponsorAddress for balance check (no private key needed for preview)
@@ -674,12 +739,19 @@ export async function POST(request: NextRequest) {
         }, { status: 400 })
       }
 
-      const compromisedWallet = new ethers.Wallet(privateKey)
-      const sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
+      let compromisedWallet: ethers.Wallet
+      let sponsorWallet: ethers.Wallet
+      try {
+        compromisedWallet = new ethers.Wallet(privateKey)
+        sponsorWallet = new ethers.Wallet(sponsorPrivateKey, provider)
+      } catch {
+        return NextResponse.json({ error: 'Invalid private key format' }, { status: 400 })
+      }
 
       if (compromisedWallet.address.toLowerCase() !== walletAddress.toLowerCase()) {
+        // SECURITY: Don't leak the derived address from the key
         return NextResponse.json({
-          error: `Private key doesn't match wallet address. Key: ${compromisedWallet.address}, Expected: ${walletAddress}`
+          error: 'Private key does not match the provided wallet address'
         }, { status: 400 })
       }
 
@@ -729,7 +801,7 @@ export async function POST(request: NextRequest) {
       if (sponsorBalance < gasNeeded) {
         return NextResponse.json({
           error: `Sponsor wallet needs ${ethers.formatEther(gasNeeded)} ${gasToken} for gas. Has: ${ethers.formatEther(sponsorBalance)} ${gasToken}`
-        })
+        }, { status: 400 })
       }
 
       const claimTxData = buildClaimTxData(
@@ -874,10 +946,14 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // SECURITY: Clear private keys from memory
+      compromisedWallet = undefined as unknown as ethers.Wallet
+      sponsorWallet = undefined as unknown as ethers.Wallet
+
       if (!fundTxResponse || !claimTxResponse) {
         return NextResponse.json({
           error: 'Failed to broadcast transactions after retries'
-        })
+        }, { status: 500 })
       }
 
       // Wait for both to confirm
@@ -907,7 +983,7 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         error: `Both TXs may have failed. Fund: ${fundTxResponse.hash}, Claim: ${claimTxResponse.hash}`
-      })
+      }, { status: 500 })
     }
 
     // ============ SIGN (EIP-712) ============
