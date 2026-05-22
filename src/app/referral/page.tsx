@@ -204,19 +204,19 @@ export default function ReferralPage() {
         {/* Stats Grid */}
         <div className="grid md:grid-cols-3 gap-6 mb-12">
           <div className="p-6 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/[0.06] rounded-2xl text-center">
-            <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+            <div className="text-4xl md:text-5xl font-black bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
               {stats.totalReferrals}
             </div>
             <div className="text-white/30 text-sm mt-1">Total Referrals</div>
           </div>
           <div className="p-6 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/[0.06] rounded-2xl text-center">
-            <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+            <div className="text-4xl md:text-5xl font-black bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
               ${stats.totalEarned.toFixed(2)}
             </div>
             <div className="text-white/30 text-sm mt-1">Total Earned</div>
           </div>
           <div className="p-6 bg-gradient-to-br from-white/[0.03] to-white/[0.01] border border-white/[0.06] rounded-2xl text-center">
-            <div className="text-3xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+            <div className="text-4xl md:text-5xl font-black bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
               5%
             </div>
             <div className="text-white/30 text-sm mt-1">Commission Rate</div>
