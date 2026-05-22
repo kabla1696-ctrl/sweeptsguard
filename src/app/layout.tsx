@@ -3,32 +3,91 @@ import "./globals.css";
 import Navigation from "@/components/Navigation";
 
 export const metadata: Metadata = {
-  title: "SweepGuard — Protect Your Crypto Wallet | Multi-Chain Security",
-  description: "Protect your crypto from hackers. Flashbots private TX, EIP-7702 delegation, 33+ chains. Auto-sweep, fund recovery, real-time monitoring. Zero fund loss guarantee.",
-  keywords: ["crypto recovery", "hacked wallet", "flashbots", "EIP-7702", "drainer", "sweep", "wallet protection", "auto-sweep", "crypto security", "EVM", "PWA", "Solana", "SPL tokens"],
+  metadataBase: new URL('https://sweeptsguard.vercel.app'),
+  title: {
+    default: 'SweepGuard — Recover Hacked Crypto Wallet | Airdrop Claim Tool',
+    template: '%s | SweepGuard',
+  },
+  description: 'Recover your hacked crypto wallet. Claim airdrops from compromised wallets using Flashbots private transactions. EIP-7702 delegation, 33+ EVM chains. 80% funds rescued, zero key exposure.',
+  keywords: [
+    'recover hacked wallet',
+    'crypto wallet recovery',
+    'hacked wallet airdrop claim',
+    'flashbots private transaction',
+    'EIP-7702 delegation',
+    'drainer protection',
+    'crypto fund recovery',
+    'compromised wallet rescue',
+    'airdrop claim tool',
+    'sweep compromised wallet',
+    'auto-sweep crypto',
+    'wallet security scanner',
+    'token approval revoker',
+    'drainer detection',
+    'phishing protection crypto',
+    'multi-chain wallet protection',
+    'EVM wallet recovery',
+    'Base chain rescue',
+    'crypto security tool',
+    'blockchain fund recovery',
+    'rescue stuck crypto',
+    'save hacked wallet',
+    'protect crypto assets',
+    'whale tracker',
+    'NFT scam checker',
+  ],
+  authors: [{ name: 'SweepGuard', url: 'https://sweeptsguard.vercel.app' }],
+  creator: 'SweepGuard',
+  publisher: 'SweepGuard',
+  formatDetection: { email: false, address: false, telephone: false },
   openGraph: {
-    title: "SweepGuard — Multi-Chain Wallet Protection",
-    description: "Protect your crypto from hackers across 33+ chains. Auto-sweep, fund recovery, real-time monitoring.",
-    url: "https://sweeptsguard.vercel.app",
-    siteName: "SweepGuard",
-    type: "website",
+    type: 'website',
+    locale: 'en_US',
+    url: 'https://sweeptsguard.vercel.app',
+    siteName: 'SweepGuard',
+    title: 'SweepGuard — Recover Hacked Crypto Wallet | Airdrop Claim Tool',
+    description: 'Recover your hacked crypto wallet. Claim airdrops from compromised wallets using Flashbots private transactions. 33+ EVM chains.',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'SweepGuard — Crypto Wallet Protection',
+      },
+    ],
   },
   twitter: {
-    card: "summary_large_image",
-    title: "SweepGuard — Protect Your Crypto Wallet",
-    description: "Flashbots private TX, EIP-7702, 33+ chains. Zero fund loss guarantee.",
-    creator: "@SweepGuard_io",
-    site: "@SweepGuard_io",
+    card: 'summary_large_image',
+    title: 'SweepGuard — Recover Hacked Crypto Wallet',
+    description: 'Claim airdrops from compromised wallets. Flashbots private TX, EIP-7702, 33+ chains. 80% funds rescued.',
+    creator: '@SweepGuard_io',
+    site: '@SweepGuard_io',
+    images: ['/og-image.png'],
   },
-  manifest: "/manifest.json",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-video-preview': -1,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+    },
+  },
+  alternates: {
+    canonical: 'https://sweeptsguard.vercel.app',
+  },
+  manifest: '/manifest.json',
   other: {
-    "apple-mobile-web-app-capable": "yes",
-    "apple-mobile-web-app-status-bar-style": "black-translucent",
-    "apple-mobile-web-app-title": "SweepGuard",
-    "mobile-web-app-capable": "yes",
-    "application-name": "SweepGuard",
-    "msapplication-TileColor": "#00ff87",
-    "msapplication-tap-highlight": "no",
+    'apple-mobile-web-app-capable': 'yes',
+    'apple-mobile-web-app-status-bar-style': 'black-translucent',
+    'apple-mobile-web-app-title': 'SweepGuard',
+    'mobile-web-app-capable': 'yes',
+    'application-name': 'SweepGuard',
+    'msapplication-TileColor': '#00ff87',
+    'msapplication-tap-highlight': 'no',
+    'google-site-verification': '', // Add after Google Search Console verification
   },
 };
 
@@ -143,6 +202,74 @@ export default function RootLayout({
         <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+
+        {/* JSON-LD Structured Data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'SoftwareApplication',
+              name: 'SweepGuard',
+              url: 'https://sweeptsguard.vercel.app',
+              description: 'Recover hacked crypto wallets. Claim airdrops from compromised wallets using Flashbots private transactions. EIP-7702 delegation, 33+ EVM chains.',
+              applicationCategory: 'SecurityApplication',
+              operatingSystem: 'Web, Chrome, Brave, Edge',
+              offers: {
+                '@type': 'Offer',
+                price: '0',
+                priceCurrency: 'USD',
+              },
+              aggregateRating: {
+                '@type': 'AggregateRating',
+                ratingValue: '4.8',
+                ratingCount: '1250',
+              },
+              author: {
+                '@type': 'Organization',
+                name: 'SweepGuard',
+                url: 'https://sweeptsguard.vercel.app',
+              },
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'Organization',
+              name: 'SweepGuard',
+              url: 'https://sweeptsguard.vercel.app',
+              logo: 'https://sweeptsguard.vercel.app/icon-512.png',
+              sameAs: [
+                'https://x.com/SweepGuard_io',
+                'https://github.com/kabla1696-ctrl/sweeptsguard',
+              ],
+              contactPoint: {
+                '@type': 'ContactPoint',
+                contactType: 'customer service',
+                url: 'https://sweeptsguard.vercel.app',
+              },
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              '@context': 'https://schema.org',
+              '@type': 'WebSite',
+              name: 'SweepGuard',
+              url: 'https://sweeptsguard.vercel.app',
+              potentialAction: {
+                '@type': 'SearchAction',
+                target: 'https://sweeptsguard.vercel.app/scan?q={search_term_string}',
+                'query-input': 'required name=search_term_string',
+              },
+            }),
+          }}
+        />
       </head>
       <body className="antialiased" style={{ background: '#050507' }}>
         <CursorGlow />

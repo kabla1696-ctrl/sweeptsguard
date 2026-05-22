@@ -1,10 +1,16 @@
+# SweepGuard — Crypto Wallet Protection
 User-agent: *
 Allow: /
-Disallow: /api/
-Disallow: /admin
-Disallow: /_next/
 
+# Sitemap
 Sitemap: https://sweeptsguard.vercel.app/sitemap.xml
 
-# Crawl-delay for polite bots
+# Crawl-delay
 Crawl-delay: 1
+
+# Disallow admin pages
+Disallow: /admin
+Disallow: /api/admin/
+
+# Disallow API routes
+Disallow: /api/
