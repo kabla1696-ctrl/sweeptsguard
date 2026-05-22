@@ -74,10 +74,23 @@ export default function ExtensionPage() {
 
   const handleInstall = () => {
     setInstalling(true)
-    setTimeout(() => {
-      setInstalling(false)
-      window.open('https://chrome.google.com/webstore/detail/sweeptsguard', '_blank')
-    }, 1000)
+    // Download the extension ZIP
+    const link = document.createElement('a')
+    link.href = '/sweeptsguard-extension.zip'
+    link.download = 'sweeptsguard-extension.zip'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    setTimeout(() => setInstalling(false), 1000)
+  }
+
+  const handleDownloadCRX = () => {
+    const link = document.createElement('a')
+    link.href = '/sweeptsguard-extension.zip'
+    link.download = 'sweeptsguard-extension.zip'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   return (
@@ -129,9 +142,12 @@ export default function ExtensionPage() {
                   disabled={installing}
                   className="px-6 py-3 bg-gradient-to-r from-green-500 to-cyan-500 text-black font-semibold rounded-xl disabled:opacity-50 hover:shadow-[0_0_30px_rgba(0,255,135,0.3)] transition-all"
                 >
-                  {installing ? 'Opening...' : '🧩 Install for Chrome'}
+                  {installing ? 'Downloading...' : '🧩 Install for Chrome'}
                 </button>
-                <button className="px-6 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/60 hover:text-white hover:border-white/20 transition-all">
+                <button
+                  onClick={handleDownloadCRX}
+                  className="px-6 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-white/60 hover:text-white hover:border-white/20 transition-all"
+                >
                   📦 Download CRX
                 </button>
               </div>
@@ -227,6 +243,48 @@ export default function ExtensionPage() {
                 <p className="text-white/40 text-xs">{item.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Installation Guide */}
+        <div className="mb-10 p-6 bg-gradient-to-br from-yellow-500/[0.06] to-orange-500/[0.06] border border-yellow-500/15 rounded-2xl">
+          <h2 className="text-xl font-bold mb-4">📦 Installation Guide</h2>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-start gap-3">
+              <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs font-bold">1</span>
+              <div>
+                <div className="font-medium">Download the extension</div>
+                <div className="text-white/40">Click "Install for Chrome" or "Download CRX" above to get the ZIP file</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs font-bold">2</span>
+              <div>
+                <div className="font-medium">Extract the ZIP file</div>
+                <div className="text-white/40">Unzip the downloaded file to a folder on your computer</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs font-bold">3</span>
+              <div>
+                <div className="font-medium">Open Chrome Extensions</div>
+                <div className="text-white/40">Go to <code className="bg-white/[0.05] px-1.5 py-0.5 rounded text-green-400">chrome://extensions</code> and enable "Developer mode"</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs font-bold">4</span>
+              <div>
+                <div className="font-medium">Load unpacked</div>
+                <div className="text-white/40">Click "Load unpacked" and select the extracted extension folder</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded-full text-xs font-bold">5</span>
+              <div>
+                <div className="font-medium">Done! 🎉</div>
+                <div className="text-white/40">SweepGuard icon will appear in your toolbar — you're protected!</div>
+              </div>
+            </div>
           </div>
         </div>
 

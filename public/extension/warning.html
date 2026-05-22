@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SweepGuard Warning</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #030305;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 500px;
+      text-align: center;
+    }
+    .icon { font-size: 72px; margin-bottom: 24px; }
+    h1 {
+      font-size: 32px;
+      color: #ef4444;
+      margin-bottom: 12px;
+    }
+    p {
+      color: rgba(255,255,255,0.5);
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+    .btn {
+      display: inline-block;
+      padding: 14px 32px;
+      background: linear-gradient(135deg, #22c55e, #06b6d4);
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .btn:hover { transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">⚠️</div>
+    <h1>Dangerous Site Detected</h1>
+    <p>SweepGuard has identified this website as potentially malicious. Do not connect your wallet or sign any transactions on this page.</p>
+    <a href="https://sweeptsguard.vercel.app" class="btn">🛡️ Go to SweepGuard</a>
+  </div>
+</body>
+</html>
