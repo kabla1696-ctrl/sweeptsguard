@@ -139,7 +139,7 @@ export default function ScreenshotScanPage() {
                 <span className="text-red-400">⚠️</span> Detected Threats
               </h3>
               <div className="space-y-3">
-                {result.threats.map((t: any, i: number) => (
+                {result.threats.map((t, i) => (
                   <div key={i} className="bg-red-500/5 border border-red-500/10 rounded-xl p-4">
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-red-400">{t.type}</span>

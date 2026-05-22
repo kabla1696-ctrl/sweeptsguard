@@ -26,7 +26,7 @@ const DEMO_ALERTS: Alert[] = [
 export default function AlertNetworkPage() {
   const [alerts, setAlerts] = useState<Alert[]>(DEMO_ALERTS)
   const [filter, setFilter] = useState<string>('all')
-  const [newAlert, setNewAlert] = useState({ type: 'drainer' as const, target: '', description: '', severity: 'high' as const })
+  const [newAlert, setNewAlert] = useState({ type: 'drainer' as 'drainer' | 'phishing' | 'scam' | 'rugpull', target: '', description: '', severity: 'high' as 'low' | 'medium' | 'high' | 'critical' })
   const [showSubmit, setShowSubmit] = useState(false)
   const [userVotes, setUserVotes] = useState<Record<string, 'up' | 'down'>>({})
 
@@ -89,13 +89,13 @@ export default function AlertNetworkPage() {
           <div className="bg-gray-800/50 backdrop-blur-sm border border-red-500 rounded-xl p-6 mb-8">
             <h3 className="text-white font-semibold mb-4">🚨 Report New Threat</h3>
             <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <select value={newAlert.type} onChange={e => setNewAlert({ ...newAlert, type: e.target.value as any })} className="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+              <select value={newAlert.type} onChange={e => setNewAlert({ ...newAlert, type: e.target.value as 'drainer' | 'phishing' | 'scam' | 'rugpull' })} className="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
                 <option value="drainer">Drainer Contract</option>
                 <option value="phishing">Phishing Site</option>
                 <option value="scam">Scam Token</option>
                 <option value="rugpull">Rugpull</option>
               </select>
-              <select value={newAlert.severity} onChange={e => setNewAlert({ ...newAlert, severity: e.target.value as any })} className="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+              <select value={newAlert.severity} onChange={e => setNewAlert({ ...newAlert, severity: e.target.value as 'low' | 'medium' | 'high' | 'critical' })} className="bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
                 <option value="low">Low Severity</option>
                 <option value="medium">Medium Severity</option>
                 <option value="high">High Severity</option>

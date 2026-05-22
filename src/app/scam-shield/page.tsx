@@ -19,6 +19,26 @@ const MOCK_PATTERNS = [
   { type: 'Approval Exploit', score: 85, status: 'clean' },
 ]
 
+interface Pattern {
+  type: string
+  score: number
+  status: string
+}
+
+interface Simulation {
+  gasEstimate: string
+  stateChanges: number
+  tokenTransfers: number
+}
+
+interface ScamShieldResult {
+  riskLevel: string
+  score: number
+  patterns: Pattern[]
+  recommendation: string
+  simulation: Simulation
+}
+
 export default function ScamShieldPage() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
@@ -26,7 +46,7 @@ export default function ScamShieldPage() {
   const [data, setData] = useState('')
   const [chain, setChain] = useState('1')
   const [analyzing, setAnalyzing] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<ScamShieldResult | null>(null)
   const [progress, setProgress] = useState(0)
 
   const handleAnalyze = async (e: React.FormEvent) => {
@@ -209,7 +229,7 @@ export default function ScamShieldPage() {
                 <span className="text-[#00ff87]">🔍</span> Pattern Detection
               </h3>
               <div className="space-y-3">
-                {result.patterns.map((p: any, i: number) => (
+                {result.patterns.map((p, i) => (
                   <div key={i} className="flex items-center justify-between bg-white/[0.03] rounded-xl px-4 py-3 border border-white/[0.04]">
                     <div className="flex items-center gap-3">
                       <div className={`w-2 h-2 rounded-full ${p.status === 'clean' ? 'bg-green-400' : p.status === 'warning' ? 'bg-yellow-400' : 'bg-red-400'}`} />
