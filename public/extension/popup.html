@@ -7,152 +7,389 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 360px;
-      min-height: 400px;
+      width: 380px;
+      min-height: 500px;
       background: #030305;
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      padding: 20px;
+      overflow-x: hidden;
     }
     .header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
+      justify-content: space-between;
+      padding: 16px 20px;
       border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(0,255,135,0.02);
     }
-    .header .logo { font-size: 28px; }
+    .header-left { display: flex; align-items: center; gap: 10px; }
+    .header .logo { font-size: 24px; }
     .header h1 {
-      font-size: 18px;
+      font-size: 16px;
       background: linear-gradient(135deg, #22c55e, #06b6d4);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       font-weight: 700;
     }
-    .status-card {
-      background: rgba(255,255,255,0.03);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-    .status-row {
+    .version { font-size: 10px; color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+    .tabs {
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      background: rgba(255,255,255,0.01);
     }
-    .status-row + .status-row { border-top: 1px solid rgba(255,255,255,0.04); }
-    .status-label { color: rgba(255,255,255,0.4); font-size: 13px; }
-    .status-value { font-weight: 600; font-size: 14px; }
-    .status-value.safe { color: #22c55e; }
-    .status-value.warning { color: #f59e0b; }
-    .status-value.danger { color: #ef4444; }
-    .btn {
-      width: 100%;
-      padding: 12px;
-      border-radius: 10px;
-      font-size: 14px;
+    .tab {
+      flex: 1;
+      padding: 10px 8px;
+      text-align: center;
+      font-size: 11px;
       font-weight: 600;
+      color: rgba(255,255,255,0.3);
       cursor: pointer;
-      border: none;
-      margin-bottom: 8px;
+      border-bottom: 2px solid transparent;
       transition: all 0.2s;
     }
-    .btn-primary {
+    .tab:hover { color: rgba(255,255,255,0.6); }
+    .tab.active { color: #22c55e; border-bottom-color: #22c55e; }
+    .tab-icon { display: block; font-size: 16px; margin-bottom: 2px; }
+    .content { padding: 16px; }
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* Wallet Section */
+    .wallet-card {
+      background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(6,182,212,0.08));
+      border: 1px solid rgba(34,197,94,0.15);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .wallet-address {
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 12px;
+      color: rgba(255,255,255,0.5);
+      word-break: break-all;
+      margin-bottom: 8px;
+    }
+    .balance { font-size: 28px; font-weight: 700; color: #22c55e; }
+    .balance-sub { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 4px; }
+    .connect-btn {
+      width: 100%;
+      padding: 14px;
       background: linear-gradient(135deg, #22c55e, #06b6d4);
       color: #000;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
     }
-    .btn-secondary {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.6);
-    }
-    .btn:hover { transform: translateY(-1px); }
-    .section-title {
-      font-size: 13px;
-      color: rgba(255,255,255,0.3);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 10px;
-    }
-    .feature-list {
-      list-style: none;
-      margin-bottom: 16px;
-    }
-    .feature-list li {
-      padding: 6px 0;
-      font-size: 13px;
-      color: rgba(255,255,255,0.6);
+    .connect-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(34,197,94,0.3); }
+
+    /* Token List */
+    .token-item {
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 8px;
+      margin-bottom: 6px;
     }
-    .feature-list li::before {
-      content: '✅';
+    .token-name { font-size: 13px; font-weight: 600; }
+    .token-balance { font-size: 13px; color: #22c55e; font-weight: 600; }
+    .token-symbol { font-size: 10px; color: rgba(255,255,255,0.3); }
+
+    /* Approval List */
+    .approval-item {
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 8px;
+      margin-bottom: 6px;
+    }
+    .approval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .approval-token { font-size: 13px; font-weight: 600; }
+    .approval-spender { font-size: 10px; color: rgba(255,255,255,0.3); font-family: monospace; word-break: break-all; }
+    .approval-amount { font-size: 11px; color: #f59e0b; }
+    .revoke-btn {
+      padding: 4px 10px;
+      background: rgba(239,68,68,0.15);
+      border: 1px solid rgba(239,68,68,0.3);
+      border-radius: 6px;
+      color: #ef4444;
+      font-size: 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .revoke-btn:hover { background: rgba(239,68,68,0.25); }
+
+    /* Airdrop Section */
+    .airdrop-item {
+      padding: 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .airdrop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .airdrop-name { font-size: 14px; font-weight: 700; }
+    .airdrop-value { font-size: 12px; color: #22c55e; font-weight: 600; }
+    .airdrop-chain { font-size: 10px; color: rgba(255,255,255,0.3); }
+    .airdrop-status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+    .airdrop-status.eligible { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .airdrop-status.check { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .claim-btn {
+      width: 100%;
+      padding: 8px;
+      background: linear-gradient(135deg, #22c55e, #06b6d4);
+      color: #000;
+      border: none;
+      border-radius: 8px;
       font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
     }
+    .claim-btn:hover { box-shadow: 0 2px 12px rgba(34,197,94,0.3); }
+    .claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Protection Section */
+    .protection-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 8px;
+      margin-bottom: 6px;
+    }
+    .protection-left { display: flex; align-items: center; gap: 10px; }
+    .protection-icon { font-size: 18px; }
+    .protection-name { font-size: 13px; font-weight: 600; }
+    .protection-desc { font-size: 10px; color: rgba(255,255,255,0.3); }
+    .toggle {
+      width: 40px;
+      height: 22px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 11px;
+      position: relative;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .toggle.on { background: #22c55e; }
+    .toggle::after {
+      content: '';
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: all 0.2s;
+    }
+    .toggle.on::after { left: 20px; }
+
+    /* Stats */
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+    }
+    .stat-label { font-size: 12px; color: rgba(255,255,255,0.4); }
+    .stat-value { font-size: 12px; font-weight: 600; }
+    .stat-value.safe { color: #22c55e; }
+    .stat-value.warning { color: #f59e0b; }
+    .stat-value.danger { color: #ef4444; }
+
     .footer {
-      text-align: center;
-      padding-top: 12px;
+      padding: 12px 16px;
       border-top: 1px solid rgba(255,255,255,0.06);
-    }
-    .footer a {
-      color: rgba(255,255,255,0.3);
-      font-size: 11px;
-      text-decoration: none;
-    }
-    .footer a:hover { color: #22c55e; }
-    .shield-icon {
-      font-size: 64px;
       text-align: center;
-      margin: 12px 0;
-      filter: drop-shadow(0 0 20px rgba(34,197,94,0.3));
     }
+    .footer a { color: rgba(255,255,255,0.2); font-size: 10px; text-decoration: none; }
+    .footer a:hover { color: #22c55e; }
+
+    .empty-state { text-align: center; padding: 24px; color: rgba(255,255,255,0.2); }
+    .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+
+    .scan-btn {
+      width: 100%;
+      padding: 10px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px;
+      color: rgba(255,255,255,0.6);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    .scan-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+
+    .loading { text-align: center; padding: 20px; color: rgba(255,255,255,0.3); }
+    .loading .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid rgba(255,255,255,0.1);
+      border-top-color: #22c55e;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="header">
-    <span class="logo">🛡️</span>
-    <h1>SweepGuard</h1>
+    <div class="header-left">
+      <span class="logo">🛡️</span>
+      <h1>SweepGuard</h1>
+    </div>
+    <span class="version">v2.0</span>
   </div>
 
-  <div class="shield-icon">🛡️</div>
-
-  <div class="status-card">
-    <div class="status-row">
-      <span class="status-label">Status</span>
-      <span class="status-value safe" id="status">● Active</span>
+  <div class="tabs">
+    <div class="tab active" data-tab="wallet">
+      <span class="tab-icon">💰</span>
+      Wallet
     </div>
-    <div class="status-row">
-      <span class="status-label">Drainer DB</span>
-      <span class="status-value safe" id="drainer-count">Loading...</span>
+    <div class="tab" data-tab="airdrops">
+      <span class="tab-icon">🎁</span>
+      Airdrops
     </div>
-    <div class="status-row">
-      <span class="status-label">Phishing DB</span>
-      <span class="status-value safe" id="phishing-count">Loading...</span>
+    <div class="tab" data-tab="approvals">
+      <span class="tab-icon">🔐</span>
+      Approvals
     </div>
-    <div class="status-row">
-      <span class="status-label">Current Site</span>
-      <span class="status-value" id="current-site">—</span>
-    </div>
-    <div class="status-row">
-      <span class="status-label">Site Risk</span>
-      <span class="status-value safe" id="site-risk">Safe</span>
+    <div class="tab" data-tab="protect">
+      <span class="tab-icon">🛡️</span>
+      Protect
     </div>
   </div>
 
-  <div class="section-title">Active Protection</div>
-  <ul class="feature-list">
-    <li>Drainer Detection</li>
-    <li>Phishing Blocking</li>
-    <li>Transaction Simulation</li>
-    <li>Approval Monitoring</li>
-  </ul>
+  <div class="content">
+    <!-- Wallet Tab -->
+    <div class="section active" id="wallet">
+      <div id="wallet-disconnected">
+        <div class="empty-state">
+          <div class="icon">🔗</div>
+          <p style="margin-bottom:12px;font-size:13px;">Connect your wallet to get started</p>
+        </div>
+        <button class="connect-btn" id="connect-btn">🔗 Connect MetaMask</button>
+      </div>
+      <div id="wallet-connected" style="display:none;">
+        <div class="wallet-card">
+          <div class="wallet-address" id="wallet-address"></div>
+          <div class="balance" id="wallet-balance">Loading...</div>
+          <div class="balance-sub" id="wallet-balance-sub"></div>
+        </div>
+        <button class="scan-btn" id="refresh-btn">🔄 Refresh Balance</button>
+        <div id="token-list">
+          <div class="loading"><div class="spinner"></div>Loading tokens...</div>
+        </div>
+      </div>
+    </div>
 
-  <button class="btn btn-primary" id="scan-btn">🔍 Scan Current Site</button>
-  <button class="btn btn-secondary" id="dashboard-btn">📊 Open Dashboard</button>
+    <!-- Airdrops Tab -->
+    <div class="section" id="airdrops">
+      <button class="scan-btn" id="scan-airdrops">🎯 Scan for Airdrops</button>
+      <div id="airdrop-list">
+        <div class="empty-state">
+          <div class="icon">🎁</div>
+          <p>Click "Scan for Airdrops" to check eligibility</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Approvals Tab -->
+    <div class="section" id="approvals">
+      <button class="scan-btn" id="scan-approvals">🔍 Scan Token Approvals</button>
+      <div id="approval-list">
+        <div class="empty-state">
+          <div class="icon">🔐</div>
+          <p>Scan your wallet for token approvals</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Protection Tab -->
+    <div class="section" id="protect">
+      <div class="protection-item">
+        <div class="protection-left">
+          <span class="protection-icon">🛡️</span>
+          <div>
+            <div class="protection-name">Drainer Detection</div>
+            <div class="protection-desc">Block known drainer contracts</div>
+          </div>
+        </div>
+        <div class="toggle on" data-setting="drainer"></div>
+      </div>
+      <div class="protection-item">
+        <div class="protection-left">
+          <span class="protection-icon">⚠️</span>
+          <div>
+            <div class="protection-name">Phishing Block</div>
+            <div class="protection-desc">Block phishing websites</div>
+          </div>
+        </div>
+        <div class="toggle on" data-setting="phishing"></div>
+      </div>
+      <div class="protection-item">
+        <div class="protection-left">
+          <span class="protection-icon">🔍</span>
+          <div>
+            <div class="protection-name">TX Simulation</div>
+            <div class="protection-desc">Preview before signing</div>
+          </div>
+        </div>
+        <div class="toggle on" data-setting="simulation"></div>
+      </div>
+      <div class="protection-item">
+        <div class="protection-left">
+          <span class="protection-icon">🔔</span>
+          <div>
+            <div class="protection-name">Alerts</div>
+            <div class="protection-desc">Browser notifications</div>
+          </div>
+        </div>
+        <div class="toggle on" data-setting="alerts"></div>
+      </div>
+
+      <div style="margin-top:16px;">
+        <div class="stat-row">
+          <span class="stat-label">Drainer DB</span>
+          <span class="stat-value safe" id="stat-drainers">Loading...</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Phishing DB</span>
+          <span class="stat-value safe" id="stat-phishing">Loading...</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Threats Blocked</span>
+          <span class="stat-value safe" id="stat-blocked">0</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Current Site</span>
+          <span class="stat-value" id="stat-site">—</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Site Risk</span>
+          <span class="stat-value safe" id="stat-risk">Safe</span>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <div class="footer">
     <a href="https://sweeptsguard.vercel.app" target="_blank">sweeptsguard.vercel.app</a>
