@@ -21,6 +21,39 @@ interface PortfolioData {
   chainBreakdown: Record<number, { chainName: string; assets: PortfolioAsset[]; total: number }>
 }
 
+const CHAIN_COLORS: Record<string, string> = {
+  Ethereum: '#627eea',
+  Base: '#0052ff',
+  BSC: '#f3ba2f',
+  Arbitrum: '#28a0f0',
+  Polygon: '#8247e5',
+  Optimism: '#ff0420',
+}
+
+const TOKEN_ICONS: Record<string, string> = {
+  ETH: '⟠',
+  USDC: '💵',
+  USDT: '💲',
+  DAI: '◈',
+  WETH: '⟠',
+  BNB: '🔶',
+  MATIC: '🟣',
+  ARB: '🔵',
+  OP: '🔴',
+}
+
+function Sparkline({ seed }: { seed: number }) {
+  const points = Array.from({ length: 12 }, (_, i) => {
+    const y = 20 + Math.sin(i * 0.8 + seed) * 8 + Math.cos(i * 1.2 + seed * 2) * 4
+    return `${i * 5},${y}`
+  }).join(' ')
+  return (
+    <svg viewBox="0 0 55 30" className="w-16 h-6 opacity-40">
+      <polyline points={points} fill="none" stroke="#00ff87" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 function PortfolioContent() {
   const searchParams = useSearchParams()
   const addressParam = searchParams.get('address')
@@ -75,83 +108,167 @@ function PortfolioContent() {
     fetchPortfolio(address)
   }
 
+  const allAssets = portfolio
+    ? Object.values(portfolio.chainBreakdown).flatMap(c => c.assets)
+    : []
+
+  const topMovers = allAssets
+    .sort((a, b) => parseFloat(b.balanceFormatted) - parseFloat(a.balanceFormatted))
+    .slice(0, 5)
+
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl">🛡️</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
-        </Link>
-        <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Dashboard</Link>
+    <main className="min-h-screen bg-gradient-to-br from-[#050507] via-[#0a0a0f] to-[#050507] text-white">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/3 left-1/3 w-96 h-96 bg-[#00ff87]/3 rounded-full blur-[128px]" />
+        <div className="absolute bottom-1/3 right-1/3 w-96 h-96 bg-[#00e5ff]/3 rounded-full blur-[128px]" />
+      </div>
+
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
+        {/* Header */}
+        <div className="mb-10 animate-[fade-in_0.6s_ease-out]">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+            💼 Portfolio Tracker
+          </h1>
+          <p className="text-gray-400 text-sm sm:text-base">Track wallet assets across all chains</p>
         </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">📊 Portfolio Tracker</h1>
-        <p className="text-white/40 mb-8">Track safe wallet assets across all chains</p>
-
-        {/* Guide */}
-        <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
-          <h2 className="text-sm font-bold text-green-400 mb-2">📖 How to use</h2>
-          <div className="space-y-1 text-xs text-white/50">
-            <p>Enter any <strong className="text-white/70">EVM wallet address</strong> (0x...) to see its token balances across all supported chains.</p>
-            <p>💡 This is read-only — no private key needed. You can check any public wallet address.</p>
+        {/* Address Input */}
+        <form onSubmit={handleSubmit} className="mb-10 animate-[fade-in_0.6s_ease-out_0.1s_both]">
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#00ff87]/20 to-[#00e5ff]/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex gap-2">
+              <input
+                type="text"
+                value={address}
+                onChange={e => setAddress(e.target.value)}
+                placeholder="Enter wallet address (0x...)"
+                aria-label="Wallet address for portfolio"
+                className="flex-1 px-5 py-4 bg-white/5 border border-white/10 rounded-2xl text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00ff87]/40 focus:shadow-[0_0_20px_rgba(0,255,135,0.1)] text-sm font-mono transition-all duration-300"
+              />
+              <button
+                type="submit"
+                disabled={loading || !isValidAddress(address)}
+                aria-label="Load portfolio"
+                className="px-6 py-4 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black font-semibold rounded-2xl text-sm disabled:opacity-40 hover:shadow-[0_0_30px_rgba(0,255,135,0.3)] transition-all duration-300 active:scale-95"
+              >
+                {loading ? (
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : '📊 Load'}
+              </button>
+            </div>
           </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
-          <input
-            type="text"
-            value={address}
-            onChange={e => setAddress(e.target.value)}
-            placeholder="Enter wallet address (0x...)"
-            aria-label="Wallet address for portfolio"
-            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={loading || !isValidAddress(address)}
-            aria-label="Load portfolio"
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
-          >
-            {loading ? 'Loading...' : '📊 Load'}
-          </button>
         </form>
 
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>
+          <div className="p-4 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-[#ff3b3b] text-sm mb-6 animate-[fade-in_0.3s_ease-out]">{error}</div>
         )}
 
         {portfolio && (
-          <div className="space-y-6">
-            <div className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
-              <div className="flex items-center justify-between">
+          <div className="space-y-6 animate-[fade-in_0.6s_ease-out]">
+            {/* Total Value Card */}
+            <div className="relative overflow-hidden bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8">
+              <div className="absolute inset-0 bg-gradient-to-br from-[#00ff87]/5 to-[#00e5ff]/5" />
+              <div className="relative flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
-                  <span className="text-white/40 text-sm">Total Assets</span>
-                  <div className="text-3xl font-bold text-green-400">{portfolio.totalAssets}</div>
+                  <span className="text-gray-500 text-sm">Total Assets</span>
+                  <div className="text-4xl sm:text-5xl font-bold bg-gradient-to-r from-[#00ff87] to-[#00e5ff] bg-clip-text text-transparent mt-1">
+                    {portfolio.totalAssets}
+                  </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-white/40 text-sm">Chains</span>
-                  <div className="text-3xl font-bold text-emerald-400">{Object.keys(portfolio.chainBreakdown).length}</div>
+                  <span className="text-gray-500 text-sm">Chains</span>
+                  <div className="text-3xl font-bold text-[#00e5ff]">{Object.keys(portfolio.chainBreakdown).length}</div>
                 </div>
               </div>
             </div>
 
-            {Object.entries(portfolio.chainBreakdown).map(([chainId, chain]) => (
-              <div key={chainId} className="p-5 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
-                <h3 className="font-semibold mb-3">{chain.chainName}</h3>
-                <div className="space-y-2">
-                  {chain.assets.map((asset, i) => (
-                    <div key={i} className="flex justify-between items-center p-3 bg-white/[0.02] rounded-xl">
-                      <span className="text-sm">{asset.symbol}</span>
-                      <span className="font-mono text-sm">{parseFloat(asset.balanceFormatted).toFixed(6)}</span>
+            <div className="grid lg:grid-cols-3 gap-6">
+              {/* Token List */}
+              <div className="lg:col-span-2 space-y-3">
+                <h2 className="text-lg font-semibold text-white/80 mb-4">Tokens</h2>
+                {allAssets.map((asset, i) => {
+                  const chainColor = CHAIN_COLORS[asset.chainName] || '#627eea'
+                  return (
+                    <div
+                      key={i}
+                      className="group bg-white/5 backdrop-blur-xl border border-white/10 rounded-xl p-4 flex items-center gap-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.07] animate-[fade-in_0.4s_ease-out_both]"
+                      style={{ animationDelay: `${i * 50}ms` }}
+                    >
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center text-lg" style={{ background: `${chainColor}15`, border: `1px solid ${chainColor}30` }}>
+                        {TOKEN_ICONS[asset.symbol] || '🪙'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{asset.symbol}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full text-gray-500 bg-white/5 border border-white/5">{asset.chainName}</span>
+                        </div>
+                        <div className="text-gray-500 text-xs font-mono mt-0.5">{asset.type}</div>
+                      </div>
+                      <div className="text-right flex items-center gap-3">
+                        <Sparkline seed={i * 3.7} />
+                        <div>
+                          <div className="font-mono text-sm text-white">{parseFloat(asset.balanceFormatted).toFixed(4)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Chain Distribution */}
+              <div>
+                <h2 className="text-lg font-semibold text-white/80 mb-4">Chain Distribution</h2>
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 space-y-4">
+                  {Object.entries(portfolio.chainBreakdown).map(([chainId, chain]) => {
+                    const pct = portfolio.totalAssets > 0 ? (chain.assets.length / portfolio.totalAssets) * 100 : 0
+                    const color = CHAIN_COLORS[chain.chainName] || '#627eea'
+                    return (
+                      <div key={chainId}>
+                        <div className="flex justify-between text-sm mb-1.5">
+                          <span className="text-gray-400">{chain.chainName}</span>
+                          <span className="text-white/60 font-mono text-xs">{chain.assets.length} tokens</span>
+                        </div>
+                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-1000"
+                            style={{
+                              width: `${Math.max(pct, 5)}%`,
+                              background: `linear-gradient(90deg, ${color}88, ${color})`,
+                              boxShadow: `0 0 8px ${color}44`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Top Movers */}
+                <h2 className="text-lg font-semibold text-white/80 mt-8 mb-4">Top Holdings</h2>
+                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 space-y-3">
+                  {topMovers.map((asset, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-gray-600 text-xs w-5">{i + 1}.</span>
+                        <span className="text-sm text-white">{asset.symbol}</span>
+                      </div>
+                      <span className="font-mono text-xs text-gray-400">{parseFloat(asset.balanceFormatted).toFixed(4)}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            ))}
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!portfolio && !loading && !error && (
+          <div className="text-center py-20 animate-[fade-in_0.6s_ease-out]">
+            <div className="text-6xl mb-4 opacity-30">💼</div>
+            <p className="text-gray-500 text-sm">Enter a wallet address to view its portfolio</p>
           </div>
         )}
       </div>
@@ -161,7 +278,7 @@ function PortfolioContent() {
 
 export default function PortfolioPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center text-white/30">Loading...</div>}>
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-[#050507] via-[#0a0a0f] to-[#050507] flex items-center justify-center text-gray-500">Loading...</div>}>
       <PortfolioContent />
     </Suspense>
   )
