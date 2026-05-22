@@ -19,6 +19,7 @@ export default function GasPage() {
   const [gasPrices, setGasPrices] = useState<GasPrice[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [showGuide, setShowGuide] = useState(true)
 
   useEffect(() => {
     const controller = new AbortController()
@@ -68,6 +69,22 @@ export default function GasPage() {
         <h1 className="text-3xl font-bold mb-2">⛽ Gas Tracker</h1>
         <p className="text-white/40 mb-8">Real-time gas prices across all supported chains</p>
 
+        {/* Guide */}
+        {showGuide && (
+          <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-green-400">📖 What is Gas?</h2>
+              <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>
+            </div>
+            <div className="space-y-2 text-xs text-white/50">
+              <p><strong className="text-white/70">Gas</strong> is the fee you pay to make transactions on a blockchain. Think of it like a processing fee.</p>
+              <p><strong className="text-white/70">Gwei</strong> is a tiny unit of the blockchain's currency (1 Gwei = 0.000000001 ETH).</p>
+              <p>💡 <strong className="text-white/70">Low</strong> = cheapest (slowest) · <strong className="text-white/70">Average</strong> = normal speed · <strong className="text-white/70">High</strong> = fastest (most expensive)</p>
+              <p>🔄 Prices auto-refresh every 15 seconds.</p>
+            </div>
+          </div>
+        )}
+
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>
         )}
@@ -111,8 +128,13 @@ export default function GasPage() {
                     <div className="text-red-400 font-mono text-sm">{parseFloat(gas.high).toFixed(2)}</div>
                   </div>
                 </div>
-                <div className="text-right mt-2">
-                  <span className="text-white/20 text-xs">{gas.unit}</span>
+                <div className="flex justify-between items-center mt-2">
+                  <span className="text-white/20 text-xs">
+                    {gas.baseFee ? `${parseFloat(gas.baseFee).toFixed(2)} base fee` : ''}
+                  </span>
+                  <span className="text-white/20 text-xs" title="Gwei is a tiny unit of ETH (1 Gwei = 0.000000001 ETH)">
+                    {gas.unit} ⓘ
+                  </span>
                 </div>
               </div>
             ))}

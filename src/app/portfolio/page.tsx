@@ -89,8 +89,17 @@ function PortfolioContent() {
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">Portfolio Tracker</h1>
+        <h1 className="text-3xl font-bold mb-2">📊 Portfolio Tracker</h1>
         <p className="text-white/40 mb-8">Track safe wallet assets across all chains</p>
+
+        {/* Guide */}
+        <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+          <h2 className="text-sm font-bold text-green-400 mb-2">📖 How to use</h2>
+          <div className="space-y-1 text-xs text-white/50">
+            <p>Enter any <strong className="text-white/70">EVM wallet address</strong> (0x...) to see its token balances across all supported chains.</p>
+            <p>💡 This is read-only — no private key needed. You can check any public wallet address.</p>
+          </div>
+        </div>
 
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
           <input

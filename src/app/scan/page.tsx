@@ -140,7 +140,18 @@ function ScanContent() {
 
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">Wallet Scanner</h1>
-        <p className="text-white/40 mb-8">Check for EIP-7702 delegations and wallet assets</p>
+        <p className="text-white/40 mb-4">Check for suspicious permissions (delegations) and wallet assets</p>
+        
+        {/* Quick guide */}
+        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-8">
+          <p className="text-blue-400 text-sm font-semibold mb-2">📋 What this scan checks:</p>
+          <ul className="text-white/50 text-xs space-y-1">
+            <li>• <strong className="text-white/70">Delegations</strong> — has someone else been given control of your wallet? ("EIP-7702" permissions)</li>
+            <li>• <strong className="text-white/70">Assets</strong> — ETH and tokens left across all 32+ chains</li>
+            <li>• <strong className="text-white/70">NFTs</strong> — any collectibles still in the wallet</li>
+            <li>• <strong className="text-white/70">Drainer activity</strong> — recent suspicious transactions and approvals</li>
+          </ul>
+        </div>
 
         {/* Scan Form */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
@@ -209,7 +220,7 @@ function ScanContent() {
                       </p>
                     )}
                     <p className="text-white/40 text-xs mt-3">
-                      This wallet has delegated execution to another contract. If you didn&apos;t authorize this, your wallet is compromised.
+                      This wallet has given another contract permission to move funds. If you didn&apos;t authorize this, your wallet is compromised — someone else can drain it.
                     </p>
                   </div>
                 </div>

@@ -42,6 +42,7 @@ function NFTContent() {
   const [sweeping, setSweeping] = useState(false)
   const [sweepResults, setSweepResults] = useState<SweepResult[]>([])
   const [privateKey, setPrivateKey] = useState('')
+  const [showGuide, setShowGuide] = useState(true)
 
   const chains = [...new Set(nfts.map(n => n.chainId))].sort((a, b) => a - b)
   const filteredNfts = selectedChain ? nfts.filter(n => n.chainId === selectedChain) : nfts
@@ -139,6 +140,22 @@ function NFTContent() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">🖼️ NFT Rescue</h1>
         <p className="text-white/40 mb-8">Scan and rescue ERC-721 & ERC-1155 NFTs from compromised wallets</p>
+
+        {/* Guide */}
+        {showGuide && (
+          <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-green-400">📖 How NFT Rescue Works</h2>
+              <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>
+            </div>
+            <div className="space-y-2 text-xs text-white/50">
+              <p><strong className="text-white/70">Step 1:</strong> Enter your compromised wallet address to scan for NFTs across all chains.</p>
+              <p><strong className="text-white/70">Step 2:</strong> Enter your safe wallet address + private key of the compromised wallet.</p>
+              <p><strong className="text-white/70">Step 3:</strong> Click "Sweep" on any collection to transfer NFTs to your safe wallet.</p>
+              <p>💡 <strong className="text-white/70">ERC-721</strong> = unique 1-of-1 NFTs · <strong className="text-white/70">ERC-1155</strong> = multi-edition NFTs (can have multiple copies)</p>
+            </div>
+          </div>
+        )}
 
         {/* Scan Form */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">

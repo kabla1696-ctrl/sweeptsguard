@@ -42,6 +42,7 @@ function BatchContent() {
   const [nftResults, setNftResults] = useState<NFTResult[]>([])
   const [progress, setProgress] = useState({ total: 0, completed: 0, successful: 0, failed: 0 })
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showGuide, setShowGuide] = useState(true)
 
   // Cleanup
   useEffect(() => {
@@ -224,6 +225,23 @@ function BatchContent() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">⚡ Batch Operations</h1>
         <p className="text-white/40 mb-8">Execute multi-chain operations in parallel — revoke, claim, sweep, scan</p>
+
+        {/* Guide */}
+        {showGuide && step === 'idle' && (
+          <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-green-400">📖 Batch Operations Guide</h2>
+              <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>
+            </div>
+            <div className="space-y-2 text-xs text-white/50">
+              <p>🚫 <strong className="text-white/70">Batch Revoke</strong> — Remove token approvals & delegations from your compromised wallet across multiple chains at once.</p>
+              <p>🎁 <strong className="text-white/70">Batch Claim</strong> — Claim pending airdrops from multiple sources in one go.</p>
+              <p>🧹 <strong className="text-white/70">Batch Sweep</strong> — Transfer all remaining tokens from a compromised wallet to a safe one across many chains.</p>
+              <p>🖼️ <strong className="text-white/70">Scan NFTs</strong> — Discover all NFTs held by a wallet across supported chains.</p>
+              <p>💡 Select an action below, fill in the required details, and choose which chains to target.</p>
+            </div>
+          </div>
+        )}
 
         {/* Action Selector */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">

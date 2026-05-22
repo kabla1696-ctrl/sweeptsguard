@@ -7,6 +7,8 @@ export default function Home() {
   const [walletAddress, setWalletAddress] = useState('')
   const [canInstall, setCanInstall] = useState(false)
   const [isStandalone, setIsStandalone] = useState(false)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [addressError, setAddressError] = useState('')
 
   useEffect(() => {
     // Detect if running as PWA
@@ -19,6 +21,20 @@ export default function Home() {
     window.addEventListener('pwa-installable', handler)
     return () => window.removeEventListener('pwa-installable', handler)
   }, [])
+
+  const handleScanClick = (e: React.MouseEvent) => {
+    if (!walletAddress.trim()) {
+      e.preventDefault()
+      setAddressError('Please enter a wallet address first')
+      return
+    }
+    if (!/^0x[0-9a-fA-F]{40}$/.test(walletAddress.trim())) {
+      e.preventDefault()
+      setAddressError('Invalid address — must start with 0x and be 42 characters')
+      return
+    }
+    setAddressError('')
+  }
 
   const handleInstall = async () => {
     const win = window as unknown as Record<string, unknown>
@@ -45,7 +61,8 @@ export default function Home() {
             SweepGuard
           </span>
         </div>
-        <div className="flex gap-4 flex-wrap">
+        {/* Desktop nav */}
+        <div className="hidden md:flex gap-4 flex-wrap">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">EVM Scan</Link>
           <Link href="/solana" className="text-sm text-purple-400/70 hover:text-purple-400 transition-colors font-semibold">◎ Solana</Link>
           <Link href="/recover" className="text-sm text-green-400/70 hover:text-green-400 transition-colors font-semibold">💰 Recover</Link>
@@ -63,7 +80,44 @@ export default function Home() {
           <Link href="/reputation" className="text-sm text-white/50 hover:text-white transition-colors">Reputation</Link>
           <Link href="/scam-check" className="text-sm text-white/50 hover:text-white transition-colors">Scam Check</Link>
         </div>
+        {/* Mobile hamburger */}
+        <button
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden text-white/70 hover:text-white p-2"
+          aria-label="Toggle navigation menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {mobileMenuOpen ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            )}
+          </svg>
+        </button>
       </nav>
+      {/* Mobile menu overlay */}
+      {mobileMenuOpen && (
+        <div className="relative z-10 md:hidden bg-[#0a0a0f]/95 backdrop-blur-sm border-b border-white/[0.05] px-6 py-4">
+          <div className="grid grid-cols-2 gap-3">
+            <Link href="/scan" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">🔍 EVM Scan</Link>
+            <Link href="/solana" onClick={() => setMobileMenuOpen(false)} className="text-sm text-purple-400 hover:text-purple-300 py-2">◎ Solana</Link>
+            <Link href="/recover" onClick={() => setMobileMenuOpen(false)} className="text-sm text-green-400 hover:text-green-300 py-2">💰 Recover</Link>
+            <Link href="/tracker" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Tracker</Link>
+            <Link href="/airdrop" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Airdrop</Link>
+            <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Dashboard</Link>
+            <Link href="/wallets" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Wallets</Link>
+            <Link href="/history" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">History</Link>
+            <Link href="/freeze" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Freeze</Link>
+            <Link href="/gas" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Gas</Link>
+            <Link href="/bridge" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Bridge</Link>
+            <Link href="/portfolio" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Portfolio</Link>
+            <Link href="/defi" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">DeFi</Link>
+            <Link href="/audit" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Audit</Link>
+            <Link href="/reputation" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Reputation</Link>
+            <Link href="/scam-check" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Scam Check</Link>
+          </div>
+        </div>
+      )}
 
       {/* Hero */}
       <div className="relative z-10 flex flex-col items-center justify-center px-6 pt-20 md:pt-32">
@@ -98,6 +152,7 @@ export default function Home() {
         <p className="text-white/40 text-center mt-6 max-w-2xl text-lg leading-relaxed">
           Compromised wallet? Funds still flowing in? SweepGuard automatically detects
           incoming funds and transfers them to your safe wallet before hackers can drain them.
+          No coding needed — just paste your wallet address to get started.
         </p>
 
         {/* CTA */}
@@ -112,11 +167,15 @@ export default function Home() {
             />
             <Link
               href={walletAddress ? `/scan?address=${walletAddress}` : '#'}
+              onClick={handleScanClick}
               className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm hover:from-green-500 hover:to-emerald-500 transition-all whitespace-nowrap"
             >
               Scan Now →
             </Link>
           </div>
+          {addressError && (
+            <p className="text-center text-red-400/80 text-xs mt-2">⚠️ {addressError}</p>
+          )}
           <p className="text-center text-white/15 text-xs mt-3">
             33 EVM chains + Solana ◎ — ETH, Base, BSC, Arbitrum, Polygon, Optimism, Avalanche, Fantom, Cronos, Blast, Zora, zkEVM, Manta, zkSync, Linea, Mantle, Scroll, Gnosis, ZetaChain, Gravity, Core, Sei, Berachain, Ink, XLayer, Hemi, Kaia, Soneium, Morph, Swellchain, Mode, Monad, 0G, Solana
           </p>
@@ -143,10 +202,10 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-center mb-12 text-white/80">How It Works</h2>
           <div className="grid md:grid-cols-4 gap-6">
             {[
-              { icon: '🔍', title: '1. Scan', desc: 'Enter your compromised wallet address. We check all EVM chains + Solana for assets and delegations.' },
-              { icon: '🔗', title: '2. Track', desc: 'Track where your stolen funds went. See if they reached an exchange or drainer wallet.' },
-              { icon: '🎯', title: '3. Airdrop', desc: 'Claim airdrops from your compromised wallet. Tokens are sent directly to your safe wallet.' },
-              { icon: '⚡', title: '4. Auto-Sweep', desc: 'When funds arrive, we automatically sweep them to your safe wallet within seconds.' }
+              { icon: '🔍', title: '1. Scan', desc: 'Paste your compromised wallet address. We check all 34 chains for leftover assets and suspicious permissions.' },
+              { icon: '🔗', title: '2. Track', desc: 'See where your stolen funds went — did they hit an exchange or a drainer wallet?' },
+              { icon: '🎯', title: '3. Airdrop', desc: 'Claim airdrops from your compromised wallet. Tokens go directly to your safe wallet.' },
+              { icon: '⚡', title: '4. Auto-Sweep', desc: 'New funds arrive? We automatically move them to safety within seconds.' }
             ].map((step) => (
               <div key={step.title} className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl hover:border-green-500/20 transition-all">
                 <div className="text-3xl mb-4">{step.icon}</div>
@@ -163,7 +222,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 gap-6">
             {[
               { icon: '🔍', title: 'Multi-Chain Scanner', desc: 'Scan all 33 chains at once for assets and delegations.' },
-              { icon: '🚨', title: 'Drainer Detection', desc: 'Identify known drainer contracts and EIP-7702 delegations.' },
+              { icon: '🚨', title: 'Drainer Detection', desc: 'Identify known drainer contracts and suspicious wallet permissions (EIP-7702 delegations).' },
               { icon: '🔗', title: 'Fund Tracker', desc: 'Track stolen funds across chains. See if they hit an exchange.' },
               { icon: '🎯', title: 'Airdrop Claimer', desc: 'Claim airdrops safely. Tokens go directly to your safe wallet.' },
               { icon: '🚰', title: 'Gas Sponsor', desc: 'Atomic Flashbots bundles — gas + claim in one tx, invisible to drainer.' },

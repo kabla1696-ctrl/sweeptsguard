@@ -81,8 +81,10 @@ export default function WalletsPage() {
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Dashboard</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
+          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
         </div>
       </nav>
 
@@ -90,9 +92,16 @@ export default function WalletsPage() {
         <h1 className="text-3xl font-bold mb-2">Wallet Manager</h1>
         <p className="text-white/40 mb-8">Manage multiple compromised wallets from one dashboard</p>
 
+        {/* Help Text */}
+        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
+          <h3 className="text-blue-400 font-semibold text-sm mb-2">💡 What's this for?</h3>
+          <p className="text-white/50 text-sm">If you have multiple compromised wallets, add them here. You can quickly switch between them and launch protection from the Dashboard. The <span className="text-white font-medium">active wallet</span> is used by default when you visit the Dashboard.</p>
+        </div>
+
         {/* Add Wallet Form */}
         <div className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl mb-8">
           <h2 className="text-lg font-semibold mb-4">Add Wallet</h2>
+          <p className="text-white/30 text-xs mb-4">Enter the addresses of your compromised wallet and a safe wallet to sweep funds to.</p>
           <div className="grid md:grid-cols-3 gap-4 mb-4">
             <input
               type="text"
@@ -167,6 +176,7 @@ export default function WalletsPage() {
                       <button
                         onClick={() => setActive(wallet.id)}
                         aria-label="Set wallet as active"
+                        title="Set as default wallet on Dashboard"
                       className="px-3 py-1.5 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors"
                       >
                         Set Active

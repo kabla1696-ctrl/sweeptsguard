@@ -91,12 +91,27 @@ export default function TrackerPage() {
         <div className="flex gap-4">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
           <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/wallets" className="text-sm text-white/50 hover:text-white transition-colors">Wallets</Link>
+          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
         </div>
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">Fund Tracker</h1>
         <p className="text-white/40 mb-8">Track where stolen funds have been sent</p>
+
+        {/* Help Text */}
+        {!tracking && transfers.length === 0 && !error && (
+          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
+            <h3 className="text-blue-400 font-semibold text-sm mb-2">💡 How Fund Tracking Works</h3>
+            <p className="text-white/50 text-sm">Enter a compromised wallet address and we'll scan all supported chains (Ethereum, Base, BSC, Arbitrum, Polygon, Optimism) to trace where the funds were sent. Transfers are classified as:</p>
+            <ul className="text-white/40 text-xs mt-2 space-y-1">
+              <li>• <span className="text-yellow-400">🏦 Exchange deposits</span> — funds sent to known exchanges (potential recovery targets)</li>
+              <li>• <span className="text-red-400">🚨 Drainer transfers</span> — transfers linked to known drainer contracts</li>
+              <li>• <span className="text-green-400">Regular</span> — other wallet-to-wallet transfers</li>
+            </ul>
+          </div>
+        )}
 
         {/* Track Form */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">

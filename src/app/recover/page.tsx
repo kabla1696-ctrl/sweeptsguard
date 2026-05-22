@@ -67,6 +67,85 @@ interface RevokeResult {
 
 type Step = 'idle' | 'scanning' | 'confirm' | 'executing-recover' | 'executing-revoke' | 'done-recover' | 'done-revoke' | 'error'
 
+function HowItWorksSection() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-8">
+      <button onClick={() => setOpen(!open)} className="flex items-center justify-between w-full">
+        <h3 className="text-blue-400 font-semibold">🧠 How It Works</h3>
+        <span className="text-white/40 text-xs">{open ? '▲ Hide' : '▼ Show'}</span>
+      </button>
+      {open && (
+        <div className="mt-4 space-y-4">
+          <div>
+            <p className="text-green-400 text-sm font-semibold mb-1">💰 Fund Recovery (80/20 Split)</p>
+            <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
+              <li>Scan ALL chains for ETH + tokens</li>
+              <li>Select which chain to recover from</li>
+              <li>Permit-based sweep — drainer sees NOTHING (L2s + Flashbots)</li>
+              <li>80% → Safe Wallet | 20% → Platform Fee</li>
+            </ol>
+          </div>
+          <div>
+            <p className="text-orange-400 text-sm font-semibold mb-1">🚫 One-Click Revoke ($40/chain)</p>
+            <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
+              <li>Scans ALL chains for delegations</li>
+              <li>$40 USDC per chain (charged on Base chain)</li>
+              <li>Gas fees per chain (from Safe Wallet)</li>
+              <li>Revoke ALL delegations in parallel</li>
+              <li>Wallet becomes CLEAN — hacker loses access</li>
+            </ol>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RulesFeesSection() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mb-6">
+      <button onClick={() => setOpen(!open)} className="w-full p-4 bg-purple-500/10 border border-purple-500/20 rounded-xl text-left hover:bg-purple-500/15 transition-colors">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">📋</span>
+            <div>
+              <h3 className="text-purple-400 font-semibold">Rules & Fees</h3>
+              <p className="text-white/30 text-xs">Important information about recovery</p>
+            </div>
+          </div>
+          <span className="text-purple-400 text-xl">{open ? '▼' : '▶'}</span>
+        </div>
+      </button>
+      {open && (
+        <div className="mt-3 p-5 bg-purple-500/5 border border-purple-500/10 rounded-xl space-y-3">
+          <div className="flex items-start gap-2">
+            <span className="text-green-400">✅</span>
+            <p className="text-white/60 text-sm">80% of recovered tokens go to your safe wallet</p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-purple-400">💰</span>
+            <p className="text-white/60 text-sm">20% platform fee (charged only on successful recovery)</p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-blue-400">🔗</span>
+            <p className="text-white/60 text-sm">$40 revoke fee per chain (charged from Base chain USDC)</p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-yellow-400">⚠️</span>
+            <p className="text-white/60 text-sm">Delegation revocation removes drainer automation, but compromised private key = funds still at risk</p>
+          </div>
+          <div className="flex items-start gap-2">
+            <span className="text-red-400">🚫</span>
+            <p className="text-white/60 text-sm">Public mempool chains (Fantom, Cronos) cannot be recovered — drainer bots can front-run</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RecoverContent() {
   const [privateKey, setPrivateKey] = useState('')
   const [safeAddress, setSafeAddress] = useState('')
@@ -304,77 +383,31 @@ function RecoverContent() {
 
       <div className="max-w-2xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">💰 Fund Recovery</h1>
-        <p className="text-white/40 mb-8">Multi-chain asset recovery + one-click delegation revoke</p>
+        <p className="text-white/40 mb-4">Multi-chain asset recovery + one-click delegation revoke</p>
 
-        {/* How It Works */}
-        <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-8">
-          <h3 className="text-blue-400 font-semibold mb-3">🧠 How It Works</h3>
-          <div className="space-y-4">
-            <div>
-              <p className="text-green-400 text-sm font-semibold mb-1">💰 Fund Recovery (80/20 Split)</p>
-              <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
-                <li>Scan ALL chains for ETH + tokens</li>
-                <li>Select which chain to recover from</li>
-                <li>Permit-based sweep — drainer sees NOTHING (L2s + Flashbots)</li>
-                <li>80% → Safe Wallet | 20% → Platform Fee</li>
-              </ol>
-            </div>
-            <div>
-              <p className="text-orange-400 text-sm font-semibold mb-1">🚫 One-Click Revoke ($40/chain)</p>
-              <ol className="text-white/50 text-sm space-y-1 list-decimal list-inside ml-2">
-                <li>Scans ALL chains for delegations</li>
-                <li>$40 USDC per chain (charged on Base chain)</li>
-                <li>Gas fees per chain (from Safe Wallet)</li>
-                <li>Revoke ALL delegations in parallel</li>
-                <li>Wallet becomes CLEAN — hacker loses access</li>
-              </ol>
-            </div>
+        {/* Step Indicator */}
+        <div className="flex items-center gap-2 mb-8 text-xs">
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${step === 'idle' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : step === 'scanning' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' : 'bg-green-500/20 text-green-400 border border-green-500/40'}`}>
+            <span>1</span>
+            <span>Enter Keys</span>
+          </div>
+          <div className="text-white/20">→</div>
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${step === 'confirm' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/40' : step.startsWith('executing') || step.startsWith('done') ? 'bg-green-500/20 text-green-400 border border-green-500/40' : 'text-white/20 border border-white/10'}`}>
+            <span>2</span>
+            <span>Review</span>
+          </div>
+          <div className="text-white/20">→</div>
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${step.startsWith('done') ? 'bg-green-500/20 text-green-400 border border-green-500/40' : step.startsWith('executing') ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/40' : 'text-white/20 border border-white/10'}`}>
+            <span>3</span>
+            <span>Recover</span>
           </div>
         </div>
 
-        {/* Rules & Fees */}
-        <div className="p-5 bg-orange-500/10 border border-orange-500/20 rounded-xl mb-8">
-          <h3 className="text-orange-400 font-semibold mb-3">📋 Revoke Rules & Fees</h3>
-          <div className="space-y-3">
-            <div>
-              <p className="text-yellow-400 text-xs font-semibold mb-1">💰 Revoke Fee</p>
-              <ul className="text-white/50 text-xs space-y-1">
-                <li>• $40 USDC per chain (charged from Safe Wallet on Base chain)</li>
-                <li>• 5 chains = $200 USDC total</li>
-                <li>• USDC always taken from Base chain, regardless of revoke chain</li>
-                <li>• Non-refundable once TX is submitted</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-blue-400 text-xs font-semibold mb-1">⛽ Gas Fees (Separate)</p>
-              <ul className="text-white/50 text-xs space-y-1">
-                <li>• Each chain has its own gas fee (ETH, BNB, MATIC, etc.)</li>
-                <li>• Gas charged from Safe Wallet — NOT compromised wallet</li>
-                <li>• Example: Arbitrum ~$0.50, Ethereum ~$5-15</li>
-                <li>• Must have native gas tokens in Safe Wallet per chain</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-red-400 text-xs font-semibold mb-1">❌ If Revoke Fails</p>
-              <ul className="text-white/50 text-xs space-y-1">
-                <li>• Detailed error message with specific fix instructions</li>
-                <li>• $40 fee charged only if TX was submitted (check TX status)</li>
-                <li>• Can retry after fixing the issue</li>
-              </ul>
-            </div>
-            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-              <p className="text-red-400 text-xs font-semibold mb-1">⚠️ IMPORTANT WARNING</p>
-              <ul className="text-red-300/70 text-xs space-y-1">
-                <li>• Revoke removes drainer&apos;s automatic access</li>
-                <li>• After revoke, drainer CANNOT auto-sweep funds</li>
-                <li>• BUT: if private key is compromised, funds are STILL AT RISK</li>
-                <li>• Anyone with the key can still send TXs from your wallet</li>
-                <li>• After revoke → IMMEDIATELY move all funds to a NEW wallet</li>
-                <li>• Revoke = removes automation | New wallet = removes key risk</li>
-              </ul>
-            </div>
-          </div>
-        </div>
+        {/* How It Works (collapsible) */}
+        <HowItWorksSection />
+
+        {/* Rules & Fees (collapsible) */}
+        <RulesFeesSection />
 
         {/* Double Confirmation Modal */}
         {showConfirmScan && (
@@ -423,7 +456,7 @@ function RecoverContent() {
                 type={showKey ? 'text' : 'password'}
                 value={privateKey}
                 onChange={(e) => setPrivateKey(e.target.value)}
-                placeholder="Private key of compromised wallet..."
+                placeholder="Paste the private key of your compromised wallet..."
                 className="w-full px-4 py-3 pr-20 bg-red-500/5 border border-red-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/40 text-sm font-mono"
               />
               <button
@@ -469,7 +502,7 @@ function RecoverContent() {
                 type={showSponsorKey ? 'text' : 'password'}
                 value={sponsorKey}
                 onChange={(e) => setSponsorKey(e.target.value)}
-                placeholder="Private key of wallet with ETH for gas"
+                placeholder="Private key of a SEPARATE wallet with funds for gas"
                 className="w-full px-4 py-3 pr-20 bg-yellow-500/5 border border-yellow-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-yellow-500/40 text-sm font-mono"
               />
               <button
@@ -481,7 +514,7 @@ function RecoverContent() {
                 {showSponsorKey ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="text-yellow-400/50 text-xs mt-1">Pays gas for recovery/revoke + $40 per chain revoke fee (on Base)</p>
+            <p className="text-yellow-400/50 text-xs mt-1">A separate wallet you own that has ETH/USDC to pay for gas and fees</p>
             <div className="p-2 bg-yellow-500/5 border border-yellow-500/10 rounded-lg mt-2">
               <p className="text-yellow-400/70 text-xs font-semibold">💡 Safe Wallet must have:</p>
               <ul className="text-yellow-400/50 text-xs mt-1 space-y-0.5">

@@ -41,6 +41,7 @@ function DashboardContent() {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default')
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(getPreferences())
   const [setupError, setSetupError] = useState('')
+  const [starting, setStarting] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   // Cleanup: abort in-flight fetches and clear keys on unmount
@@ -83,6 +84,7 @@ function DashboardContent() {
     }
     setSetupError('')
 
+    setStarting(true)
     try {
       const res = await fetch('/api/monitor', {
         method: 'POST',
@@ -112,6 +114,8 @@ function DashboardContent() {
       }
     } catch (err) {
       setSetupError('Failed to start monitoring. Please try again.')
+    } finally {
+      setStarting(false)
     }
   }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl, pollStatus, notifPermission])
 
@@ -166,6 +170,9 @@ function DashboardContent() {
         </Link>
         <div className="flex gap-4">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/wallets" className="text-sm text-white/50 hover:text-white transition-colors">Wallets</Link>
+          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
+          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
           <Link href="/batch" className="text-sm text-white/50 hover:text-white transition-colors">⚡ Batch</Link>
         </div>
       </nav>
@@ -173,6 +180,19 @@ function DashboardContent() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">Protection Dashboard</h1>
         <p className="text-white/40 mb-8">Set up auto-sweep monitoring for your compromised wallet</p>
+
+        {/* Quick Start Guide */}
+        {!monitoring && (
+          <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
+            <h3 className="text-blue-400 font-semibold mb-3">📖 How It Works</h3>
+            <ol className="space-y-2 text-white/60 text-sm">
+              <li><span className="text-blue-400 font-bold mr-2">1.</span> Enter your <span className="text-white font-medium">compromised wallet</span> address — the wallet whose keys may have been exposed</li>
+              <li><span className="text-blue-400 font-bold mr-2">2.</span> Set a <span className="text-white font-medium">safe wallet</span> — a different wallet you control where funds will be swept to</li>
+              <li><span className="text-blue-400 font-bold mr-2">3.</span> Provide the <span className="text-white font-medium">private key</span> of the compromised wallet (needed to sign sweep transactions)</li>
+              <li><span className="text-blue-400 font-bold mr-2">4.</span> Hit <span className="text-white font-medium">Start Protection</span> — we'll monitor all chains and auto-sweep any incoming funds to safety</li>
+            </ol>
+          </div>
+        )}
 
         {/* Status Bar */}
         {monitoring && (
@@ -228,6 +248,7 @@ function DashboardContent() {
                   placeholder="0x..."
                   className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
                 />
+                <p className="text-white/20 text-xs mt-1">The wallet whose private key was compromised or leaked</p>
               </div>
               <div>
                 <label htmlFor="safe-wallet" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
@@ -241,6 +262,7 @@ function DashboardContent() {
                   placeholder="0x..."
                   className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
                 />
+                <p className="text-white/20 text-xs mt-1">A secure wallet you own — rescued funds will be sent here</p>
               </div>
             </div>
 
@@ -248,6 +270,7 @@ function DashboardContent() {
               <label htmlFor="private-key" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
                 Private Key (for compromised wallet)
               </label>
+              <p className="text-white/20 text-xs mb-2">⚠️ Required to sign sweep transactions. Only the compromised wallet's key — never share your safe wallet's key.</p>
               <div className="relative">
                 <input
                   id="private-key"
@@ -332,11 +355,21 @@ function DashboardContent() {
               {!monitoring ? (
                 <button
                   onClick={startMonitoring}
-                  disabled={!address || !safeAddress || !privateKey}
+                  disabled={!address || !safeAddress || !privateKey || starting}
                   aria-label="Start wallet protection"
-                  className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
+                  className="px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all flex items-center gap-2"
                 >
-                  🛡️ Start Protection
+                  {starting ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Starting...
+                    </>
+                  ) : (
+                    '🛡️ Start Protection'
+                  )}
                 </button>
               ) : (
                 <button

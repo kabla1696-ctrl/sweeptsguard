@@ -77,14 +77,24 @@ function HistoryContent() {
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Dashboard</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/wallets" className="text-sm text-white/50 hover:text-white transition-colors">Wallets</Link>
+          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
         </div>
       </nav>
 
       <div className="max-w-4xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold mb-2">Transaction History</h1>
         <p className="text-white/40 mb-8">Full transaction history across all chains</p>
+
+        {/* Help Text */}
+        {!loading && transfers.length === 0 && !error && (
+          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
+            <h3 className="text-blue-400 font-semibold text-sm mb-2">💡 What does this show?</h3>
+            <p className="text-white/50 text-sm">Enter any wallet address to see its full transaction history across all supported chains. Each transaction shows whether it's an incoming (<span className="text-green-400">IN</span>) or outgoing (<span className="text-red-400">OUT</span>) transfer, along with chain info and explorer links.</p>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
           <input
@@ -93,7 +103,7 @@ function HistoryContent() {
             onChange={e => setAddress(e.target.value)}
             placeholder="Enter wallet address (0x...)"
             aria-label="Wallet address for history"
-            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
+            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
           />
           <button
             type="submit"
@@ -110,7 +120,15 @@ function HistoryContent() {
         )}
 
         {loading && (
-          <div className="text-center py-12 text-white/30">Loading transactions...</div>
+          <div className="text-center py-12">
+            <div className="inline-flex items-center gap-3 text-green-400">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Loading transactions...
+            </div>
+          </div>
         )}
 
         {!loading && transfers.length > 0 && (
@@ -159,7 +177,10 @@ function HistoryContent() {
         )}
 
         {!loading && transfers.length === 0 && address && !error && (
-          <div className="text-center py-12 text-white/30">No transactions found</div>
+          <div className="text-center py-12 text-white/30">
+            <p className="text-lg mb-2">No transactions found</p>
+            <p className="text-sm">Make sure the address is correct and try again</p>
+          </div>
         )}
       </div>
     </main>

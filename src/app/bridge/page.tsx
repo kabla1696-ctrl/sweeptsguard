@@ -23,6 +23,7 @@ export default function BridgePage() {
   const [result, setResult] = useState<BridgeResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showGuide, setShowGuide] = useState(true)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
@@ -78,6 +79,21 @@ export default function BridgePage() {
         <h1 className="text-3xl font-bold mb-2">🌉 Cross-Chain Bridge</h1>
         <p className="text-white/40 mb-8">Find the best bridge route between chains</p>
 
+        {/* Guide */}
+        {showGuide && (
+          <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold text-green-400">📖 What is a Bridge?</h2>
+              <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>
+            </div>
+            <div className="space-y-2 text-xs text-white/50">
+              <p>A <strong className="text-white/70">bridge</strong> lets you move tokens from one blockchain to another (e.g., Ethereum → Base).</p>
+              <p>💡 Select the chain your tokens are on (From) and the chain you want them on (To), then find the best route.</p>
+              <p>⚠️ Bridges charge fees and take time — we'll show you the estimated cost and duration.</p>
+            </div>
+          </div>
+        )}
+
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div>
             <label htmlFor="from-chain" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">From Chain</label>
@@ -111,10 +127,13 @@ export default function BridgePage() {
           onClick={handleSearch}
           disabled={loading || fromChain === toChain}
           aria-label="Find bridge route"
-          className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 mb-8"
+          className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 mb-2"
         >
           {loading ? 'Searching...' : '🔍 Find Bridge Route'}
         </button>
+        {fromChain === toChain && (
+          <p className="text-yellow-400/60 text-xs mb-6">⚠️ Please select two different chains to bridge between.</p>
+        )}
 
         {error && (
           <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>
