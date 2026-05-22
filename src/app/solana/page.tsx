@@ -187,9 +187,15 @@ function SolanaContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-500/[0.05] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-violet-500/[0.04] rounded-full blur-[100px]" />
+      </div>
+
       {/* ── Navigation ──────────────────────────────────────── */}
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent">
@@ -197,13 +203,13 @@ function SolanaContent() {
           </span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">
+          <Link href="/scan" className="text-sm text-white/50 hover:text-purple-400 transition-colors">
             EVM Scan
           </Link>
           <Link href="/solana" className="text-sm text-purple-400 font-semibold">
             ◎ Solana
           </Link>
-          <Link href="/recover" className="text-sm text-white/50 hover:text-white transition-colors">
+          <Link href="/recover" className="text-sm text-white/50 hover:text-purple-400 transition-colors">
             Recover
           </Link>
         </div>
