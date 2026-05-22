@@ -57,6 +57,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/multi-sig', label: 'Multi-Sig Recovery', icon: '🏛️' },
       { href: '/insurance', label: 'Insurance', icon: '🛡️' },
       { href: '/nft', label: 'NFT Rescue', icon: '🖼️' },
+      { href: '/referral', label: 'Referral Program', icon: '🤝' },
     ],
   },
   {
