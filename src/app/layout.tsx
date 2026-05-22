@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import Navigation from "@/components/Navigation";
 
 export const metadata: Metadata = {
   title: "SweepGuard — Recover Hacked Wallets | Multi-Chain Crypto Recovery",
@@ -89,7 +90,10 @@ export default function RootLayout({
             `
           }}
         />
-        {children}
+        <Navigation />
+        <div className="lg:ml-64">
+          {children}
+        </div>
       </body>
     </html>
   );
