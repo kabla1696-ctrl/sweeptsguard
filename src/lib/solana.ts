@@ -254,11 +254,60 @@ export function decodeSolanaKey(privateKeyInput: string): Keypair {
   )
 }
 
-// ── Recover SOL + SPL tokens from compromised wallet ──────
+// ── Jito Bundle Submission (private, no front-running) ────
+const JITO_ENDPOINTS = [
+  'https://mainnet.block-engine.jito.wtf/api/v1/transactions',
+  'https://amsterdam.mainnet.block-engine.jito.wtf/api/v1/transactions',
+  'https://ny.mainnet.block-engine.jito.wtf/api/v1/transactions',
+  'https://tokyo.mainnet.block-engine.jito.wtf/api/v1/transactions',
+]
+
+async function submitViaJito(
+  transaction: Transaction,
+  signers: Keypair[],
+  connection: Connection
+): Promise<{ success: boolean; signature?: string; error?: string }> {
+  // Sign the transaction
+  const { blockhash } = await connection.getLatestBlockhash('confirmed')
+  transaction.recentBlockhash = blockhash
+  transaction.feePayer = signers[0].publicKey
+  transaction.sign(...signers)
+
+  const serialized = transaction.serialize().toString('base64')
+
+  // Try each Jito endpoint
+  for (const endpoint of JITO_ENDPOINTS) {
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'sendTransaction',
+          params: [serialized, { encoding: 'base64' }],
+        }),
+      })
+
+      const data = await response.json()
+      if (data.result) {
+        return { success: true, signature: data.result }
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return { success: false, error: 'All Jito endpoints failed' }
+}
+
+// ── Recover SOL + SPL tokens — ATOMIC BATCH ───────────────
+// ALL transfers in ONE transaction = no race condition, no front-running
 export async function recoverSolanaFunds(
   compromisedPrivateKey: string,
   safeAddress: string,
-  rpcUrl?: string
+  rpcUrl?: string,
+  useJito: boolean = true
 ): Promise<{
   success: boolean
   solRecovered?: string
@@ -281,65 +330,78 @@ export async function recoverSolanaFunds(
 
   const txSignatures: string[] = []
   const tokensRecovered: string[] = []
-  let solRecovered = '0'
 
-  // ── Step 1: Recover SOL ──────────────────────────────────
+  // ── Get all SPL token accounts ───────────────────────────
+  const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
+    compromisedPubkey,
+    { programId: TOKEN_PROGRAM_ID }
+  )
+
+  // Filter tokens with balance
+  const activeTokens = tokenAccounts.value.filter(({ account }) => {
+    const parsed = account.data.parsed
+    return parsed.info.tokenAmount.uiAmount > 0
+  })
+
+  // ── Get SOL balance ──────────────────────────────────────
   const solBalance = await connection.getBalance(compromisedPubkey)
-  const feeEstimate = 5000 // ~0.000005 SOL for tx fee
-  const transferableLamports = solBalance - feeEstimate
 
+  // Calculate fees: base fee + priority fee per instruction
+  // Each SPL transfer = 1 instruction, SOL transfer = 1 instruction
+  const numInstructions = 1 + activeTokens.length // SOL + tokens
+  const baseFee = 5000 * numInstructions // 5000 lamports per signature
+  const priorityFee = 50000 * numInstructions // Priority fee for faster processing
+  const rentReserve = 890880 // Minimum rent for account existence
+  const totalFees = baseFee + priorityFee + rentReserve
+
+  const transferableLamports = solBalance - totalFees
+
+  if (transferableLamports <= 0 && activeTokens.length === 0) {
+    return { success: false, error: 'No recoverable funds. Wallet has 0 SOL and no SPL tokens.' }
+  }
+
+  // ── Build ONE atomic transaction with ALL transfers ─────
+  const transaction = new Transaction()
+
+  // Instruction 1: Transfer SOL (leave enough for rent if we have tokens)
   if (transferableLamports > 0) {
-    const solAmount = transferableLamports / LAMPORTS_PER_SOL
-    const transaction = new Transaction().add(
+    transaction.add(
       SystemProgram.transfer({
         fromPubkey: compromisedPubkey,
         toPubkey: safePubkey,
         lamports: transferableLamports,
       })
     )
-
-    const { blockhash } = await connection.getLatestBlockhash('confirmed')
-    transaction.recentBlockhash = blockhash
-    transaction.feePayer = compromisedPubkey
-
-    const signature = await sendAndConfirmTransaction(
-      connection,
-      transaction,
-      [compromisedKeypair],
-      { commitment: 'confirmed' }
-    )
-
-    txSignatures.push(signature)
-    solRecovered = solAmount.toFixed(9)
   }
 
-  // ── Step 2: Recover SPL tokens ───────────────────────────
-  const tokenAccounts = await connection.getParsedTokenAccountsByOwner(
-    compromisedPubkey,
-    { programId: TOKEN_PROGRAM_ID }
-  )
-
-  for (const { account } of tokenAccounts.value) {
+  // Instructions 2..N: Transfer each SPL token
+  for (const { account } of activeTokens) {
     const parsed = account.data.parsed
     const info = parsed.info
     const tokenAmount = info.tokenAmount
-
-    if (tokenAmount.uiAmount === 0) continue
 
     try {
       const mint = new PublicKey(info.mint)
       const fromATA = await getAssociatedTokenAddress(mint, compromisedPubkey)
       const toATA = await getAssociatedTokenAddress(mint, safePubkey)
 
-      // Check if destination ATA exists, skip if not (would need createATA ix)
+      // Check if destination ATA exists
       const toATAInfo = await connection.getAccountInfo(toATA)
       if (!toATAInfo) {
-        // ATA doesn't exist on safe wallet — would need to create it first
-        // For safety, we skip tokens where we can't guarantee delivery
-        continue
+        // Create ATA instruction + transfer in same TX
+        const { createAssociatedTokenAccountInstruction } = await import('@solana/spl-token')
+        transaction.add(
+          createAssociatedTokenAccountInstruction(
+            safePubkey, // payer
+            toATA,      // ATA address
+            safePubkey, // owner
+            mint        // mint
+          )
+        )
       }
 
-      const transaction = new Transaction().add(
+      // Add transfer instruction
+      transaction.add(
         createTransferInstruction(
           fromATA,
           toATA,
@@ -350,24 +412,68 @@ export async function recoverSolanaFunds(
         )
       )
 
+      tokensRecovered.push(info.mint)
+    } catch (err) {
+      // Skip tokens that fail
+      console.error(`Failed to add token ${info.mint}:`, err)
+      continue
+    }
+  }
+
+  if (transaction.instructions.length === 0) {
+    return { success: false, error: 'No valid transfer instructions could be built.' }
+  }
+
+  // ── Add priority fee (Compute Budget) for faster processing ──
+  // This makes our TX process before lower-fee TXs (including hacker bots)
+  const { ComputeBudgetProgram } = await import('@solana/web3.js')
+  transaction.instructions.unshift(
+    ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 100000 }),
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 200000 * numInstructions })
+  )
+
+  // ── Submit via Jito Bundle (private) or public RPC ─────
+  let signature: string | undefined
+
+  if (useJito) {
+    // Jito = private submission, no public mempool visibility
+    // Hacker bots CANNOT see this transaction before it's confirmed
+    const jitoResult = await submitViaJito(transaction, [compromisedKeypair], connection)
+    if (jitoResult.success && jitoResult.signature) {
+      signature = jitoResult.signature
+    } else {
+      // Fallback to public RPC with high priority fee
+      console.warn('Jito failed, falling back to public RPC')
       const { blockhash } = await connection.getLatestBlockhash('confirmed')
       transaction.recentBlockhash = blockhash
       transaction.feePayer = compromisedPubkey
-
-      const signature = await sendAndConfirmTransaction(
+      signature = await sendAndConfirmTransaction(
         connection,
         transaction,
         [compromisedKeypair],
         { commitment: 'confirmed' }
       )
-
-      txSignatures.push(signature)
-      tokensRecovered.push(info.mint)
-    } catch {
-      // Skip tokens that fail (may need separate tx with more SOL for fees)
-      continue
     }
+  } else {
+    // Direct public RPC submission
+    const { blockhash } = await connection.getLatestBlockhash('confirmed')
+    transaction.recentBlockhash = blockhash
+    transaction.feePayer = compromisedPubkey
+    signature = await sendAndConfirmTransaction(
+      connection,
+      transaction,
+      [compromisedKeypair],
+      { commitment: 'confirmed' }
+    )
   }
+
+  if (signature) {
+    txSignatures.push(signature)
+  }
+
+  const solRecovered = transferableLamports > 0
+    ? (transferableLamports / LAMPORTS_PER_SOL).toFixed(9)
+    : '0'
 
   return {
     success: txSignatures.length > 0,

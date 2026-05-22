@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     compromisedAddress?: string
     safeAddress?: string
     privateKey?: string
+    useJito?: boolean
   }
 
   try {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
 
-  const { safeAddress, privateKey } = body
+  const { safeAddress, privateKey, useJito = true } = body
 
   // Validate inputs
   if (!privateKey || typeof privateKey !== 'string') {
@@ -75,8 +76,9 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Execute recovery
-    const result = await recoverSolanaFunds(privateKey, safeAddress)
+    // Execute recovery — ATOMIC BATCH (SOL + all tokens in ONE tx)
+    // useJito=true by default = private submission, no front-running
+    const result = await recoverSolanaFunds(privateKey, safeAddress, undefined, useJito)
 
     // Calculate platform fee (20% of recovered SOL)
     let platformFee = '0'
