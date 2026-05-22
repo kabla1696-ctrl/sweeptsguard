@@ -3,244 +3,190 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SweepGuard</title>
+  <title>SweepGuard Rescue</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 380px;
-      min-height: 500px;
-      background: #030305;
+      width: 400px;
+      min-height: 520px;
+      background: #0a0a12;
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      overflow-x: hidden;
     }
     .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      background: rgba(0,255,135,0.02);
+      padding: 14px 18px;
+      border-bottom: 1px solid rgba(34,197,94,0.15);
+      background: linear-gradient(135deg, rgba(34,197,94,0.06), rgba(6,182,212,0.06));
     }
     .header-left { display: flex; align-items: center; gap: 10px; }
-    .header .logo { font-size: 24px; }
+    .logo { font-size: 22px; }
     .header h1 {
-      font-size: 16px;
+      font-size: 15px;
       background: linear-gradient(135deg, #22c55e, #06b6d4);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       font-weight: 700;
     }
-    .version { font-size: 10px; color: rgba(255,255,255,0.3); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
-    .tabs {
+    .version { font-size: 9px; color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+    .content { padding: 14px; }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: rgba(255,255,255,0.4);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
       display: flex;
-      border-bottom: 1px solid rgba(255,255,255,0.06);
-      background: rgba(255,255,255,0.01);
+      align-items: center;
+      gap: 6px;
     }
-    .tab {
-      flex: 1;
-      padding: 10px 8px;
-      text-align: center;
+    .section-title .icon { font-size: 14px; }
+
+    label {
+      display: block;
       font-size: 11px;
       font-weight: 600;
-      color: rgba(255,255,255,0.3);
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.2s;
-    }
-    .tab:hover { color: rgba(255,255,255,0.6); }
-    .tab.active { color: #22c55e; border-bottom-color: #22c55e; }
-    .tab-icon { display: block; font-size: 16px; margin-bottom: 2px; }
-    .content { padding: 16px; }
-    .section { display: none; }
-    .section.active { display: block; }
-
-    /* Wallet Section */
-    .wallet-card {
-      background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(6,182,212,0.08));
-      border: 1px solid rgba(34,197,94,0.15);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-    }
-    .wallet-address {
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 12px;
       color: rgba(255,255,255,0.5);
-      word-break: break-all;
-      margin-bottom: 8px;
+      margin-bottom: 4px;
+      margin-top: 10px;
     }
-    .balance { font-size: 28px; font-weight: 700; color: #22c55e; }
-    .balance-sub { font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 4px; }
-    .connect-btn {
+    label .required { color: #ef4444; }
+
+    input, select, textarea {
       width: 100%;
-      padding: 14px;
-      background: linear-gradient(135deg, #22c55e, #06b6d4);
-      color: #000;
+      padding: 10px 12px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: #fff;
+      font-size: 12px;
+      font-family: 'SF Mono', Monaco, monospace;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: rgba(34,197,94,0.4);
+    }
+    input::placeholder { color: rgba(255,255,255,0.15); }
+    textarea { resize: vertical; min-height: 50px; }
+    select {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 30px;
+    }
+    select option { background: #0a0a12; color: #fff; }
+
+    .btn {
+      width: 100%;
+      padding: 12px;
       border: none;
       border-radius: 10px;
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 700;
       cursor: pointer;
       transition: all 0.2s;
-    }
-    .connect-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(34,197,94,0.3); }
-
-    /* Token List */
-    .token-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.04);
-      border-radius: 8px;
-      margin-bottom: 6px;
+      justify-content: center;
+      gap: 6px;
     }
-    .token-name { font-size: 13px; font-weight: 600; }
-    .token-balance { font-size: 13px; color: #22c55e; font-weight: 600; }
-    .token-symbol { font-size: 10px; color: rgba(255,255,255,0.3); }
+    .btn-primary {
+      background: linear-gradient(135deg, #22c55e, #06b6d4);
+      color: #000;
+    }
+    .btn-primary:hover { box-shadow: 0 4px 20px rgba(34,197,94,0.3); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-secondary {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(255,255,255,0.6);
+    }
+    .btn-secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .btn-danger {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      color: #fff;
+    }
 
-    /* Approval List */
-    .approval-item {
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.04);
-      border-radius: 8px;
-      margin-bottom: 6px;
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
+      margin: 14px 0;
     }
-    .approval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-    .approval-token { font-size: 13px; font-weight: 600; }
-    .approval-spender { font-size: 10px; color: rgba(255,255,255,0.3); font-family: monospace; word-break: break-all; }
-    .approval-amount { font-size: 11px; color: #f59e0b; }
-    .revoke-btn {
-      padding: 4px 10px;
-      background: rgba(239,68,68,0.15);
-      border: 1px solid rgba(239,68,68,0.3);
-      border-radius: 6px;
-      color: #ef4444;
-      font-size: 10px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .revoke-btn:hover { background: rgba(239,68,68,0.25); }
 
-    /* Airdrop Section */
-    .airdrop-item {
-      padding: 12px;
+    .card {
       background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.06);
       border-radius: 10px;
-      margin-bottom: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
     }
-    .airdrop-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .airdrop-name { font-size: 14px; font-weight: 700; }
-    .airdrop-value { font-size: 12px; color: #22c55e; font-weight: 600; }
-    .airdrop-chain { font-size: 10px; color: rgba(255,255,255,0.3); }
-    .airdrop-status {
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .card-title { font-size: 13px; font-weight: 700; }
+    .card-value { font-size: 13px; font-weight: 700; color: #22c55e; }
+
+    .badge {
       display: inline-block;
       padding: 2px 8px;
       border-radius: 4px;
       font-size: 10px;
       font-weight: 600;
     }
-    .airdrop-status.eligible { background: rgba(34,197,94,0.15); color: #22c55e; }
-    .airdrop-status.check { background: rgba(245,158,11,0.15); color: #f59e0b; }
-    .claim-btn {
-      width: 100%;
-      padding: 8px;
-      background: linear-gradient(135deg, #22c55e, #06b6d4);
-      color: #000;
-      border: none;
-      border-radius: 8px;
-      font-size: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 8px;
-    }
-    .claim-btn:hover { box-shadow: 0 2px 12px rgba(34,197,94,0.3); }
-    .claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
+    .badge-yellow { background: rgba(245,158,11,0.15); color: #f59e0b; }
+    .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
 
-    /* Protection Section */
-    .protection-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.04);
-      border-radius: 8px;
-      margin-bottom: 6px;
-    }
-    .protection-left { display: flex; align-items: center; gap: 10px; }
-    .protection-icon { font-size: 18px; }
-    .protection-name { font-size: 13px; font-weight: 600; }
-    .protection-desc { font-size: 10px; color: rgba(255,255,255,0.3); }
-    .toggle {
-      width: 40px;
-      height: 22px;
-      background: rgba(255,255,255,0.1);
-      border-radius: 11px;
-      position: relative;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .toggle.on { background: #22c55e; }
-    .toggle::after {
-      content: '';
-      width: 18px;
-      height: 18px;
-      background: #fff;
-      border-radius: 50%;
-      position: absolute;
-      top: 2px;
-      left: 2px;
-      transition: all 0.2s;
-    }
-    .toggle.on::after { left: 20px; }
-
-    /* Stats */
-    .stat-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.04);
-    }
-    .stat-label { font-size: 12px; color: rgba(255,255,255,0.4); }
-    .stat-value { font-size: 12px; font-weight: 600; }
-    .stat-value.safe { color: #22c55e; }
-    .stat-value.warning { color: #f59e0b; }
-    .stat-value.danger { color: #ef4444; }
-
-    .footer {
-      padding: 12px 16px;
-      border-top: 1px solid rgba(255,255,255,0.06);
-      text-align: center;
-    }
-    .footer a { color: rgba(255,255,255,0.2); font-size: 10px; text-decoration: none; }
-    .footer a:hover { color: #22c55e; }
-
-    .empty-state { text-align: center; padding: 24px; color: rgba(255,255,255,0.2); }
-    .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
-
-    .scan-btn {
-      width: 100%;
+    .info-box {
       padding: 10px;
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 8px;
-      color: rgba(255,255,255,0.6);
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      margin-bottom: 12px;
+      font-size: 11px;
+      line-height: 1.5;
+      margin-bottom: 10px;
     }
-    .scan-btn:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .info-box.warning {
+      background: rgba(245,158,11,0.08);
+      border: 1px solid rgba(245,158,11,0.2);
+      color: #f59e0b;
+    }
+    .info-box.danger {
+      background: rgba(239,68,68,0.08);
+      border: 1px solid rgba(239,68,68,0.2);
+      color: #ef4444;
+    }
+    .info-box.success {
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+      color: #22c55e;
+    }
+    .info-box.info {
+      background: rgba(6,182,212,0.08);
+      border: 1px solid rgba(6,182,212,0.2);
+      color: #06b6d4;
+    }
+
+    .result-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 11px;
+    }
+    .result-label { color: rgba(255,255,255,0.4); }
+    .result-value { font-weight: 600; }
 
     .loading { text-align: center; padding: 20px; color: rgba(255,255,255,0.3); }
     .loading .spinner {
-      width: 24px;
-      height: 24px;
+      width: 24px; height: 24px;
       border: 2px solid rgba(255,255,255,0.1);
       border-top-color: #22c55e;
       border-radius: 50%;
@@ -248,145 +194,224 @@
       margin: 0 auto 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .step-indicator {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .step {
+      flex: 1;
+      height: 3px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.06);
+    }
+    .step.active { background: #22c55e; }
+    .step.done { background: rgba(34,197,94,0.3); }
+
+    .hidden { display: none; }
+
+    .footer {
+      padding: 10px 14px;
+      border-top: 1px solid rgba(255,255,255,0.04);
+      text-align: center;
+    }
+    .footer a { color: rgba(255,255,255,0.15); font-size: 9px; text-decoration: none; }
+    .footer a:hover { color: #22c55e; }
+
+    .eye-toggle {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.3);
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .input-wrap { position: relative; }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="header-left">
       <span class="logo">🛡️</span>
-      <h1>SweepGuard</h1>
+      <h1>SweepGuard Rescue</h1>
     </div>
     <span class="version">v2.0</span>
   </div>
 
-  <div class="tabs">
-    <div class="tab active" data-tab="wallet">
-      <span class="tab-icon">💰</span>
-      Wallet
-    </div>
-    <div class="tab" data-tab="airdrops">
-      <span class="tab-icon">🎁</span>
-      Airdrops
-    </div>
-    <div class="tab" data-tab="approvals">
-      <span class="tab-icon">🔐</span>
-      Approvals
-    </div>
-    <div class="tab" data-tab="protect">
-      <span class="tab-icon">🛡️</span>
-      Protect
-    </div>
-  </div>
-
   <div class="content">
-    <!-- Wallet Tab -->
-    <div class="section active" id="wallet">
-      <div id="wallet-disconnected">
-        <div class="empty-state">
-          <div class="icon">🔗</div>
-          <p style="margin-bottom:12px;font-size:13px;">Connect your wallet to get started</p>
-        </div>
-        <button class="connect-btn" id="connect-btn">🔗 Connect MetaMask</button>
+    <!-- Step Indicator -->
+    <div class="step-indicator">
+      <div class="step active" id="step1"></div>
+      <div class="step" id="step2"></div>
+      <div class="step" id="step3"></div>
+    </div>
+
+    <!-- Step 1: Setup -->
+    <div id="setup-section">
+      <div class="section-title"><span class="icon">🔑</span> Wallet Setup</div>
+
+      <label>Hacked Wallet Private Key <span class="required">*</span></label>
+      <div class="input-wrap">
+        <input type="password" id="privateKey" placeholder="0x..." autocomplete="off">
+        <button class="eye-toggle" onclick="toggleVisibility('privateKey', this)">👁️</button>
       </div>
-      <div id="wallet-connected" style="display:none;">
-        <div class="wallet-card">
-          <div class="wallet-address" id="wallet-address"></div>
-          <div class="balance" id="wallet-balance">Loading...</div>
-          <div class="balance-sub" id="wallet-balance-sub"></div>
-        </div>
-        <button class="scan-btn" id="refresh-btn">🔄 Refresh Balance</button>
-        <div id="token-list">
-          <div class="loading"><div class="spinner"></div>Loading tokens...</div>
-        </div>
+
+      <label>Safe Wallet Address <span class="required">*</span></label>
+      <input type="text" id="safeWallet" placeholder="0x... (where rescued funds go)">
+
+      <label>Sponsor Wallet Private Key <span class="required">*</span></label>
+      <div class="input-wrap">
+        <input type="password" id="sponsorKey" placeholder="0x... (pays gas fees)" autocomplete="off">
+        <button class="eye-toggle" onclick="toggleVisibility('sponsorKey', this)">👁️</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title"><span class="icon">🎯</span> Airdrop Contract</div>
+
+      <label>Chain <span class="required">*</span></label>
+      <select id="chainSelect">
+        <option value="">Select chain...</option>
+        <option value="1">Ethereum</option>
+        <option value="8453">Base</option>
+        <option value="42161">Arbitrum</option>
+        <option value="10">Optimism</option>
+        <option value="137">Polygon</option>
+        <option value="56">BNB Chain</option>
+        <option value="43114">Avalanche</option>
+        <option value="324">zkSync Era</option>
+        <option value="59144">Linea</option>
+        <option value="534352">Scroll</option>
+        <option value="81457">Blast</option>
+        <option value="7777777">Zora</option>
+        <option value="5000">Mantle</option>
+        <option value="34443">Mode</option>
+        <option value="250">Fantom</option>
+        <option value="25">Cronos</option>
+      </select>
+
+      <label>Airdrop Contract Address <span class="required">*</span></label>
+      <input type="text" id="contractAddress" placeholder="0x...">
+
+      <label>Token Amount (optional)</label>
+      <input type="text" id="tokenAmount" placeholder="Auto-detect if empty">
+
+      <label>Claim Data (optional)</label>
+      <textarea id="claimData" placeholder="0x... (auto-detect if empty)"></textarea>
+
+      <label>Merkle Proof (optional)</label>
+      <textarea id="merkleProof" placeholder='["0x...", "0x..."]'></textarea>
+
+      <div style="margin-top:14px;">
+        <button class="btn btn-primary" id="previewBtn" onclick="previewClaim()">
+          🔍 Preview Claim
+        </button>
       </div>
     </div>
 
-    <!-- Airdrops Tab -->
-    <div class="section" id="airdrops">
-      <button class="scan-btn" id="scan-airdrops">🎯 Scan for Airdrops</button>
-      <div id="airdrop-list">
-        <div class="empty-state">
-          <div class="icon">🎁</div>
-          <p>Click "Scan for Airdrops" to check eligibility</p>
+    <!-- Step 2: Preview -->
+    <div id="preview-section" class="hidden">
+      <div class="section-title"><span class="icon">📊</span> Claim Preview</div>
+
+      <div id="preview-loading" class="hidden">
+        <div class="loading"><div class="spinner"></div>Analyzing airdrop contract...</div>
+      </div>
+
+      <div id="preview-content" class="hidden">
+        <!-- Contract warnings -->
+        <div id="contract-warnings"></div>
+
+        <!-- Token info -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title" id="token-name">Token</span>
+            <span class="badge badge-green" id="eligible-badge">✅ Eligible</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Claimable</span>
+            <span class="card-value" id="claimable-amount">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Platform Fee (20%)</span>
+            <span class="result-value" id="fee-amount">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">You Receive (80%)</span>
+            <span class="result-value" style="color:#22c55e" id="safe-amount">—</span>
+          </div>
         </div>
+
+        <!-- Sponsor info -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⛽ Sponsor Gas</span>
+            <span class="badge" id="gas-badge">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Sponsor Balance</span>
+            <span class="result-value" id="sponsor-balance">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Estimated Gas</span>
+            <span class="result-value" id="gas-cost">—</span>
+          </div>
+        </div>
+
+        <!-- Execution strategy -->
+        <div id="execution-info" class="info-box info"></div>
+
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn btn-secondary" onclick="goBack()" style="flex:1;">← Back</button>
+          <button class="btn btn-primary" id="claimBtn" onclick="executeClaim()" style="flex:2;">
+            🚀 Rescue Funds
+          </button>
+        </div>
+      </div>
+
+      <div id="preview-error" class="hidden">
+        <div class="info-box danger" id="error-message"></div>
+        <button class="btn btn-secondary" onclick="goBack()" style="margin-top:10px;">← Back</button>
       </div>
     </div>
 
-    <!-- Approvals Tab -->
-    <div class="section" id="approvals">
-      <button class="scan-btn" id="scan-approvals">🔍 Scan Token Approvals</button>
-      <div id="approval-list">
-        <div class="empty-state">
-          <div class="icon">🔐</div>
-          <p>Scan your wallet for token approvals</p>
-        </div>
-      </div>
-    </div>
+    <!-- Step 3: Result -->
+    <div id="result-section" class="hidden">
+      <div class="section-title"><span class="icon">✅</span> Result</div>
 
-    <!-- Protection Tab -->
-    <div class="section" id="protect">
-      <div class="protection-item">
-        <div class="protection-left">
-          <span class="protection-icon">🛡️</span>
-          <div>
-            <div class="protection-name">Drainer Detection</div>
-            <div class="protection-desc">Block known drainer contracts</div>
-          </div>
-        </div>
-        <div class="toggle on" data-setting="drainer"></div>
-      </div>
-      <div class="protection-item">
-        <div class="protection-left">
-          <span class="protection-icon">⚠️</span>
-          <div>
-            <div class="protection-name">Phishing Block</div>
-            <div class="protection-desc">Block phishing websites</div>
-          </div>
-        </div>
-        <div class="toggle on" data-setting="phishing"></div>
-      </div>
-      <div class="protection-item">
-        <div class="protection-left">
-          <span class="protection-icon">🔍</span>
-          <div>
-            <div class="protection-name">TX Simulation</div>
-            <div class="protection-desc">Preview before signing</div>
-          </div>
-        </div>
-        <div class="toggle on" data-setting="simulation"></div>
-      </div>
-      <div class="protection-item">
-        <div class="protection-left">
-          <span class="protection-icon">🔔</span>
-          <div>
-            <div class="protection-name">Alerts</div>
-            <div class="protection-desc">Browser notifications</div>
-          </div>
-        </div>
-        <div class="toggle on" data-setting="alerts"></div>
+      <div id="result-loading" class="hidden">
+        <div class="loading"><div class="spinner"></div>Executing rescue transaction...</div>
       </div>
 
-      <div style="margin-top:16px;">
-        <div class="stat-row">
-          <span class="stat-label">Drainer DB</span>
-          <span class="stat-value safe" id="stat-drainers">Loading...</span>
+      <div id="result-success" class="hidden">
+        <div class="info-box success">🎉 Funds rescued successfully!</div>
+        <div class="card">
+          <div class="result-item">
+            <span class="result-label">Fund TX</span>
+            <span class="result-value" id="fund-tx" style="font-size:10px;word-break:break-all;">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Claim TX</span>
+            <span class="result-value" id="claim-tx" style="font-size:10px;word-break:break-all;">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Block</span>
+            <span class="result-value" id="block-num">—</span>
+          </div>
+          <div class="result-item">
+            <span class="result-label">Method</span>
+            <span class="result-value" id="exec-method">—</span>
+          </div>
         </div>
-        <div class="stat-row">
-          <span class="stat-label">Phishing DB</span>
-          <span class="stat-value safe" id="stat-phishing">Loading...</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Threats Blocked</span>
-          <span class="stat-value safe" id="stat-blocked">0</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Current Site</span>
-          <span class="stat-value" id="stat-site">—</span>
-        </div>
-        <div class="stat-row">
-          <span class="stat-label">Site Risk</span>
-          <span class="stat-value safe" id="stat-risk">Safe</span>
-        </div>
+        <button class="btn btn-primary" onclick="resetAll()" style="margin-top:12px;">🔄 New Rescue</button>
+      </div>
+
+      <div id="result-error" class="hidden">
+        <div class="info-box danger" id="result-error-msg"></div>
+        <button class="btn btn-secondary" onclick="goBack()" style="margin-top:10px;">← Back</button>
       </div>
     </div>
   </div>
