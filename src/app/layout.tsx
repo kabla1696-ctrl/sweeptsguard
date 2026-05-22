@@ -17,6 +17,8 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "SweepGuard — Protect Your Crypto Wallet",
     description: "Flashbots private TX, EIP-7702, 33+ chains. Zero fund loss guarantee.",
+    creator: "@SweepGuard_io",
+    site: "@SweepGuard_io",
   },
   manifest: "/manifest.json",
   other: {

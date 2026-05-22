@@ -28,9 +28,10 @@ archive.finalize()
 
 output.on('close', () => {
   console.log(`Extension ZIP created: ${(archive.pointer() / 1024).toFixed(1)} KB`)
-  console.log(`Path: ${outputPath}`)
+  console.log(`Output: ${outputPath}`)
 })
 
-archive.on('error', (err) => {
-  throw err
+output.on('error', (err) => {
+  console.error('Error creating ZIP:', err)
+  process.exit(1)
 })
