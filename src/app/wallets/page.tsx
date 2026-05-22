@@ -96,10 +96,10 @@ export default function WalletsPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 animate-[fade-in_0.6s_ease-out]">
           <div>
-            <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-              👛 Wallet Manager
+            <h1 className="text-4xl md:text-5xl font-black mb-2">
+              👛 Wallet <span className="bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent">Manager</span>
             </h1>
-            <p className="text-gray-400 text-sm sm:text-base">Manage multiple compromised wallets from one dashboard</p>
+            <p className="text-gray-500 text-lg">Manage multiple compromised wallets from one dashboard</p>
           </div>
           <button
             onClick={() => setShowAdd(!showAdd)}

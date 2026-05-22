@@ -126,10 +126,10 @@ function PortfolioContent() {
       <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
         {/* Header */}
         <div className="mb-10 animate-[fade-in_0.6s_ease-out]">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            💼 Portfolio Tracker
+          <h1 className="text-4xl md:text-5xl font-black mb-2">
+            💼 Portfolio <span className="bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent">Tracker</span>
           </h1>
-          <p className="text-gray-400 text-sm sm:text-base">Track wallet assets across all chains</p>
+          <p className="text-gray-500 text-lg">Track wallet assets across all chains</p>
         </div>
 
         {/* Address Input */}
