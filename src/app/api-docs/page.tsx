@@ -301,7 +301,7 @@ export default function ApiDocsPage() {
         </div>
 
         {/* Generate Key Section */}
-        <div id="generate-key" className="mt-12 p-6 bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20 rounded-2xl">
+        <div id="generate-key" className="mt-12 p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-violet-500/20 rounded-2xl">
           <h2 className="text-lg font-semibold mb-2">🔑 Get Your API Key</h2>
           <p className="text-white/40 text-sm mb-4">
             Get a free API key for higher rate limits and drainer reporting access.

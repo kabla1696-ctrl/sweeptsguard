@@ -155,7 +155,7 @@ export default function GasOptimizerPage() {
 
         {/* Guide */}
         {showGuide && (
-          <div className="mb-8 p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl">
+          <div className="mb-8 p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-blue-500/20 rounded-2xl">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-blue-400">📖 How Gas Optimization Works</h2>
               <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>
@@ -204,7 +204,7 @@ export default function GasOptimizerPage() {
           <div className="space-y-6">
             {/* Savings Calculator */}
             {savings && (
-              <div className="p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+              <div className="p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-green-500/20 rounded-2xl">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
                   <div>
                     <h3 className="font-semibold text-green-400">💰 Gas Savings Calculator</h3>
@@ -471,7 +471,7 @@ export default function GasOptimizerPage() {
         {/* Auto-Execute Tab */}
         {activeTab === 'auto' && (
           <div className="space-y-6">
-            <div className="p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-2xl">
+            <div className="p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-500/20 rounded-2xl">
               <h3 className="font-semibold mb-2">⚡ Auto-Execute When Gas Is Low</h3>
               <p className="text-xs text-white/40 mb-4">Set a transaction and max gas price. We&apos;ll execute it automatically when gas drops below your limit.</p>
 

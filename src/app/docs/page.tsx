@@ -91,7 +91,7 @@ export default function DocsPage() {
         </div>
 
         {/* Quick Start */}
-        <div className="bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-xl p-6 mb-10">
+        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-green-500/20 rounded-xl p-6 mb-10">
           <h2 className="text-lg font-semibold mb-2">⚡ Quick Start</h2>
           <p className="text-zinc-300 text-sm mb-4">
             New to SweepGuard? Start here to recover your first wallet in under 5 minutes.

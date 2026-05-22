@@ -111,7 +111,7 @@ export default function BridgePage() {
 
         {/* Guide */}
         {showGuide && (
-          <div className="mb-8 p-5 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+          <div className="mb-8 p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-green-500/20 rounded-2xl">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-green-400">📖 What is a Bridge?</h2>
               <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>

@@ -117,7 +117,7 @@ export default function WhiteLabelPage() {
         {activeTab === 'docs' && (
           <div className="space-y-8">
             {/* Quick Start */}
-            <section className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <section className="p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-green-500/20 rounded-2xl">
               <h2 className="text-lg font-bold mb-4">🚀 Quick Start</h2>
               <ol className="space-y-3 text-sm text-white/50">
                 <li className="flex gap-2"><span className="text-green-400 font-bold">1.</span> Generate an API key from the <button onClick={() => setActiveTab('manage')} className="text-green-400 hover:underline">API Keys</button> tab</li>
@@ -280,7 +280,7 @@ export default function WhiteLabelPage() {
                 key={plan.name}
                 className={`p-6 rounded-2xl border ${
                   plan.highlight
-                    ? 'bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-green-500/30'
+                    ? 'bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border-green-500/30'
                     : 'bg-white/[0.02] border-white/[0.05]'
                 }`}
               >

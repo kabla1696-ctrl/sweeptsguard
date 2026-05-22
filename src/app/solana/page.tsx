@@ -219,7 +219,7 @@ function SolanaContent() {
 
         {/* ── GUIDE SECTION ──────────────────────────────────── */}
         {showGuide && step === 'input' && (
-          <div className="mb-8 p-6 bg-gradient-to-br from-purple-500/10 to-violet-500/10 border border-purple-500/20 rounded-2xl">
+          <div className="mb-8 p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-500/20 rounded-2xl">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-bold text-purple-400">📖 How It Works</h2>
               <button
@@ -352,7 +352,7 @@ function SolanaContent() {
         {step === 'result' && scanResult && (
           <div className="space-y-6">
             {/* SOL Balance Card */}
-            <div className="p-6 bg-gradient-to-br from-purple-500/10 to-violet-500/10 border border-purple-500/20 rounded-2xl">
+            <div className="p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-500/20 rounded-2xl">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-white/40 text-xs uppercase tracking-wider">SOL Balance</p>

@@ -118,7 +118,7 @@ export default function DeFiProtectorPage() {
 
         {/* Guide */}
         {showGuide && (
-          <div className="mb-8 p-5 bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-2xl">
+          <div className="mb-8 p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-yellow-500/20 rounded-2xl">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-bold text-yellow-400">📖 Understanding Health Factor</h2>
               <button onClick={() => setShowGuide(false)} className="text-white/30 hover:text-white/60 text-xs">Hide ✕</button>
@@ -367,7 +367,7 @@ export default function DeFiProtectorPage() {
             {/* Auto-Repay Tab */}
             {activeTab === 'auto-repay' && (
               <div className="space-y-6">
-                <div className="p-5 bg-gradient-to-br from-purple-500/10 to-blue-500/10 border border-purple-500/20 rounded-2xl">
+                <div className="p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-purple-500/20 rounded-2xl">
                   <h3 className="font-semibold mb-2">🔄 Auto-Repay Configuration</h3>
                   <p className="text-xs text-white/40 mb-4">Automatically repay debt when health factor drops to protect against liquidation.</p>
 

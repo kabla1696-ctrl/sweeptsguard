@@ -199,7 +199,7 @@ export default function InsurancePage() {
         {/* Info */}
         {step === 'info' && (
           <div className="space-y-6">
-            <div className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border border-green-500/20 rounded-2xl">
+            <div className="p-6 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-green-500/20 rounded-2xl">
               <h2 className="text-lg font-bold mb-4">How Insurance Works</h2>
               <div className="space-y-4">
                 <div className="flex gap-3">
