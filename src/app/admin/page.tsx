@@ -14,7 +14,7 @@ import {
   type AdminStats,
 } from '@/lib/referral'
 
-const ADMIN_WALLET = '0x59825337487449844982374897324987'
+const ADMIN_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 
 export default function AdminPage() {
   const [connectedWallet, setConnectedWallet] = useState<string>('')
