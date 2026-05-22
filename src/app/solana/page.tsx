@@ -12,6 +12,28 @@ interface SolanaTokenBalance {
   ata: string
 }
 
+interface SolanaDrainAlert {
+  type: 'drain' | 'suspicious' | 'approval' | 'unknown'
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  description: string
+  txSignature: string
+  timestamp: string
+  amount?: string
+  token?: string
+  destination?: string
+}
+
+interface SolanaHackDetection {
+  isCompromised: boolean
+  riskLevel: 'critical' | 'high' | 'medium' | 'low' | 'clean'
+  alerts: SolanaDrainAlert[]
+  drainedTokens: string[]
+  suspiciousDestinations: string[]
+  recentDrainTxs: number
+  totalDrainedSOL: string
+  summary: string
+}
+
 interface SolanaScanResult {
   address: string
   solBalance: string
@@ -19,6 +41,7 @@ interface SolanaScanResult {
   tokens: SolanaTokenBalance[]
   totalTokens: number
   lastActivity: string | null
+  hackDetection?: SolanaHackDetection
 }
 
 interface RecoveryResult {
@@ -40,6 +63,7 @@ function SolanaContent() {
   const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<SolanaScanResult | null>(null)
   const [error, setError] = useState('')
+  const [hackDetection, setHackDetection] = useState<SolanaHackDetection | null>(null)
 
   // Recovery state
   const [privateKey, setPrivateKey] = useState('')
@@ -72,6 +96,7 @@ function SolanaContent() {
         setError(data.error)
       } else {
         setScanResult(data)
+        setHackDetection(data.hackDetection || null)
       }
     } catch {
       setError('Failed to scan Solana wallet. Please try again.')
@@ -262,6 +287,49 @@ function SolanaContent() {
                     </a>
                   </div>
                 </div>
+
+                {/* Hack Detection Alert */}
+                {hackDetection && hackDetection.riskLevel !== 'clean' && (
+                  <div className={`p-5 border rounded-2xl ${
+                    hackDetection.riskLevel === 'critical'
+                      ? 'bg-red-500/10 border-red-500/30'
+                      : hackDetection.riskLevel === 'high'
+                        ? 'bg-orange-500/10 border-orange-500/30'
+                        : 'bg-yellow-500/10 border-yellow-500/30'
+                  }`}>
+                    <div className="flex items-center gap-3 mb-3">
+                      <span className="text-2xl">{hackDetection.isCompromised ? '🚨' : '⚠️'}</span>
+                      <div>
+                        <h3 className={`font-bold ${
+                          hackDetection.riskLevel === 'critical' ? 'text-red-400'
+                            : hackDetection.riskLevel === 'high' ? 'text-orange-400'
+                            : 'text-yellow-400'
+                        }`}>
+                          {hackDetection.isCompromised ? 'WALLET COMPROMISED!' : 'Suspicious Activity Detected'}
+                        </h3>
+                        <p className="text-white/60 text-sm">Risk Level: {hackDetection.riskLevel.toUpperCase()}</p>
+                      </div>
+                    </div>
+                    <p className="text-white/80 text-sm mb-3">{hackDetection.summary}</p>
+                    {hackDetection.recentDrainTxs > 0 && (
+                      <div className="text-sm text-white/50 space-y-1">
+                        <p>• {hackDetection.recentDrainTxs} drain transactions detected</p>
+                        <p>• {hackDetection.totalDrainedSOL} SOL drained</p>
+                        <p>• {hackDetection.drainedTokens.length} tokens drained</p>
+                      </div>
+                    )}
+                    {hackDetection.isCompromised && (
+                      <div className="mt-4">
+                        <button
+                          onClick={() => setTab('recover')}
+                          className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
+                        >
+                          🚨 Recover Funds Now
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* SPL Tokens */}
                 <div>

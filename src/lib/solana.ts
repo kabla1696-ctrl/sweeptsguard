@@ -19,8 +19,12 @@ import {
 } from '@solana/spl-token'
 import bs58 from 'bs58'
 
-// ── Connection ─────────────────────────────────────────────
+// ── Constants ─────────────────────────────────────────────
 const SOLANA_RPC = process.env.SOLANA_RPC || 'https://api.mainnet-beta.solana.com'
+
+// Solana platform fee wallet (20% fee for recovery services)
+export const SOLANA_PLATFORM_WALLET = 'CoRIGkf547ZzXxw6PHFnVdoxq5xFGbcoVWtLbw1cM3x1'
+export const SOLANA_FEE_BPS = 2000 // 20%
 
 export function getSolanaConnection(rpcUrl?: string): Connection {
   return new Connection(rpcUrl || SOLANA_RPC, {
@@ -373,6 +377,254 @@ export async function recoverSolanaFunds(
     explorerUrl: txSignatures.length > 0
       ? `https://solscan.io/tx/${txSignatures[0]}`
       : undefined,
+  }
+}
+
+// ── Solana Hack/Drain Detection ───────────────────────────
+export interface SolanaDrainAlert {
+  type: 'drain' | 'suspicious' | 'approval' | 'unknown'
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  description: string
+  txSignature: string
+  timestamp: string
+  amount?: string
+  token?: string
+  destination?: string
+}
+
+export interface SolanaHackDetection {
+  isCompromised: boolean
+  riskLevel: 'critical' | 'high' | 'medium' | 'low' | 'clean'
+  alerts: SolanaDrainAlert[]
+  drainedTokens: string[]
+  suspiciousDestinations: string[]
+  recentDrainTxs: number
+  totalDrainedSOL: string
+  summary: string
+}
+
+// Known Solana drainer addresses (add to this list as discovered)
+const KNOWN_SOLANA_DRAINERS = [
+  // Common Solana drainer patterns
+  'Drain1111111111111111111111111111111111111111',
+  'DrainerSo111111111111111111111111111111111111',
+  // Phishing/scam program IDs
+]
+
+export async function detectSolanaHack(
+  address: string,
+  rpcUrl?: string
+): Promise<SolanaHackDetection> {
+  const connection = getSolanaConnection(rpcUrl)
+  const pubkey = new PublicKey(address)
+  const alerts: SolanaDrainAlert[] = []
+  const drainedTokens: string[] = []
+  const suspiciousDestinations: string[] = []
+  let totalDrainedLamports = 0
+  let recentDrainTxs = 0
+
+  try {
+    // Get recent transaction signatures (last 50)
+    const signatures = await connection.getSignaturesForAddress(pubkey, {
+      limit: 50,
+    })
+
+    if (signatures.length === 0) {
+      return {
+        isCompromised: false,
+        riskLevel: 'clean',
+        alerts: [],
+        drainedTokens: [],
+        suspiciousDestinations: [],
+        recentDrainTxs: 0,
+        totalDrainedSOL: '0',
+        summary: 'No transaction history found.',
+      }
+    }
+
+    // Analyze recent transactions for drain patterns
+    const recentTxs = signatures.slice(0, 20) // Check last 20 txs
+    const destinationCounts: Record<string, number> = {}
+
+    for (const sigInfo of recentTxs) {
+      if (!sigInfo.signature) continue
+
+      try {
+        const tx = await connection.getParsedTransaction(
+          sigInfo.signature,
+          { maxSupportedTransactionVersion: 0 }
+        )
+
+        if (!tx || !tx.meta) continue
+
+        const timestamp = sigInfo.blockTime
+          ? new Date(sigInfo.blockTime * 1000).toISOString()
+          : 'unknown'
+
+        // Check for SOL transfers OUT (drain pattern)
+        const preBalances = tx.meta.preBalances
+        const postBalances = tx.meta.postBalances
+        const accountKeys = tx.transaction.message.accountKeys
+
+        // Find our address index
+        const ourIndex = accountKeys.findIndex(
+          (k: { pubkey: PublicKey }) => k.pubkey.toBase58() === address
+        )
+
+        if (ourIndex >= 0 && preBalances[ourIndex] > postBalances[ourIndex]) {
+          const drainedLamports = preBalances[ourIndex] - postBalances[ourIndex]
+          totalDrainedLamports += drainedLamports
+
+          // Find destination (who received the SOL)
+          for (let i = 0; i < accountKeys.length; i++) {
+            if (i === ourIndex) continue
+            if (postBalances[i] > preBalances[i]) {
+              const destAddr = accountKeys[i].pubkey.toBase58()
+              destinationCounts[destAddr] = (destinationCounts[destAddr] || 0) + 1
+              if (!suspiciousDestinations.includes(destAddr)) {
+                suspiciousDestinations.push(destAddr)
+              }
+            }
+          }
+
+          // Check if drain is rapid (multiple drains in short time)
+          const isKnownDrainer = KNOWN_SOLANA_DRAINERS.some(
+            d => destinationCounts[d] && destinationCounts[d] > 0
+          )
+
+          if (drainedLamports > 0.01 * LAMPORTS_PER_SOL) {
+            recentDrainTxs++
+            alerts.push({
+              type: 'drain',
+              severity: drainedLamports > 1 * LAMPORTS_PER_SOL ? 'critical' : 'high',
+              description: `SOL drain detected: ${(drainedLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL transferred out`,
+              txSignature: sigInfo.signature,
+              timestamp,
+              amount: (drainedLamports / LAMPORTS_PER_SOL).toFixed(9),
+              token: 'SOL',
+            })
+          }
+        }
+
+        // Check for SPL token transfers OUT
+        if (tx.meta.preTokenBalances && tx.meta.postTokenBalances) {
+          for (const preToken of tx.meta.preTokenBalances) {
+            if (preToken.owner !== address) continue
+
+            const postToken = tx.meta.postTokenBalances.find(
+              (p: { accountIndex: number }) => p.accountIndex === preToken.accountIndex
+            )
+
+            if (postToken && postToken.uiTokenAmount && preToken.uiTokenAmount) {
+              const preAmount = parseFloat(preToken.uiTokenAmount.uiAmountString || '0')
+              const postAmount = parseFloat(postToken.uiTokenAmount.uiAmountString || '0')
+
+              if (preAmount > postAmount && postAmount === 0) {
+                // Token fully drained
+                const mint = preToken.mint
+                drainedTokens.push(mint)
+                recentDrainTxs++
+                alerts.push({
+                  type: 'drain',
+                  severity: 'critical',
+                  description: `Token fully drained: ${mint.slice(0, 8)}...${mint.slice(-4)}`,
+                  txSignature: sigInfo.signature,
+                  timestamp,
+                  amount: preAmount.toString(),
+                  token: mint,
+                })
+              }
+            }
+          }
+        }
+
+        // Check for suspicious program invocations
+        if (tx.transaction.message.instructions) {
+          for (const ix of tx.transaction.message.instructions) {
+            const programId = 'programId' in ix ? ix.programId.toBase58() : ''
+            // Known suspicious programs
+            if (KNOWN_SOLANA_DRAINERS.includes(programId)) {
+              alerts.push({
+                type: 'suspicious',
+                severity: 'critical',
+                description: `Known drainer program invoked: ${programId.slice(0, 8)}...`,
+                txSignature: sigInfo.signature,
+                timestamp,
+              })
+            }
+          }
+        }
+
+        // Rate limit API calls
+        await new Promise(resolve => setTimeout(resolve, 200))
+      } catch {
+        // Skip failed tx parsing
+        continue
+      }
+    }
+
+    // Analyze patterns for compromise detection
+    // Multiple drains to same destination = likely compromised
+    const highFreqDestinations = Object.entries(destinationCounts)
+      .filter(([, count]) => count >= 2)
+      .map(([addr]) => addr)
+
+    if (highFreqDestinations.length > 0) {
+      alerts.push({
+        type: 'drain',
+        severity: 'critical',
+        description: `Multiple transfers to same destination detected: ${highFreqDestinations[0].slice(0, 8)}... — wallet likely compromised!`,
+        txSignature: '',
+        timestamp: new Date().toISOString(),
+        destination: highFreqDestinations[0],
+      })
+    }
+
+    // Determine risk level
+    const criticalAlerts = alerts.filter(a => a.severity === 'critical').length
+    const highAlerts = alerts.filter(a => a.severity === 'high').length
+
+    let riskLevel: SolanaHackDetection['riskLevel'] = 'clean'
+    if (criticalAlerts >= 3 || recentDrainTxs >= 3) riskLevel = 'critical'
+    else if (criticalAlerts >= 1 || recentDrainTxs >= 2) riskLevel = 'high'
+    else if (highAlerts >= 2) riskLevel = 'medium'
+    else if (highAlerts >= 1 || alerts.length > 0) riskLevel = 'low'
+
+    const isCompromised = riskLevel === 'critical' || riskLevel === 'high'
+
+    const summary = isCompromised
+      ? `⚠️ WALLET COMPROMISED! ${recentDrainTxs} drain transactions detected. ${(totalDrainedLamports / LAMPORTS_PER_SOL).toFixed(4)} SOL drained. ${drainedTokens.length} tokens drained. Recover funds immediately!`
+      : alerts.length > 0
+        ? `⚠️ ${alerts.length} suspicious activities detected. Monitor closely.`
+        : '✅ No suspicious activity detected. Wallet appears clean.'
+
+    return {
+      isCompromised,
+      riskLevel,
+      alerts,
+      drainedTokens,
+      suspiciousDestinations,
+      recentDrainTxs,
+      totalDrainedSOL: (totalDrainedLamports / LAMPORTS_PER_SOL).toFixed(9),
+      summary,
+    }
+  } catch (err) {
+    return {
+      isCompromised: false,
+      riskLevel: 'clean',
+      alerts: [{
+        type: 'unknown',
+        severity: 'low',
+        description: `Scan incomplete: ${err instanceof Error ? err.message : 'unknown error'}`,
+        txSignature: '',
+        timestamp: new Date().toISOString(),
+      }],
+      drainedTokens: [],
+      suspiciousDestinations: [],
+      recentDrainTxs: 0,
+      totalDrainedSOL: '0',
+      summary: 'Scan incomplete — could not analyze transactions.',
+    }
   }
 }
 

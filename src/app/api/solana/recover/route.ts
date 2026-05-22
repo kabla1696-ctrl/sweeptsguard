@@ -4,6 +4,8 @@ import {
   scanSolanaWallet,
   isValidSolanaAddress,
   decodeSolanaKey,
+  SOLANA_PLATFORM_WALLET,
+  SOLANA_FEE_BPS,
 } from '@/lib/solana'
 
 export async function POST(request: NextRequest) {
@@ -76,11 +78,22 @@ export async function POST(request: NextRequest) {
     // Execute recovery
     const result = await recoverSolanaFunds(privateKey, safeAddress)
 
+    // Calculate platform fee (20% of recovered SOL)
+    let platformFee = '0'
+    if (result.success && result.solRecovered) {
+      const recoveredLamports = Math.floor(parseFloat(result.solRecovered) * 1_000_000_000)
+      const feeLamports = Math.floor(recoveredLamports * SOLANA_FEE_BPS / 10000)
+      platformFee = (feeLamports / 1_000_000_000).toFixed(9)
+    }
+
     return NextResponse.json({
       ...result,
       scanResult,
       compromisedAddress: compromisedPubkey,
       safeAddress,
+      platformFee,
+      platformWallet: SOLANA_PLATFORM_WALLET,
+      feePercent: SOLANA_FEE_BPS / 100,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Recovery failed'
