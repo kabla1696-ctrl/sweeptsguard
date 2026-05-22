@@ -141,19 +141,34 @@ self.addEventListener('push', (event) => {
     icon: '/icon-192.png',
     badge: '/icon-192.png',
     vibrate: [100, 50, 100],
-    data: { url: data.url || '/' },
-    actions: data.actions || []
+    tag: data.tag || 'sweeptsguard-notification',
+    renotify: true,
+    requireInteraction: data.requireInteraction || false,
+    data: { url: data.url || '/dashboard', ...data.data },
+    actions: [
+      { action: 'open', title: 'Open Dashboard' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
   }
   event.waitUntil(
     self.registration.showNotification(data.title || 'SweepGuard', options)
   )
 })
 
-// Notification click
+// Notification click — focus existing tab or open new one
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
+  if (event.action === 'dismiss') return
+  const url = event.notification.data.url || '/dashboard'
   event.waitUntil(
-    self.clients.openWindow(event.notification.data.url)
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
+      for (const client of clients) {
+        if (client.url.includes(url) && 'focus' in client) {
+          return client.focus()
+        }
+      }
+      return self.clients.openWindow(url)
+    })
   )
 })
 

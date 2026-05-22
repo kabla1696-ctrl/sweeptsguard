@@ -6,7 +6,8 @@
 import { encrypt, decrypt } from './crypto.js'
 import {
   SWEEPGUARD_RESCUER, PLATFORM_FEE_WALLET, RPC_URLS,
-  EXPLORER_URLS, RESCUER_ABI, CHAIN_NAMES
+  EXPLORER_URLS, RESCUER_ABI, CHAIN_NAMES,
+  SOLANA_CONFIG, isPhantomAvailable, isValidSolanaAddress
 } from './constants.js'
 
 // Encryption password — derived from extension install ID

@@ -700,7 +700,7 @@ function RecoverContent() {
                       aria-label="Revoke all delegations"
                       className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl font-semibold disabled:opacity-30 hover:brightness-110 transition-all"
                     >
-                      🚫 Revoke ALL Delegations (${totalRevokeFee} USDC + gas)
+                      🚫 Revoke ALL Chains (${totalRevokeFee} USDC + gas)
                     </button>
                   </div>
                 )}
@@ -781,15 +781,39 @@ function RecoverContent() {
                 ? 'Wallet is PARTIALLY clean — retry failed chains below.'
                 : 'All revokes failed — check errors below.'}
             </p>
+
+            {/* Progress Bar */}
+            <div className="mb-4">
+              <div className="flex justify-between text-xs text-white/40 mb-2">
+                <span>Revoke Progress</span>
+                <span>{revokeResults.filter(r => r.success).length}/{revokeResults.length} chains</span>
+              </div>
+              <div className="h-3 bg-white/10 rounded-full overflow-hidden flex">
+                <div
+                  className="h-full bg-green-500 transition-all"
+                  style={{ width: `${revokeResults.length > 0 ? (revokeResults.filter(r => r.success).length / revokeResults.length) * 100 : 0}%` }}
+                />
+                <div
+                  className="h-full bg-red-500 transition-all"
+                  style={{ width: `${revokeResults.length > 0 ? (revokeResults.filter(r => !r.success).length / revokeResults.length) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               {revokeResults.map((r, i) => (
                 <div key={i} className={`p-3 rounded-lg border ${
                   r.success ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'
                 }`}>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm">{r.chainName}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={r.success ? 'text-green-400' : 'text-red-400'}>
+                        {r.success ? '✅' : '❌'}
+                      </span>
+                      <span className="text-sm font-semibold">{r.chainName}</span>
+                    </div>
                     <span className={r.success ? 'text-green-400 text-xs' : 'text-red-400 text-xs'}>
-                      {r.success ? '✅ Revoked' : `❌ ${r.error}`}
+                      {r.success ? 'Revoked' : r.error}
                     </span>
                   </div>
                   {r.txHashes && r.txHashes.length > 0 && r.txHashes.map((hash, j) => (

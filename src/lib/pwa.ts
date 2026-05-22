@@ -90,7 +90,7 @@ export function isPWA(): boolean {
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches
 
   // Check iOS Safari standalone mode
-  const isIOSStandalone = (window.navigator as Record<string, unknown>).standalone === true
+  const isIOSStandalone = (window.navigator as unknown as Record<string, unknown>).standalone === true
 
   // Check if launched from home screen on Android
   const referrer = document.referrer
@@ -133,7 +133,7 @@ export async function setupPushNotifications(): Promise<PushSubscription | null>
 
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey) as BufferSource
     })
 
     // Send subscription to server

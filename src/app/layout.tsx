@@ -4,7 +4,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "SweepGuard — Crypto Wallet Protection",
   description: "Rescue tokens, NFTs, and airdrops from compromised wallets. Auto-sweep incoming funds before hackers can drain them.",
-  keywords: ["wallet protection", "drainer", "EIP-7702", "auto-sweep", "crypto security", "EVM", "PWA"],
+  keywords: ["wallet protection", "drainer", "EIP-7702", "auto-sweep", "crypto security", "EVM", "PWA", "Solana", "SPL tokens"],
   manifest: "/manifest.json",
   other: {
     "apple-mobile-web-app-capable": "yes",

@@ -208,7 +208,7 @@ export async function scanNFTs(
 
               try {
                 tokenURI = await erc721Contract.tokenURI(tokenId)
-                image = await resolveNFTImage(tokenURI)
+                if (tokenURI) image = await resolveNFTImage(tokenURI)
               } catch { /* tokenURI may not exist */ }
 
               nfts.push({
@@ -240,7 +240,7 @@ export async function scanNFTs(
                   let image: string | undefined
                   try {
                     tokenURI = await erc721Contract.tokenURI(tokenId)
-                    image = await resolveNFTImage(tokenURI)
+                    if (tokenURI) image = await resolveNFTImage(tokenURI)
                   } catch { /* ok */ }
 
                   nfts.push({

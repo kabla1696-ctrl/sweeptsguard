@@ -93,13 +93,12 @@ export async function sendNotification(payload: NotificationPayload): Promise<vo
       body: payload.body,
       icon,
       badge,
-      vibrate: [100, 50, 100],
       tag: `sweeptsguard-${payload.type}`,
       data: { url, ...payload.data },
       actions: [
         { action: 'open', title: 'Open Dashboard' },
       ],
-    })
+    } as unknown as NotificationOptions)
   } catch {
     // Fallback to basic Notification API (tab must be open)
     try {

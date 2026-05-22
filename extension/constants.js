@@ -77,6 +77,27 @@ export const PRIVATE_SEQUENCER_CHAINS = new Set([
   57073, 1868, 80094, 1329,
 ])
 
+// ═══════════════════════════════════════════════════════
+// SOLANA SUPPORT
+// ═══════════════════════════════════════════════════════
+
+export const SOLANA_CONFIG = {
+  rpc: 'https://api.mainnet-beta.solana.com',
+  explorer: 'https://solscan.io',
+  nativeCurrency: { name: 'SOL', symbol: 'SOL', decimals: 9 },
+}
+
+// Detect Phantom wallet
+export function isPhantomAvailable() {
+  return typeof window !== 'undefined' && window.solana && window.solana.isPhantom
+}
+
+// Solana key format helpers
+export function isValidSolanaAddress(address) {
+  // Base58, 32-44 chars
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)
+}
+
 // SweepGuardRescuer ABI (key functions)
 export const RESCUER_ABI = [
   'function executeRescue(address safeRecipient, address[] tokens, address claimTarget, bytes claimData, address fw) external payable',

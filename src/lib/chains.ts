@@ -1,4 +1,4 @@
-// Supported EVM chains configuration
+// Supported chains configuration
 export interface ChainConfig {
   id: number
   name: string
@@ -10,6 +10,25 @@ export interface ChainConfig {
   nativeCurrency: string
   multicallAddress?: string
   icon: string
+}
+
+// Non-EVM chain config (Solana)
+export interface SolanaChainConfig {
+  id: string
+  name: string
+  rpc: string
+  explorer: string
+  nativeCurrency: { name: string; symbol: string; decimals: number }
+  isEVM: false
+}
+
+export const SOLANA_CHAIN: SolanaChainConfig = {
+  id: 'solana',
+  name: 'Solana',
+  rpc: process.env.NEXT_PUBLIC_SOLANA_RPC || 'https://api.mainnet-beta.solana.com',
+  explorer: 'https://solscan.io',
+  nativeCurrency: { name: 'SOL', symbol: 'SOL', decimals: 9 },
+  isEVM: false,
 }
 
 export const CHAINS: Record<number, ChainConfig> = {
@@ -370,4 +389,17 @@ export function getChain(id: number): ChainConfig | undefined {
 
 export function getAllChains(): ChainConfig[] {
   return Object.values(CHAINS)
+}
+
+// Solana helpers
+export function getSolanaChain(): SolanaChainConfig {
+  return SOLANA_CHAIN
+}
+
+export function isEVMChain(chainId: string | number): boolean {
+  return typeof chainId === 'number' || !isNaN(Number(chainId))
+}
+
+export function isSolanaChain(chainId: string): boolean {
+  return chainId === 'solana'
 }

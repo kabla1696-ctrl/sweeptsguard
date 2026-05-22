@@ -11,7 +11,7 @@ export default function Home() {
   useEffect(() => {
     // Detect if running as PWA
     const standalone = window.matchMedia('(display-mode: standalone)').matches ||
-      (window.navigator as Record<string, unknown>).standalone === true
+      (window.navigator as unknown as Record<string, unknown>).standalone === true
     setIsStandalone(standalone)
 
     // Listen for install availability
@@ -21,7 +21,7 @@ export default function Home() {
   }, [])
 
   const handleInstall = async () => {
-    const win = window as Record<string, unknown>
+    const win = window as unknown as Record<string, unknown>
     if (typeof win.__pwaInstall === 'function') {
       const result = await (win.__pwaInstall as () => Promise<string>)()
       if (result === 'accepted') setCanInstall(false)
@@ -46,7 +46,8 @@ export default function Home() {
           </span>
         </div>
         <div className="flex gap-4 flex-wrap">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">EVM Scan</Link>
+          <Link href="/solana" className="text-sm text-purple-400/70 hover:text-purple-400 transition-colors font-semibold">◎ Solana</Link>
           <Link href="/recover" className="text-sm text-green-400/70 hover:text-green-400 transition-colors font-semibold">💰 Recover</Link>
           <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
           <Link href="/airdrop" className="text-sm text-white/50 hover:text-white transition-colors">Airdrop</Link>
@@ -117,15 +118,15 @@ export default function Home() {
             </Link>
           </div>
           <p className="text-center text-white/15 text-xs mt-3">
-            Supports 33 chains: ETH, Base, BSC, Arbitrum, Polygon, Optimism, Avalanche, Fantom, Cronos, Blast, Zora, zkEVM, Manta, zkSync, Linea, Mantle, Scroll, Gnosis, ZetaChain, Gravity, Core, Sei, Berachain, Ink, XLayer, Hemi, Kaia, Soneium, Morph, Swellchain, Mode, Monad, 0G
+            33 EVM chains + Solana ◎ — ETH, Base, BSC, Arbitrum, Polygon, Optimism, Avalanche, Fantom, Cronos, Blast, Zora, zkEVM, Manta, zkSync, Linea, Mantle, Scroll, Gnosis, ZetaChain, Gravity, Core, Sei, Berachain, Ink, XLayer, Hemi, Kaia, Soneium, Morph, Swellchain, Mode, Monad, 0G, Solana
           </p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-3 gap-8 mt-20 max-w-lg">
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-green-400">33</div>
-            <div className="text-white/30 text-xs mt-1">Chains</div>
+            <div className="text-2xl md:text-3xl font-bold text-green-400">34</div>
+            <div className="text-white/30 text-xs mt-1">Chains + Solana</div>
           </div>
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-emerald-400">&lt;1s</div>
@@ -142,7 +143,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold text-center mb-12 text-white/80">How It Works</h2>
           <div className="grid md:grid-cols-4 gap-6">
             {[
-              { icon: '🔍', title: '1. Scan', desc: 'Enter your compromised wallet address. We check all chains for assets and EIP-7702 delegations.' },
+              { icon: '🔍', title: '1. Scan', desc: 'Enter your compromised wallet address. We check all EVM chains + Solana for assets and delegations.' },
               { icon: '🔗', title: '2. Track', desc: 'Track where your stolen funds went. See if they reached an exchange or drainer wallet.' },
               { icon: '🎯', title: '3. Airdrop', desc: 'Claim airdrops from your compromised wallet. Tokens are sent directly to your safe wallet.' },
               { icon: '⚡', title: '4. Auto-Sweep', desc: 'When funds arrive, we automatically sweep them to your safe wallet within seconds.' }
