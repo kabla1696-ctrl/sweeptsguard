@@ -32,205 +32,97 @@
     }
     .version { font-size: 9px; color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
     .content { padding: 14px; }
-
     .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: rgba(255,255,255,0.4);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+      font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.4);
+      text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+      display: flex; align-items: center; gap: 6px;
     }
     .section-title .icon { font-size: 14px; }
-
     label {
-      display: block;
-      font-size: 11px;
-      font-weight: 600;
-      color: rgba(255,255,255,0.5);
-      margin-bottom: 4px;
-      margin-top: 10px;
+      display: block; font-size: 11px; font-weight: 600;
+      color: rgba(255,255,255,0.5); margin-bottom: 4px; margin-top: 10px;
     }
     label .required { color: #ef4444; }
-
     input, select, textarea {
-      width: 100%;
-      padding: 10px 12px;
+      width: 100%; padding: 10px 12px;
       background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 8px;
-      color: #fff;
-      font-size: 12px;
-      font-family: 'SF Mono', Monaco, monospace;
-      outline: none;
+      border-radius: 8px; color: #fff; font-size: 12px;
+      font-family: 'SF Mono', Monaco, monospace; outline: none;
       transition: border-color 0.2s;
     }
-    input:focus, select:focus, textarea:focus {
-      border-color: rgba(34,197,94,0.4);
-    }
+    input:focus, select:focus, textarea:focus { border-color: rgba(34,197,94,0.4); }
     input::placeholder { color: rgba(255,255,255,0.15); }
     textarea { resize: vertical; min-height: 50px; }
     select {
       appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      padding-right: 30px;
+      background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;
     }
     select option { background: #0a0a12; color: #fff; }
-
+    select option:disabled { color: rgba(255,255,255,0.2); }
     .btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
+      width: 100%; padding: 12px; border: none; border-radius: 10px;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
     }
-    .btn-primary {
-      background: linear-gradient(135deg, #22c55e, #06b6d4);
-      color: #000;
-    }
+    .btn-primary { background: linear-gradient(135deg, #22c55e, #06b6d4); color: #000; }
     .btn-primary:hover { box-shadow: 0 4px 20px rgba(34,197,94,0.3); }
     .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
     .btn-secondary {
       background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.1);
-      color: rgba(255,255,255,0.6);
+      border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
     }
     .btn-secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
-    .btn-danger {
-      background: linear-gradient(135deg, #ef4444, #dc2626);
-      color: #fff;
-    }
-
-    .divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent);
-      margin: 14px 0;
-    }
-
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent); margin: 14px 0; }
     .card {
-      background: rgba(255,255,255,0.02);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 10px;
-      padding: 12px;
-      margin-bottom: 10px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 10px; padding: 12px; margin-bottom: 10px;
     }
-    .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 6px;
-    }
+    .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
     .card-title { font-size: 13px; font-weight: 700; }
     .card-value { font-size: 13px; font-weight: 700; color: #22c55e; }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 600;
-    }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; }
     .badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
     .badge-yellow { background: rgba(245,158,11,0.15); color: #f59e0b; }
     .badge-red { background: rgba(239,68,68,0.15); color: #ef4444; }
-
-    .info-box {
-      padding: 10px;
-      border-radius: 8px;
-      font-size: 11px;
-      line-height: 1.5;
-      margin-bottom: 10px;
-    }
-    .info-box.warning {
-      background: rgba(245,158,11,0.08);
-      border: 1px solid rgba(245,158,11,0.2);
-      color: #f59e0b;
-    }
-    .info-box.danger {
-      background: rgba(239,68,68,0.08);
-      border: 1px solid rgba(239,68,68,0.2);
-      color: #ef4444;
-    }
-    .info-box.success {
-      background: rgba(34,197,94,0.08);
-      border: 1px solid rgba(34,197,94,0.2);
-      color: #22c55e;
-    }
-    .info-box.info {
-      background: rgba(6,182,212,0.08);
-      border: 1px solid rgba(6,182,212,0.2);
-      color: #06b6d4;
-    }
-
-    .result-item {
-      display: flex;
-      justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.03);
-      font-size: 11px;
-    }
+    .info-box { padding: 10px; border-radius: 8px; font-size: 11px; line-height: 1.5; margin-bottom: 10px; }
+    .info-box.warning { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.2); color: #f59e0b; }
+    .info-box.danger { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #ef4444; }
+    .info-box.success { background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.2); color: #22c55e; }
+    .info-box.info { background: rgba(6,182,212,0.08); border: 1px solid rgba(6,182,212,0.2); color: #06b6d4; }
+    .result-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 11px; }
     .result-label { color: rgba(255,255,255,0.4); }
     .result-value { font-weight: 600; }
-
     .loading { text-align: center; padding: 20px; color: rgba(255,255,255,0.3); }
     .loading .spinner {
       width: 24px; height: 24px;
-      border: 2px solid rgba(255,255,255,0.1);
-      border-top-color: #22c55e;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      margin: 0 auto 8px;
+      border: 2px solid rgba(255,255,255,0.1); border-top-color: #22c55e;
+      border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 8px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
-    .step-indicator {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 14px;
-    }
-    .step {
-      flex: 1;
-      height: 3px;
-      border-radius: 2px;
-      background: rgba(255,255,255,0.06);
-    }
+    .step-indicator { display: flex; gap: 8px; margin-bottom: 14px; }
+    .step { flex: 1; height: 3px; border-radius: 2px; background: rgba(255,255,255,0.06); }
     .step.active { background: #22c55e; }
-    .step.done { background: rgba(34,197,94,0.3); }
-
     .hidden { display: none; }
-
-    .footer {
-      padding: 10px 14px;
-      border-top: 1px solid rgba(255,255,255,0.04);
-      text-align: center;
-    }
+    .footer { padding: 10px 14px; border-top: 1px solid rgba(255,255,255,0.04); text-align: center; }
     .footer a { color: rgba(255,255,255,0.15); font-size: 9px; text-decoration: none; }
     .footer a:hover { color: #22c55e; }
-
     .eye-toggle {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      color: rgba(255,255,255,0.3);
-      cursor: pointer;
-      font-size: 14px;
+      position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 14px;
     }
     .input-wrap { position: relative; }
+    .chain-coming {
+      font-size: 9px; color: rgba(255,255,255,0.2); margin-left: 4px;
+    }
+    .contract-status {
+      display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+      background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.15);
+      border-radius: 8px; margin-top: 8px; font-size: 10px; color: rgba(255,255,255,0.5);
+    }
+    .contract-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+    .contract-status .dot-off { background: rgba(255,255,255,0.15); }
   </style>
 </head>
 <body>
@@ -243,7 +135,6 @@
   </div>
 
   <div class="content">
-    <!-- Step Indicator -->
     <div class="step-indicator">
       <div class="step active" id="step1"></div>
       <div class="step" id="step2"></div>
@@ -275,30 +166,34 @@
 
       <label>Chain <span class="required">*</span></label>
       <select id="chainSelect">
-        <option value="">Select chain...</option>
-        <option value="1">Ethereum</option>
-        <option value="8453">Base</option>
-        <option value="42161">Arbitrum</option>
-        <option value="10">Optimism</option>
-        <option value="137">Polygon</option>
-        <option value="56">BNB Chain</option>
-        <option value="43114">Avalanche</option>
-        <option value="324">zkSync Era</option>
-        <option value="59144">Linea</option>
-        <option value="534352">Scroll</option>
-        <option value="81457">Blast</option>
-        <option value="7777777">Zora</option>
-        <option value="5000">Mantle</option>
-        <option value="34443">Mode</option>
-        <option value="250">Fantom</option>
-        <option value="25">Cronos</option>
+        <option value="8453">✅ Base — Active</option>
+        <option value="1" disabled>Ethereum — Coming Soon</option>
+        <option value="42161" disabled>Arbitrum — Coming Soon</option>
+        <option value="10" disabled>Optimism — Coming Soon</option>
+        <option value="137" disabled>Polygon — Coming Soon</option>
+        <option value="56" disabled>BNB Chain — Coming Soon</option>
+        <option value="43114" disabled>Avalanche — Coming Soon</option>
+        <option value="324" disabled>zkSync — Coming Soon</option>
+        <option value="59144" disabled>Linea — Coming Soon</option>
+        <option value="534352" disabled>Scroll — Coming Soon</option>
+        <option value="81457" disabled>Blast — Coming Soon</option>
+        <option value="7777777" disabled>Zora — Coming Soon</option>
+        <option value="5000" disabled>Mantle — Coming Soon</option>
+        <option value="34443" disabled>Mode — Coming Soon</option>
+        <option value="250" disabled>Fantom — Coming Soon</option>
+        <option value="25" disabled>Cronos — Coming Soon</option>
       </select>
 
-      <label>Airdrop Contract Address <span class="required">*</span></label>
-      <input type="text" id="contractAddress" placeholder="0x...">
+      <div class="contract-status">
+        <span class="dot"></span>
+        SweepGuardRescuer deployed on Base: 0xDB67...400F
+      </div>
 
-      <label>Token Amount (optional)</label>
-      <input type="text" id="tokenAmount" placeholder="Auto-detect if empty">
+      <label>Airdrop Contract Address <span class="required">*</span></label>
+      <input type="text" id="contractAddress" placeholder="0x... (the airdrop contract)">
+
+      <label>Hacked Wallet Address <span class="required">*</span></label>
+      <input type="text" id="hackedAddress" placeholder="0x... (the compromised wallet)">
 
       <label>Claim Data (optional)</label>
       <textarea id="claimData" placeholder="0x... (auto-detect if empty)"></textarea>
@@ -322,10 +217,8 @@
       </div>
 
       <div id="preview-content" class="hidden">
-        <!-- Contract warnings -->
         <div id="contract-warnings"></div>
 
-        <!-- Token info -->
         <div class="card">
           <div class="card-header">
             <span class="card-title" id="token-name">Token</span>
@@ -345,7 +238,6 @@
           </div>
         </div>
 
-        <!-- Sponsor info -->
         <div class="card">
           <div class="card-header">
             <span class="card-title">⛽ Sponsor Gas</span>
@@ -361,7 +253,6 @@
           </div>
         </div>
 
-        <!-- Execution strategy -->
         <div id="execution-info" class="info-box info"></div>
 
         <div style="display:flex;gap:8px;margin-top:12px;">

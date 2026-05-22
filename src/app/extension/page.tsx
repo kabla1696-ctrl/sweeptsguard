@@ -159,6 +159,27 @@ export default function ExtensionPage() {
           </div>
         </div>
 
+        {/* Chain Status Notice */}
+        <div className="mb-10 p-5 bg-gradient-to-br from-blue-500/[0.06] to-cyan-500/[0.06] border border-blue-500/15 rounded-2xl">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+            <h3 className="text-blue-400 font-semibold">🌐 Active Chain: Base</h3>
+          </div>
+          <p className="text-white/40 text-sm mb-3">
+            SweepGuardRescuer smart contract is currently deployed on <strong className="text-white/70">Base</strong> only.
+            More chains coming soon as we deploy contracts.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-1.5 bg-green-500/15 border border-green-500/25 rounded-lg text-green-400 text-xs font-medium">✅ Base — Active</span>
+            <span className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white/20 text-xs">Ethereum</span>
+            <span className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white/20 text-xs">Arbitrum</span>
+            <span className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white/20 text-xs">Optimism</span>
+            <span className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white/20 text-xs">Polygon</span>
+            <span className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white/20 text-xs">BNB Chain</span>
+            <span className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-white/20 text-xs">+10 more</span>
+          </div>
+        </div>
+
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
           {[
