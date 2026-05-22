@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { ethers } from 'ethers'
 import { submitRecoveryBundle } from '@/lib/fundRecovery'
 import { sanitizeErrorMessage } from '@/lib/validation'
+import { rateLimit as sharedRateLimit, getClientIp } from '@/lib/rateLimit'
+import { captureError } from '@/lib/sentry'
 
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
@@ -526,10 +528,20 @@ function buildClaimTxData(
 // POST handler
 // ============================================================
 export async function POST(request: NextRequest) {
+  // Global rate limit (60 req/min per IP)
+  const globalIp = getClientIp(request)
+  const globalRl = sharedRateLimit(globalIp)
+  if (!globalRl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((globalRl.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   try {
     const body = await request.json()
 
-    // SECURITY: Rate limiting — extract IP and check
+    // SECURITY: Rate limiting — extract IP and check (tighter per-route limit)
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
       || request.headers.get('x-real-ip')
       || 'unknown'
@@ -1417,6 +1429,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (err: unknown) {
+    captureError(err instanceof Error ? err : new Error(String(err)), { route: '/api/airdrop/claim' })
     console.error('Airdrop claim error:', err)
     return NextResponse.json({ error: sanitizeErrorMessage(err) || 'Internal error' }, { status: 500 })
   }

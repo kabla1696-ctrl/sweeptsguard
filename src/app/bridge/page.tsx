@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { CHAINS } from '@/lib/chains'
+import { getBridgeRoutes, type BridgeRoute } from '@/lib/bridge'
 
 interface BridgeResult {
   fromChain: number
@@ -15,12 +16,15 @@ interface BridgeResult {
   bridgeUrl: string
   message?: string
   suggestedBridges?: { name: string; url: string }[]
+  routes?: BridgeRoute[]
 }
 
 export default function BridgePage() {
   const [fromChain, setFromChain] = useState(1)
   const [toChain, setToChain] = useState(8453)
+  const [token, setToken] = useState('ETH')
   const [result, setResult] = useState<BridgeResult | null>(null)
+  const [localRoutes, setLocalRoutes] = useState<BridgeRoute[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [showGuide, setShowGuide] = useState(true)
@@ -40,6 +44,12 @@ export default function BridgePage() {
     setLoading(true)
     setError('')
     setResult(null)
+    setLocalRoutes([])
+
+    // Get local bridge routes from the bridge library
+    const routes = getBridgeRoutes(fromChain, toChain, token)
+    setLocalRoutes(routes)
+
     try {
       const res = await fetch(`/api/bridge?from=${fromChain}&to=${toChain}`, { signal: controller.signal })
       if (controller.signal.aborted) return
@@ -52,11 +62,26 @@ export default function BridgePage() {
       if (data.error) {
         setError(data.error)
       } else {
-        setResult(data)
+        setResult({ ...data, routes })
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
-      setError('Failed to fetch bridge route. Please check your connection and try again.')
+      // If API fails but we have local routes, still show them
+      if (routes.length > 0) {
+        setResult({
+          fromChain,
+          toChain,
+          fromChainName: CHAINS[fromChain]?.name || 'Unknown',
+          toChainName: CHAINS[toChain]?.name || 'Unknown',
+          estimatedFee: routes[0].fee,
+          estimatedTime: routes[0].estimatedTime,
+          bridge: routes[0].bridge,
+          bridgeUrl: routes[0].bridgeUrl,
+          routes,
+        })
+      } else {
+        setError('Failed to fetch bridge route. Please check your connection and try again.')
+      }
     } finally {
       if (!controller.signal.aborted) setLoading(false)
     }
@@ -93,6 +118,24 @@ export default function BridgePage() {
             </div>
           </div>
         )}
+
+        {/* Token selector */}
+        <div className="mb-6">
+          <label htmlFor="token" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">Token</label>
+          <select
+            id="token"
+            value={token}
+            onChange={e => setToken(e.target.value)}
+            className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white focus:outline-none focus:border-green-500/40 text-sm"
+          >
+            <option value="ETH">⟠ ETH</option>
+            <option value="USDC">💵 USDC</option>
+            <option value="USDT">💵 USDT</option>
+            <option value="DAI">💵 DAI</option>
+            <option value="WETH">⟠ WETH</option>
+            <option value="WBTC">₿ WBTC</option>
+          </select>
+        </div>
 
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <div>
@@ -147,7 +190,40 @@ export default function BridgePage() {
               <span className="text-lg font-semibold">{result.toChainName}</span>
             </div>
 
-            {result.bridge ? (
+            {result.routes && result.routes.length > 0 ? (
+              <div className="space-y-3">
+                <p className="text-xs text-white/30 mb-2">{result.routes.length} route{result.routes.length > 1 ? 's' : ''} found — sorted by fee</p>
+                {result.routes.map((route, i) => (
+                  <div key={i} className={`p-4 rounded-xl border ${i === 0 ? 'bg-green-500/5 border-green-500/20' : 'bg-white/[0.02] border-white/[0.05]'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        {i === 0 && <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded-full font-semibold">Best</span>}
+                        <span className="font-semibold">{route.bridge}</span>
+                      </div>
+                      <span className="text-white/40 text-xs">{route.token}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <span className="text-xs text-white/30">Fee</span>
+                        <p className="font-semibold text-sm">{route.fee}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-white/30">Time</span>
+                        <p className="font-semibold text-sm">{route.estimatedTime}</p>
+                      </div>
+                    </div>
+                    <a
+                      href={route.bridgeUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block mt-3 w-full px-4 py-2 bg-gradient-to-r from-green-600 to-emerald-600 rounded-lg font-semibold text-xs text-center hover:from-green-500 hover:to-emerald-500 transition-all"
+                    >
+                      🔗 Open {route.bridge} →
+                    </a>
+                  </div>
+                ))}
+              </div>
+            ) : result.bridge ? (
               <div className="space-y-3">
                 <div className="p-3 bg-green-500/5 rounded-xl">
                   <span className="text-xs text-white/30">Recommended Bridge</span>

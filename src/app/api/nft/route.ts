@@ -3,6 +3,8 @@ import { ethers } from 'ethers'
 import { scanNFTs, scanNFTsAllChains, batchNFTTransfer, getNFTGasParams } from '@/lib/nftRescue'
 import { CHAINS } from '@/lib/chains'
 import { sanitizeErrorMessage, isValidAddress } from '@/lib/validation'
+import { rateLimit, getClientIp } from '@/lib/rateLimit'
+import { captureError } from '@/lib/sentry'
 
 // ============================================================
 // NFT API
@@ -12,6 +14,15 @@ import { sanitizeErrorMessage, isValidAddress } from '@/lib/validation'
 // ============================================================
 
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = rateLimit(ip)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   const address = request.nextUrl.searchParams.get('address')
   const chainIdParam = request.nextUrl.searchParams.get('chainId')
 
@@ -45,6 +56,7 @@ export async function GET(request: NextRequest) {
       failedChains: result.failedChains
     })
   } catch (err) {
+    captureError(err instanceof Error ? err : new Error(String(err)), { route: '/api/nft', address })
     return NextResponse.json(
       { error: sanitizeErrorMessage(err) },
       { status: 500 }
@@ -53,6 +65,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const postIp = getClientIp(request)
+  const postRl = rateLimit(postIp)
+  if (!postRl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((postRl.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   try {
     const body = await request.json()
     const { action, compromisedAddress, safeAddress, chainId, privateKey } = body

@@ -7,8 +7,19 @@ import {
   SOLANA_PLATFORM_WALLET,
   SOLANA_FEE_BPS,
 } from '@/lib/solana'
+import { rateLimit, getClientIp } from '@/lib/rateLimit'
+import { captureError } from '@/lib/sentry'
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = rateLimit(ip)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   let body: {
     compromisedAddress?: string
     safeAddress?: string
@@ -98,6 +109,7 @@ export async function POST(request: NextRequest) {
       feePercent: SOLANA_FEE_BPS / 100,
     })
   } catch (err: unknown) {
+    captureError(err instanceof Error ? err : new Error(String(err)), { route: '/api/solana/recover' })
     const message = err instanceof Error ? err.message : 'Recovery failed'
     return NextResponse.json({ error: message }, { status: 500 })
   }
@@ -105,6 +117,15 @@ export async function POST(request: NextRequest) {
 
 // GET endpoint to scan without recovering
 export async function GET(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = rateLimit(ip)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   const address = request.nextUrl.searchParams.get('address')
 
   if (!address || !isValidSolanaAddress(address)) {

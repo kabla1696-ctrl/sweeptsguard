@@ -11,7 +11,17 @@ export default function GlobalError({
   reset: () => void
 }) {
   useEffect(() => {
-    // Log to error reporting service in production
+    // Report to Sentry endpoint
+    fetch('/api/sentry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: error.message,
+        level: 'error',
+        stack: error.stack,
+        context: { digest: error.digest, url: window.location.href },
+      }),
+    }).catch(() => {})
   }, [error])
 
   return (

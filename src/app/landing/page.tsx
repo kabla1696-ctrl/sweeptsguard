@@ -410,7 +410,7 @@ export default function LandingPage() {
                 Docs
               </Link>
               <a
-                href="https://twitter.com/sweeptsguard"
+                href="https://x.com/SweepGuard_io"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-white/30 hover:text-white/60 text-sm transition-colors"

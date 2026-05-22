@@ -3,6 +3,8 @@ import { scanRecoverableAssets, executeFullRecovery, executeRevokeDelegation, ex
 import { isKnownDrainer } from '@/lib/draindb'
 import { ethers } from 'ethers'
 import { sanitizeErrorMessage, getExplorerBaseUrl } from '@/lib/validation'
+import { rateLimit, getClientIp } from '@/lib/rateLimit'
+import { captureError } from '@/lib/sentry'
 
 const BASE_USDC_ADDRESS = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
 const USDC_DECIMALS = 6
@@ -10,6 +12,15 @@ const MIN_USDC_PER_DELEGATION = 40
 const MIN_GAS_PER_CHAIN = '0.001'
 
 export async function POST(request: NextRequest) {
+  const ip = getClientIp(request)
+  const rl = rateLimit(ip)
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.resetTime - Date.now()) / 1000)) } }
+    )
+  }
+
   let body: Record<string, unknown>
   try {
     body = await request.json()

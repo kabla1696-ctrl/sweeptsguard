@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
 import { getExplorerUrl } from '@/lib/validation'
+import AddressInput from '@/components/AddressInput'
 
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
@@ -859,20 +860,32 @@ export default function AirdropPage() {
             {wizardStep === 2 && (
               <div className="space-y-5">
                 <h2 className="text-xl font-bold text-white">💳 Wallet Setup</h2>
-                <div>
-                  <label className="block text-sm text-white/50 mb-2">Your Hacked Wallet Address</label>
-                  <input type="text" value={walletAddress} onChange={e => setWalletAddress(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-red-500/20 rounded-xl text-white text-sm focus:border-red-500/50 outline-none placeholder:text-white/20" />
-                  <p className="text-red-400/50 text-xs mt-1">The compromised wallet eligible for the airdrop</p>
-                </div>
-                <div>
-                  <label className="block text-sm text-white/50 mb-2">Safe Wallet Address <span className="text-blue-400 cursor-help" title="Where 80% of claimed tokens will be sent. Use a wallet you fully control. NOT the hacked wallet!">❓</span> <span className="text-red-400">⚠️ Triple check!</span></label>
-                  <input type="text" value={safeWallet} onChange={e => setSafeWallet(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-green-500/20 rounded-xl text-white text-sm focus:border-green-500/50 outline-none placeholder:text-white/20" />
-                </div>
-                <div>
-                  <label className="block text-sm text-white/50 mb-2">Sponsor Wallet Address <span className="text-blue-400 cursor-help" title="Pays the gas fee for the claim transaction. Needs ETH/native tokens. NEVER use your hacked wallet.">❓</span></label>
-                  <input type="text" value={sponsorWallet} onChange={e => setSponsorWallet(e.target.value)} placeholder="0x..." className="w-full p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl text-white text-sm focus:border-green-500/50 outline-none placeholder:text-white/20" />
-                  <p className="text-white/20 text-xs mt-1">A separate wallet with gas for paying transaction fees</p>
-                </div>
+                <AddressInput
+                  value={walletAddress}
+                  onChange={setWalletAddress}
+                  label="Your Hacked Wallet Address"
+                  sublabel="The compromised wallet eligible for the airdrop. Supports ENS names."
+                  placeholder="0x... or ENS name (e.g. vitalik.eth)"
+                  variant="red"
+                  chainId={chainId}
+                />
+                <AddressInput
+                  value={safeWallet}
+                  onChange={setSafeWallet}
+                  label="Safe Wallet Address"
+                  sublabel="Where 80% of claimed tokens will be sent. Use a wallet you fully control. NOT the hacked wallet! Triple check!"
+                  placeholder="0x... or ENS name"
+                  variant="green"
+                  chainId={chainId}
+                />
+                <AddressInput
+                  value={sponsorWallet}
+                  onChange={setSponsorWallet}
+                  label="Sponsor Wallet Address"
+                  sublabel="Pays the gas fee for the claim transaction. Needs ETH/native tokens. NEVER use your hacked wallet."
+                  placeholder="0x... or ENS name"
+                  chainId={chainId}
+                />
                 <div className="flex gap-3">
                   <button onClick={() => setWizardStep(1)} className="flex-1 py-3 rounded-xl bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06] transition-all">← Back</button>
                   <button onClick={() => setWizardStep(3)} disabled={!walletAddress || !safeWallet || !sponsorWallet} className="flex-1 py-3 rounded-xl bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold hover:brightness-110 disabled:opacity-30 transition-all">Next: Security Keys →</button>

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getExplorerUrl } from '@/lib/validation'
+import AddressInput from '@/components/AddressInput'
 
 interface ScanResult {
   address: string
@@ -50,6 +51,7 @@ function ScanContent() {
   const addressParam = searchParams.get('address')
 
   const [address, setAddress] = useState(addressParam || '')
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const [result, setResult] = useState<ScanResult | null>(null)
   const [error, setError] = useState('')
@@ -155,14 +157,16 @@ function ScanContent() {
 
         {/* Scan Form */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter wallet address (0x...)"
-            aria-label="Wallet address to scan"
-            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
-          />
+          <div className="flex-1">
+            <AddressInput
+              value={address}
+              onChange={setAddress}
+              onResolved={setResolvedAddress}
+              placeholder="Enter wallet address (0x...) or ENS name (vitalik.eth)"
+              chainId={1}
+              inputClassName="text-sm"
+            />
+          </div>
           <button
             type="submit"
             disabled={scanning}

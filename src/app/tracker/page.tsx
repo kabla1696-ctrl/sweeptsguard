@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
 import { getExplorerBaseUrl } from '@/lib/validation'
+import AddressInput from '@/components/AddressInput'
 
 interface Transfer {
   hash: string
@@ -22,6 +23,7 @@ interface Transfer {
 
 export default function TrackerPage() {
   const [address, setAddress] = useState('')
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
   const [tracking, setTracking] = useState(false)
   const [transfers, setTransfers] = useState<Transfer[]>([])
   const [error, setError] = useState('')
@@ -115,14 +117,16 @@ export default function TrackerPage() {
 
         {/* Track Form */}
         <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
-          <input
-            type="text"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-            placeholder="Enter wallet address to track (0x...)"
-            aria-label="Wallet address to track"
-            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-          />
+          <div className="flex-1">
+            <AddressInput
+              value={address}
+              onChange={setAddress}
+              onResolved={setResolvedAddress}
+              placeholder="Enter wallet address to track (0x...) or ENS name"
+              chainId={1}
+              inputClassName="text-sm"
+            />
+          </div>
           <button
             type="submit"
             disabled={tracking}

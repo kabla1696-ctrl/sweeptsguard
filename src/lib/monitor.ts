@@ -4,6 +4,8 @@ import { createAlertSystem, type AlertSystem } from './alerts'
 import { isKnownDrainer, isExchangeWallet } from './draindb'
 import { tracker, checkExchangeDeposit } from './tracker'
 import { scanNFTs, batchNFTTransfer, getNFTGasParams, type NFTItem } from './nftRescue'
+import { ChainWebSocket, CHAIN_WS_URLS, type PendingTx } from './websocket'
+import { captureError } from './sentry'
 
 export interface MonitorConfig {
   address: string
@@ -16,8 +18,10 @@ export interface MonitorConfig {
   discordWebhookUrl?: string
   slackWebhookUrl?: string
   enableFlashbots?: boolean
+  enableWebSocket?: boolean
   onAlert?: (alert: MonitorAlert) => void
   onSweep?: (result: SweepResult) => void
+  onPendingTx?: (tx: PendingTx) => void
 }
 
 export interface MonitorAlert {
@@ -50,6 +54,8 @@ export interface MonitorState {
   alerts: MonitorAlert[]
   sweepResults: SweepResult[]
   exchangeDeposits: { exchange: string; txHash: string; timestamp: number }[]
+  wsConnected: boolean
+  wsPendingTxs: PendingTx[]
 }
 
 export class WalletMonitor {
@@ -61,12 +67,15 @@ export class WalletMonitor {
   private alerts: AlertSystem | null = null
   private onAlert?: (alert: MonitorAlert) => void
   private onSweep?: (result: SweepResult) => void
+  private onPendingTx?: (tx: PendingTx) => void
+  private wsConnections: Map<number, ChainWebSocket> = new Map()
   private checkCount = 0 // Track check cycles for periodic tasks
 
   constructor(config: MonitorConfig) {
     this.config = config
     this.onAlert = config.onAlert
     this.onSweep = config.onSweep
+    this.onPendingTx = config.onPendingTx
     this.state = {
       running: false,
       lastCheck: 0,
@@ -74,7 +83,9 @@ export class WalletMonitor {
       nfts: new Map(),
       alerts: [],
       sweepResults: [],
-      exchangeDeposits: []
+      exchangeDeposits: [],
+      wsConnected: false,
+      wsPendingTxs: []
     }
 
     for (const chainId of config.chainIds) {
@@ -171,7 +182,8 @@ export class WalletMonitor {
         }
 
         this.state.balances.set(key, balance)
-      } catch {
+      } catch (err) {
+        captureError(err instanceof Error ? err : new Error(String(err)), { chainId, method: 'checkBalances' })
         // Skip failed chains
       }
     }
@@ -208,7 +220,8 @@ export class WalletMonitor {
           }
         }
       }
-    } catch {
+    } catch (err) {
+      captureError(err instanceof Error ? err : new Error(String(err)), { method: 'checkExchangeDeposits' })
       // Skip errors
     }
   }
@@ -352,7 +365,8 @@ export class WalletMonitor {
           this.state.sweepResults.push(result)
           this.onSweep?.(result)
         }
-      } catch {
+      } catch (err) {
+        captureError(err instanceof Error ? err : new Error(String(err)), { method: 'sweepERC20Tokens' })
         // Skip failed tokens
       }
     }
@@ -395,7 +409,8 @@ export class WalletMonitor {
         }
 
         this.state.nfts.set(chainId, nfts)
-      } catch {
+      } catch (err) {
+        captureError(err instanceof Error ? err : new Error(String(err)), { chainId, method: 'checkNFTs' })
         // Skip failed chains
       }
     }
@@ -493,6 +508,11 @@ export class WalletMonitor {
     if (this.state.running) return
     this.state.running = true
 
+    // Connect WebSocket for real-time monitoring if enabled
+    if (this.config.enableWebSocket) {
+      this.connectWebSocket()
+    }
+
     this.intervalId = setInterval(() => {
       this.checkBalances().catch(() => {})
     }, this.config.checkIntervalMs)
@@ -507,7 +527,49 @@ export class WalletMonitor {
       clearInterval(this.intervalId)
       this.intervalId = null
     }
+
+    // Disconnect all WebSocket connections
+    for (const [, ws] of this.wsConnections) {
+      ws.disconnect()
+    }
+    this.wsConnections.clear()
+    this.state.wsConnected = false
+
     this.state.running = false
+  }
+
+  // Connect WebSocket to supported chains for real-time pending TX monitoring
+  private connectWebSocket(): void {
+    for (const chainId of this.config.chainIds) {
+      const wsUrl = CHAIN_WS_URLS[chainId]
+      if (!wsUrl) continue
+
+      const ws = new ChainWebSocket(
+        chainId,
+        wsUrl,
+        (connected) => {
+          this.state.wsConnected = connected || this.wsConnections.size > 0
+        }
+      )
+
+      ws.subscribe(this.config.address, (tx: PendingTx) => {
+        // Real-time pending TX detected — check immediately
+        this.state.wsPendingTxs.push(tx)
+        if (this.state.wsPendingTxs.length > 200) {
+          this.state.wsPendingTxs.splice(0, this.state.wsPendingTxs.length - 200)
+        }
+
+        this.onPendingTx?.(tx)
+
+        // Trigger immediate balance check on incoming TX
+        if (tx.to.toLowerCase() === this.config.address.toLowerCase()) {
+          this.checkBalances().catch(() => {})
+        }
+      })
+
+      ws.connect()
+      this.wsConnections.set(chainId, ws)
+    }
   }
 
   getState(): MonitorState {

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { ethers } from 'ethers'
+import AddressInput from '@/components/AddressInput'
 
 interface TokenAsset {
   address: string
@@ -471,26 +472,16 @@ function RecoverContent() {
             <p className="text-red-400/50 text-xs mt-1">Used only for signing — never stored</p>
           </div>
 
-          <div>
-            <label htmlFor="recover-safe-address" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-              🟢 Safe Wallet Address
-            </label>
-            <input
-              id="recover-safe-address"
-              type="text"
-              value={safeAddress}
-              onChange={(e) => { setSafeAddress(e.target.value); validateSafeAddress(e.target.value) }}
-              placeholder="0x... where to send recovered funds"
-              className={`w-full px-4 py-3 rounded-xl text-white placeholder:text-white/20 focus:outline-none text-sm font-mono ${
-                safeAddressError
-                  ? 'bg-red-500/5 border border-red-500/40 focus:border-red-500/60'
-                  : 'bg-green-500/5 border border-green-500/20 focus:border-green-500/40'
-              }`}
-            />
-            {safeAddressError && (
-              <p className="text-red-400 text-xs mt-1">❌ {safeAddressError}</p>
-            )}
-          </div>
+          <AddressInput
+            id="recover-safe-address"
+            value={safeAddress}
+            onChange={(v) => { setSafeAddress(v); validateSafeAddress(v) }}
+            label="🟢 Safe Wallet Address"
+            placeholder="0x... or ENS name (where to send recovered funds)"
+            variant="green"
+            chainId={1}
+            error={safeAddressError || undefined}
+          />
 
           <div>
             <label htmlFor="recover-sponsor-key" className="text-xs text-white/30 uppercase tracking-wider mb-2 block">

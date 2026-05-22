@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
 import Link from 'next/link'
 import { getExplorerUrl } from '@/lib/validation'
+import AddressInput from '@/components/AddressInput'
 
 interface NFTItem {
   contractAddress: string
@@ -62,9 +63,13 @@ function NFTContent() {
     return acc
   }, {} as Record<string, { collection: string; chainId: number; chainName: string; contractAddress: string; items: NFTItem[] }>)
 
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
+
   const scanNFTs = useCallback(async (addr: string) => {
-    if (!addr || !/^0x[0-9a-fA-F]{40}$/.test(addr)) {
-      setError('Please enter a valid EVM address')
+    // Use resolved address if available, otherwise validate raw input
+    const targetAddress = resolvedAddress || addr
+    if (!targetAddress || !/^0x[0-9a-fA-F]{40}$/.test(targetAddress)) {
+      setError('Please enter a valid EVM address or ENS name')
       return
     }
 
@@ -78,7 +83,7 @@ function NFTContent() {
     setSweepResults([])
 
     try {
-      const res = await fetch(`/api/nft?address=${addr}`, { signal: controller.signal })
+      const res = await fetch(`/api/nft?address=${targetAddress}`, { signal: controller.signal })
       if (controller.signal.aborted) return
       const data = await res.json() as { nfts?: NFTItem[]; error?: string }
 
@@ -183,13 +188,16 @@ function NFTContent() {
         {/* Scan Form */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">
           <div className="flex gap-2">
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Compromised wallet address (0x...)"
-              className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
-            />
+            <div className="flex-1">
+              <AddressInput
+                value={address}
+                onChange={setAddress}
+                onResolved={setResolvedAddress}
+                placeholder="Compromised wallet address (0x...) or ENS name"
+                chainId={1}
+                inputClassName="text-sm"
+              />
+            </div>
             <button
               type="submit"
               disabled={scanning}
@@ -271,12 +279,13 @@ function NFTContent() {
             <div className="p-5 bg-green-500/5 border border-green-500/20 rounded-2xl">
               <h3 className="font-bold text-green-400 mb-3">🛡️ Rescue NFTs</h3>
               <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  type="text"
+                <AddressInput
                   value={safeAddress}
-                  onChange={(e) => setSafeAddress(e.target.value)}
-                  placeholder="Safe wallet address (0x...)"
-                  className="px-4 py-2.5 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
+                  onChange={setSafeAddress}
+                  placeholder="Safe wallet address (0x...) or ENS name"
+                  variant="green"
+                  chainId={1}
+                  inputClassName="text-sm"
                 />
                 <input
                   type="password"
