@@ -1,43 +1,106 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 
-const MOCK_ALIASES = [
-  { alias: 'alice.eth', address: '0x1234567890abcdef1234567890abcdef12345678', verified: true, created: '2026-01-15' },
-  { alias: 'bob.wallet', address: '0xabcdef1234567890abcdef1234567890abcdef12', verified: true, created: '2026-02-20' },
-  { alias: 'treasury', address: '0x9876543210fedcba9876543210fedcba98765432', verified: false, created: '2026-03-10' },
-]
+interface Alias {
+  alias: string
+  address: string
+  verified: boolean
+  created: string
+}
 
 export default function AliasPage() {
   const [alias, setAlias] = useState('')
   const [address, setAddress] = useState('')
   const [lookupQuery, setLookupQuery] = useState('')
-  const [lookupResult, setLookupResult] = useState<any>(null)
+  const [lookupResult, setLookupResult] = useState<Alias | null>(null)
   const [registering, setRegistering] = useState(false)
   const [looking, setLooking] = useState(false)
   const [showQR, setShowQR] = useState<string | null>(null)
+  const [aliases, setAliases] = useState<Alias[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchAliases = useCallback(async () => {
+    try {
+      const res = await fetch('/api/alias')
+      if (!res.ok) throw new Error('Failed to load aliases')
+      const data = await res.json()
+      setAliases(data.aliases || [])
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchAliases() }, [fetchAliases])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
     setRegistering(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setRegistering(false)
-    setAlias('')
-    setAddress('')
+    setError(null)
+    try {
+      const res = await fetch('/api/alias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', name: alias, address }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to register alias')
+      }
+      setAlias('')
+      setAddress('')
+      await fetchAliases()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to register alias')
+    } finally {
+      setRegistering(false)
+    }
   }
 
   const handleLookup = async () => {
     if (!lookupQuery) return
     setLooking(true)
-    await new Promise(r => setTimeout(r, 1000))
-    setLookupResult({
-      alias: lookupQuery,
-      address: '0x1234567890abcdef1234567890abcdef12345678',
-      verified: true,
-      created: '2026-01-15',
-    })
-    setLooking(false)
+    setError(null)
+    try {
+      const res = await fetch(`/api/alias?name=${encodeURIComponent(lookupQuery)}`)
+      if (!res.ok) {
+        if (res.status === 404) {
+          setLookupResult(null)
+          setError('Alias not found')
+          return
+        }
+        throw new Error('Lookup failed')
+      }
+      const data = await res.json()
+      setLookupResult(data.alias)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Lookup failed')
+      setLookupResult(null)
+    } finally {
+      setLooking(false)
+    }
+  }
+
+  const handleDelete = async (name: string) => {
+    try {
+      const res = await fetch('/api/alias', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete', name }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to delete alias')
+      }
+      await fetchAliases()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete alias')
+    }
   }
 
   return (
@@ -70,6 +133,13 @@ export default function AliasPage() {
           </h1>
           <p className="text-white/40 text-lg max-w-xl mx-auto">Replace complex addresses with memorable names. Send to &quot;alice.eth&quot; instead of 0x...</p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-sm text-[#ff3b3b]">
+            {error}
+            <button onClick={() => setError(null)} className="ml-3 text-xs underline">dismiss</button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Register */}
@@ -130,23 +200,34 @@ export default function AliasPage() {
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="text-[#00ff87]">📋</span> Your Aliases
             </h2>
-            <div className="space-y-3">
-              {MOCK_ALIASES.map((a, i) => (
-                <div key={i} className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-4 hover:border-violet-500/20 transition-all group">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white/90">{a.alias}</span>
-                      {a.verified && <span className="text-green-400 text-[10px]">✓</span>}
+            {loading ? (
+              <div className="text-center py-8 text-white/30">Loading...</div>
+            ) : aliases.length === 0 ? (
+              <div className="text-center py-8 text-white/30">No aliases registered yet</div>
+            ) : (
+              <div className="space-y-3">
+                {aliases.map((a) => (
+                  <div key={a.alias} className="bg-white/[0.03] border border-white/[0.04] rounded-xl p-4 hover:border-violet-500/20 transition-all group">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white/90">{a.alias}</span>
+                        {a.verified && <span className="text-green-400 text-[10px]">✓</span>}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => setShowQR(a.address)} className="text-xs text-white/30 hover:text-violet-400 transition-colors opacity-0 group-hover:opacity-100">
+                          📱 QR
+                        </button>
+                        <button onClick={() => handleDelete(a.alias)} className="text-xs text-white/30 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100">
+                          🗑️
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={() => setShowQR(a.address)} className="text-xs text-white/30 hover:text-violet-400 transition-colors opacity-0 group-hover:opacity-100">
-                      📱 QR
-                    </button>
+                    <div className="font-mono text-xs text-white/40 break-all">{a.address}</div>
+                    <div className="text-xs text-white/20 mt-2">Created: {a.created}</div>
                   </div>
-                  <div className="font-mono text-xs text-white/40 break-all">{a.address}</div>
-                  <div className="text-xs text-white/20 mt-2">Created: {a.created}</div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 

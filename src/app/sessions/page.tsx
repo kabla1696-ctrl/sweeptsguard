@@ -1,15 +1,20 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 
-const MOCK_SESSIONS = [
-  { id: '1', device: 'Chrome — MacOS', ip: '192.168.1.1', location: 'New York, US', lastActive: '2 min ago', current: true, risk: 'low' },
-  { id: '2', device: 'Firefox — Windows', ip: '10.0.0.45', location: 'London, UK', lastActive: '1 hour ago', current: false, risk: 'low' },
-  { id: '3', device: 'Safari — iOS', ip: '172.16.0.8', location: 'Tokyo, JP', lastActive: '3 hours ago', current: false, risk: 'medium' },
-  { id: '4', device: 'Unknown — Linux', ip: '203.0.113.42', location: 'Unknown', lastActive: '1 day ago', current: false, risk: 'high' },
-  { id: '5', device: 'Chrome — Android', ip: '198.51.100.7', location: 'Berlin, DE', lastActive: '2 days ago', current: false, risk: 'low' },
-]
+type RiskLevel = 'low' | 'medium' | 'high'
+
+interface Session {
+  id: string
+  device: string
+  ip: string
+  location: string
+  lastActive: string
+  current: boolean
+  risk: RiskLevel
+  createdAt: string
+}
 
 const RISK_COLORS: Record<string, string> = {
   low: 'text-green-400 bg-green-500/10 border-green-500/20',
@@ -18,14 +23,68 @@ const RISK_COLORS: Record<string, string> = {
 }
 
 export default function SessionsPage() {
-  const [sessions, setSessions] = useState(MOCK_SESSIONS)
+  const [sessions, setSessions] = useState<Session[]>([])
   const [disconnecting, setDisconnecting] = useState<string | null>(null)
+  const [disconnectingAll, setDisconnectingAll] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchSessions = useCallback(async () => {
+    try {
+      const res = await fetch('/api/sessions')
+      if (!res.ok) throw new Error('Failed to load sessions')
+      const data = await res.json()
+      setSessions(data.sessions || [])
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchSessions() }, [fetchSessions])
 
   const handleDisconnect = async (id: string) => {
     setDisconnecting(id)
-    await new Promise(r => setTimeout(r, 1000))
-    setSessions(prev => prev.filter(s => s.id !== id))
-    setDisconnecting(null)
+    setError(null)
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnect', id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to disconnect')
+      }
+      await fetchSessions()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to disconnect')
+    } finally {
+      setDisconnecting(null)
+    }
+  }
+
+  const handleDisconnectAll = async () => {
+    setDisconnectingAll(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnectAll' }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to disconnect sessions')
+      }
+      await fetchSessions()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to disconnect sessions')
+    } finally {
+      setDisconnectingAll(false)
+    }
   }
 
   return (
@@ -59,81 +118,100 @@ export default function SessionsPage() {
           <p className="text-white/40 text-lg max-w-xl mx-auto">Monitor and control active sessions. Disconnect suspicious access instantly.</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-8">
-          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 text-center">
-            <div className="text-3xl font-bold text-[#00e5ff]">{sessions.length}</div>
-            <div className="text-xs text-white/40 mt-1">Active Sessions</div>
+        {error && (
+          <div className="mb-6 p-4 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-sm text-[#ff3b3b]">
+            {error}
+            <button onClick={() => setError(null)} className="ml-3 text-xs underline">dismiss</button>
           </div>
-          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 text-center">
-            <div className="text-3xl font-bold text-green-400">{sessions.filter(s => s.risk === 'low').length}</div>
-            <div className="text-xs text-white/40 mt-1">Trusted</div>
-          </div>
-          <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 text-center">
-            <div className="text-3xl font-bold text-red-400">{sessions.filter(s => s.risk === 'high').length}</div>
-            <div className="text-xs text-white/40 mt-1">Suspicious</div>
-          </div>
-        </div>
+        )}
 
-        {/* Sessions List */}
-        <div className="space-y-4">
-          {sessions.map((s) => (
-            <div
-              key={s.id}
-              className={`bg-white/[0.03] backdrop-blur-xl border rounded-2xl p-5 transition-all duration-300 hover:border-white/[0.12] ${
-                s.current ? 'border-[#00e5ff]/30 shadow-[0_0_20px_rgba(0,229,255,0.05)]' : 'border-white/[0.06]'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
-                    s.current ? 'bg-[#00e5ff]/10' : 'bg-white/[0.04]'
-                  }`}>
-                    {s.device.includes('Chrome') ? '🌐' : s.device.includes('Firefox') ? '🦊' : s.device.includes('Safari') ? '🧭' : '💻'}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-white/90">{s.device}</span>
-                      {s.current && (
-                        <span className="px-2 py-0.5 bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] rounded text-[10px] font-medium">
-                          CURRENT
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-white/40">
-                      <span>{s.ip}</span>
-                      <span>•</span>
-                      <span>{s.location}</span>
-                      <span>•</span>
-                      <span>{s.lastActive}</span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-lg text-xs border ${RISK_COLORS[s.risk]}`}>
-                    {s.risk}
-                  </span>
-                  {!s.current && (
-                    <button
-                      onClick={() => handleDisconnect(s.id)}
-                      disabled={disconnecting === s.id}
-                      className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-all disabled:opacity-50"
-                    >
-                      {disconnecting === s.id ? 'Disconnecting...' : 'Disconnect'}
-                    </button>
-                  )}
-                </div>
+        {loading ? (
+          <div className="text-center py-20 text-white/30">Loading sessions...</div>
+        ) : (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-4 mb-8">
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 text-center">
+                <div className="text-3xl font-bold text-[#00e5ff]">{sessions.length}</div>
+                <div className="text-xs text-white/40 mt-1">Active Sessions</div>
+              </div>
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 text-center">
+                <div className="text-3xl font-bold text-green-400">{sessions.filter(s => s.risk === 'low').length}</div>
+                <div className="text-xs text-white/40 mt-1">Trusted</div>
+              </div>
+              <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 text-center">
+                <div className="text-3xl font-bold text-red-400">{sessions.filter(s => s.risk === 'high').length}</div>
+                <div className="text-xs text-white/40 mt-1">Suspicious</div>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Disconnect All */}
-        <div className="mt-8 flex justify-center">
-          <button className="px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-all flex items-center gap-2">
-            🔒 Disconnect All Other Sessions
-          </button>
-        </div>
+            {/* Sessions List */}
+            <div className="space-y-4">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={`bg-white/[0.03] backdrop-blur-xl border rounded-2xl p-5 transition-all duration-300 hover:border-white/[0.12] ${
+                    s.current ? 'border-[#00e5ff]/30 shadow-[0_0_20px_rgba(0,229,255,0.05)]' : 'border-white/[0.06]'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg ${
+                        s.current ? 'bg-[#00e5ff]/10' : 'bg-white/[0.04]'
+                      }`}>
+                        {s.device.includes('Chrome') ? '🌐' : s.device.includes('Firefox') ? '🦊' : s.device.includes('Safari') ? '🧭' : '💻'}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white/90">{s.device}</span>
+                          {s.current && (
+                            <span className="px-2 py-0.5 bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] rounded text-[10px] font-medium">
+                              CURRENT
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-white/40">
+                          <span>{s.ip}</span>
+                          <span>•</span>
+                          <span>{s.location}</span>
+                          <span>•</span>
+                          <span>{s.lastActive}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className={`px-3 py-1 rounded-lg text-xs border ${RISK_COLORS[s.risk]}`}>
+                        {s.risk}
+                      </span>
+                      {!s.current && (
+                        <button
+                          onClick={() => handleDisconnect(s.id)}
+                          disabled={disconnecting === s.id}
+                          className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-all disabled:opacity-50"
+                        >
+                          {disconnecting === s.id ? 'Disconnecting...' : 'Disconnect'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Disconnect All */}
+            {sessions.filter(s => !s.current).length > 0 && (
+              <div className="mt-8 flex justify-center">
+                <button
+                  onClick={handleDisconnectAll}
+                  disabled={disconnectingAll}
+                  className="px-6 py-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  🔒 {disconnectingAll ? 'Disconnecting...' : 'Disconnect All Other Sessions'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </main>
   )

@@ -37,40 +37,60 @@ const STATUS_STYLES: Record<TrapStatus, { bg: string; text: string; border: stri
   expired: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/20', icon: '🟡' },
 }
 
-const MOCK_TRAPS: HoneyTrap[] = [
-  { id: 't1', contractAddress: '0xabc...111', chainName: 'Ethereum', tokenName: 'Free ETH Airdrop', tokenSymbol: 'FETH', amount: '10,000', label: 'Lure #1', status: 'armed', deployedAt: new Date(Date.now() - 86400000 * 2).toISOString() },
-  { id: 't2', contractAddress: '0xdef...222', chainName: 'Base', tokenName: 'Base Rewards', tokenSymbol: 'BREW', amount: '50,000', label: 'Lure #2', status: 'triggered', deployedAt: new Date(Date.now() - 86400000 * 5).toISOString(), triggeredAt: new Date(Date.now() - 3600000).toISOString(), drainerAddress: '0xdrainer...abc' },
-  { id: 't3', contractAddress: '0xghi...333', chainName: 'Arbitrum', tokenName: 'Arb Giveaway', tokenSymbol: 'AGIVE', amount: '5,000', label: 'Lure #3', status: 'armed', deployedAt: new Date(Date.now() - 86400000).toISOString() },
-]
-
-const MOCK_ALERTS: TrapAlert[] = [
-  { id: 'a1', trapId: 't2', drainerAddress: '0xdrainer...abc', chainName: 'Base', amount: '50,000 BREW', timestamp: new Date(Date.now() - 3600000).toISOString(), method: 'sweep' },
-  { id: 'a2', trapId: 't1', drainerAddress: '0xphish...xyz', chainName: 'Ethereum', amount: '2,500 FETH', timestamp: new Date(Date.now() - 7200000).toISOString(), method: 'approval' },
-]
-
 export default function HoneyTokenPage() {
-  const [traps, setTraps] = useState<HoneyTrap[]>(MOCK_TRAPS)
-  const [alerts] = useState<TrapAlert[]>(MOCK_ALERTS)
+  const [traps, setTraps] = useState<HoneyTrap[]>([])
+  const [alerts] = useState<TrapAlert[]>([])
   const [wizardStep, setWizardStep] = useState<WizardStep>('config')
   const [showWizard, setShowWizard] = useState(false)
   const [newTrap, setNewTrap] = useState({ tokenName: '', tokenSymbol: '', amount: '', chain: '1', label: '' })
+  const [deploying, setDeploying] = useState(false)
+  const [deployError, setDeployError] = useState<string | null>(null)
 
   const handleDeploy = useCallback(async () => {
     setWizardStep('deploy')
-    await new Promise(r => setTimeout(r, 2000))
-    const trap: HoneyTrap = {
-      id: `t-${Date.now()}`,
-      contractAddress: `0x${Array.from({length: 40}, () => Math.floor(Math.random() * 16).toString(16)).join('')}`,
-      chainName: newTrap.chain === '1' ? 'Ethereum' : newTrap.chain === '8453' ? 'Base' : 'Arbitrum',
-      tokenName: newTrap.tokenName,
-      tokenSymbol: newTrap.tokenSymbol,
-      amount: newTrap.amount,
-      label: newTrap.label,
-      status: 'armed',
-      deployedAt: new Date().toISOString(),
+    setDeploying(true)
+    setDeployError(null)
+
+    try {
+      const response = await fetch('/api/honey-token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'deploy',
+          tokenName: newTrap.tokenName,
+          tokenSymbol: newTrap.tokenSymbol,
+          amount: newTrap.amount,
+          chainId: parseInt(newTrap.chain),
+          label: newTrap.label,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Deployment failed')
+      }
+
+      const trap: HoneyTrap = {
+        id: data.trap.id,
+        contractAddress: data.trap.contractAddress,
+        chainName: data.trap.chainName,
+        tokenName: data.trap.tokenName,
+        tokenSymbol: data.trap.tokenSymbol,
+        amount: data.trap.amount,
+        label: data.trap.label,
+        status: data.trap.status as TrapStatus,
+        deployedAt: data.trap.deployedAt,
+      }
+
+      setTraps(prev => [...prev, trap])
+      setWizardStep('complete')
+    } catch (err) {
+      setDeployError(err instanceof Error ? err.message : 'Deployment failed')
+      setWizardStep('config')
+    } finally {
+      setDeploying(false)
     }
-    setTraps(prev => [...prev, trap])
-    setWizardStep('complete')
   }, [newTrap])
 
   const armedCount = traps.filter(t => t.status === 'armed').length
@@ -95,7 +115,6 @@ export default function HoneyTokenPage() {
       </nav>
 
       <div className="relative z-10 max-w-5xl mx-auto px-6 py-12 relative z-10">
-        {/* Header */}
         <div className="flex items-start justify-between mb-10">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#ffd700]/10 border border-[#ffd700]/20 text-[#ffd700] text-xs font-medium mb-4">
@@ -104,12 +123,11 @@ export default function HoneyTokenPage() {
             <h1 className="text-4xl font-black mb-2 bg-gradient-to-r from-[#ffd700] via-[#ff8c00] to-[#ffd700] bg-clip-text text-transparent">🍯 Honey Token</h1>
             <p className="text-white/40">Deploy trap tokens to detect and trace drainer activity</p>
           </div>
-          <button onClick={() => { setShowWizard(true); setWizardStep('config') }} className="px-5 py-2.5 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all">
+          <button onClick={() => { setShowWizard(true); setWizardStep('config'); setDeployError(null) }} className="px-5 py-2.5 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black hover:shadow-[0_0_30px_rgba(255,215,0,0.2)] transition-all">
             + Deploy Trap
           </button>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
             { label: 'Active Traps', value: armedCount, icon: '🎯', color: '#00ff87' },
@@ -125,7 +143,6 @@ export default function HoneyTokenPage() {
           ))}
         </div>
 
-        {/* Wizard Modal */}
         {showWizard && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowWizard(false)}>
             <div className="w-full max-w-lg p-6 bg-[#0a0a0f] border border-white/[0.1] rounded-3xl" onClick={e => e.stopPropagation()}>
@@ -133,6 +150,11 @@ export default function HoneyTokenPage() {
                 <>
                   <h2 className="text-xl font-bold mb-2">🍯 Deploy Honey Token</h2>
                   <p className="text-white/30 text-sm mb-6">Configure your trap token to lure drainers</p>
+                  {deployError && (
+                    <div className="mb-4 p-3 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-[#ff3b3b] text-sm">
+                      {deployError}
+                    </div>
+                  )}
                   <div className="space-y-3 mb-4">
                     <div>
                       <label className="text-white/40 text-xs mb-1 block">Token Name *</label>
@@ -165,7 +187,9 @@ export default function HoneyTokenPage() {
                   </div>
                   <div className="flex gap-3">
                     <button onClick={() => setShowWizard(false)} className="flex-1 px-4 py-2.5 bg-white/[0.05] border border-white/[0.08] rounded-xl text-sm text-white/50">Cancel</button>
-                    <button onClick={() => setWizardStep('deploy')} disabled={!newTrap.tokenName || !newTrap.tokenSymbol} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black disabled:opacity-30">Next: Deploy</button>
+                    <button onClick={handleDeploy} disabled={!newTrap.tokenName || !newTrap.tokenSymbol || deploying} className="flex-1 px-4 py-2.5 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black disabled:opacity-30">
+                      {deploying ? 'Deploying...' : 'Deploy Trap'}
+                    </button>
                   </div>
                 </>
               )}
@@ -177,9 +201,6 @@ export default function HoneyTokenPage() {
                   </svg>
                   <p className="text-white/60 font-medium">Deploying honey token...</p>
                   <p className="text-white/30 text-xs mt-1">Deploying contract and seeding balance</p>
-                  <button onClick={handleDeploy} className="mt-6 px-6 py-2 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black">
-                    Simulate Deploy
-                  </button>
                 </div>
               )}
               {wizardStep === 'complete' && (
@@ -187,49 +208,54 @@ export default function HoneyTokenPage() {
                   <span className="text-5xl block mb-4">✅</span>
                   <h3 className="text-xl font-bold mb-2">Trap Deployed!</h3>
                   <p className="text-white/30 text-sm mb-6">Your honey token is now armed and monitoring</p>
-                  <button onClick={() => setShowWizard(false)} className="px-6 py-2.5 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black">Done</button>
+                  <button onClick={() => { setShowWizard(false); setNewTrap({ tokenName: '', tokenSymbol: '', amount: '', chain: '1', label: '' }) }} className="px-6 py-2.5 bg-gradient-to-r from-[#ffd700] to-[#ff8c00] rounded-xl text-sm font-bold text-black">Done</button>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        {/* Active Traps */}
         <div className="mb-10">
           <h2 className="text-lg font-bold mb-4">🎯 Active Traps</h2>
-          <div className="space-y-3">
-            {traps.map(trap => {
-              const style = STATUS_STYLES[trap.status]
-              return (
-                <div key={trap.id} className={`p-5 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl hover:border-white/[0.12] transition-all`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${style.bg} border ${style.border}`}>
-                        {trap.status === 'armed' ? '🍯' : trap.status === 'triggered' ? '🚨' : '⏱️'}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-bold">{trap.label}</h4>
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${style.bg} ${style.text} border ${style.border} capitalize`}>{trap.status}</span>
-                          <span className="px-2 py-0.5 rounded text-[10px] bg-white/[0.05] text-white/30">{trap.chainName}</span>
+          {traps.length === 0 ? (
+            <div className="p-8 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-center">
+              <span className="text-4xl block mb-3">🍯</span>
+              <p className="text-white/30 text-sm">No traps deployed yet. Click &quot;Deploy Trap&quot; to create your first honey token.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {traps.map(trap => {
+                const style = STATUS_STYLES[trap.status]
+                return (
+                  <div key={trap.id} className={`p-5 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl hover:border-white/[0.12] transition-all`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${style.bg} border ${style.border}`}>
+                          {trap.status === 'armed' ? '🍯' : trap.status === 'triggered' ? '🚨' : '⏱️'}
                         </div>
-                        <p className="text-white/30 text-xs mt-0.5">{trap.tokenName} ({trap.tokenSymbol}) — {trap.amount} tokens</p>
-                        <p className="text-white/20 text-[10px] font-mono mt-0.5">{trap.contractAddress}</p>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-bold">{trap.label}</h4>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${style.bg} ${style.text} border ${style.border} capitalize`}>{trap.status}</span>
+                            <span className="px-2 py-0.5 rounded text-[10px] bg-white/[0.05] text-white/30">{trap.chainName}</span>
+                          </div>
+                          <p className="text-white/30 text-xs mt-0.5">{trap.tokenName} ({trap.tokenSymbol}) — {trap.amount} tokens</p>
+                          <p className="text-white/20 text-[10px] font-mono mt-0.5">{trap.contractAddress}</p>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-white/20 text-[10px]">Deployed {new Date(trap.deployedAt).toLocaleDateString()}</p>
-                      {trap.triggeredAt && <p className="text-[#ff3b3b]/60 text-[10px]">Triggered {new Date(trap.triggeredAt).toLocaleString()}</p>}
-                      {trap.drainerAddress && <p className="text-[#ff3b3b]/40 text-[10px] font-mono">Drainer: {trap.drainerAddress}</p>}
+                      <div className="text-right">
+                        <p className="text-white/20 text-[10px]">Deployed {new Date(trap.deployedAt).toLocaleDateString()}</p>
+                        {trap.triggeredAt && <p className="text-[#ff3b3b]/60 text-[10px]">Triggered {new Date(trap.triggeredAt).toLocaleString()}</p>}
+                        {trap.drainerAddress && <p className="text-[#ff3b3b]/40 text-[10px] font-mono">Drainer: {trap.drainerAddress}</p>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        {/* Alert Feed */}
         <div>
           <h2 className="text-lg font-bold mb-4 flex items-center gap-2">🔔 Alert Feed {alerts.length > 0 && <span className="px-2 py-0.5 rounded-full bg-[#ff3b3b]/20 text-[#ff3b3b] text-xs">{alerts.length}</span>}</h2>
           {alerts.length === 0 ? (

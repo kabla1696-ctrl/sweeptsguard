@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Whale {
   address: string
@@ -51,29 +51,81 @@ export default function WhaleTrackerPage() {
   const [newAddress, setNewAddress] = useState('')
   const [alertThreshold, setAlertThreshold] = useState(100000)
 
-  const filteredWhales = whales.filter(w => filter === 'all' || w.category === filter)
-    .sort((a, b) => {
-      if (sortBy === 'netWorth') return b.netWorth - a.netWorth
-      if (sortBy === 'winRate') return (b.winRate || 0) - (a.winRate || 0)
-      if (sortBy === 'profit') return (b.profitLoss30d || 0) - (a.profitLoss30d || 0)
-      return 0
-    })
+  // Fetch whale data from API
+  useEffect(() => {
+    fetchWhaleData()
+  }, [])
 
-  const addWhale = () => {
+  const fetchWhaleData = async () => {
+    try {
+      const res = await fetch('/api/whale-tracker')
+      const data = await res.json()
+      if (res.ok) {
+        if (data.whales?.length) {
+          setWhales(data.whales.map((w: { address: string; label: string; category: string; estimatedNetWorth: number; chains: number[]; winRate?: number; profitLoss30d?: number; lastActivity: number; avatar?: string }) => ({
+            address: w.address,
+            label: w.label,
+            category: w.category,
+            netWorth: w.estimatedNetWorth,
+            chains: w.chains.map((c: number) => c === 1 ? 'Ethereum' : c === 8453 ? 'Base' : c === 42161 ? 'Arbitrum' : c === 137 ? 'Polygon' : c === 56 ? 'BSC' : `Chain ${c}`),
+            winRate: w.winRate || 0,
+            profitLoss30d: w.profitLoss30d || 0,
+            lastActivity: formatTimeAgo(w.lastActivity),
+            avatar: w.avatar || '🐋',
+          })))
+        }
+        if (data.recentTrades?.length) {
+          setTrades(data.recentTrades.map((t: { id: string; whaleLabel: string; action: string; tokenSymbol: string; amountFormatted: string; valueUsd: number; chainName: string; timestamp: string }) => ({
+            id: t.id,
+            whale: t.whaleLabel,
+            action: t.action,
+            token: t.tokenSymbol,
+            amount: parseFloat(t.amountFormatted?.replace(/,/g, '') || '0'),
+            value: t.valueUsd,
+            chain: t.chainName,
+            timestamp: formatTimeAgo(new Date(t.timestamp).getTime()),
+          })))
+        }
+      }
+    } catch {}
+  }
+
+  function formatTimeAgo(ts: number): string {
+    const diff = Date.now() - ts
+    if (diff < 60000) return 'just now'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
+    return `${Math.floor(diff / 86400000)}d ago`
+  }
+
+  const addWhale = async () => {
     if (!newAddress.startsWith('0x') || newAddress.length !== 42) return
-    const newW: Whale = {
-      address: newAddress,
-      label: `Whale ${whales.length + 1}`,
-      category: 'unknown',
-      netWorth: 0,
-      chains: ['Ethereum'],
-      winRate: 0,
-      profitLoss30d: 0,
-      lastActivity: 'just now',
-      avatar: '🐋'
-    }
-    setWhales([...whales, newW])
-    setNewAddress('')
+    setLoading(true)
+    try {
+      const res = await fetch('/api/whale-tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'follow', address: newAddress, label: `Whale ${whales.length + 1}` }),
+      })
+      if (res.ok) {
+        await fetchWhaleData()
+        setNewAddress('')
+      }
+    } catch {}
+    setLoading(false)
+  }
+
+  const scanTrades = async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/whale-tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'scan' }),
+      })
+      if (res.ok) await fetchWhaleData()
+    } catch {}
+    setLoading(false)
   }
 
   const formatUSD = (n: number) => {
@@ -82,6 +134,14 @@ export default function WhaleTrackerPage() {
     if (n >= 1e3) return `$${(n / 1e3).toFixed(0)}K`
     return `$${n.toFixed(0)}`
   }
+
+  const filteredWhales = whales.filter(w => filter === 'all' || w.category === filter)
+    .sort((a, b) => {
+      if (sortBy === 'netWorth') return b.netWorth - a.netWorth
+      if (sortBy === 'winRate') return (b.winRate || 0) - (a.winRate || 0)
+      if (sortBy === 'profit') return (b.profitLoss30d || 0) - (a.profitLoss30d || 0)
+      return 0
+    })
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-blue-950 to-gray-900 p-6">
@@ -119,6 +179,9 @@ export default function WhaleTrackerPage() {
             />
             <button onClick={addWhale} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">
               + Track
+            </button>
+            <button onClick={scanTrades} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50">
+              {loading ? 'Scanning...' : '🔍 Scan Trades'}
             </button>
           </div>
           <div className="mt-3 flex gap-2 items-center">

@@ -1,14 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import Link from 'next/link'
 
-const MOCK_LOCKS = [
-  { id: '1', asset: 'ETH', amount: '5.0', unlockDate: '2026-06-15', status: 'locked', progress: 65 },
-  { id: '2', asset: 'USDC', amount: '10,000', unlockDate: '2026-07-01', status: 'locked', progress: 40 },
-  { id: '3', asset: 'WBTC', amount: '0.5', unlockDate: '2026-05-25', status: 'locked', progress: 92 },
-  { id: '4', asset: 'ETH', amount: '2.0', unlockDate: '2026-05-10', status: 'unlocked', progress: 100 },
-]
+interface TimeLock {
+  id: string
+  asset: string
+  amount: string
+  unlockDate: string
+  status: 'locked' | 'unlocked' | 'cancelled'
+  progress: number
+  createdAt: string
+  durationHours: number
+}
 
 const DURATIONS = [
   { label: '1 Day', hours: 24 },
@@ -23,31 +27,71 @@ export default function TimeLockPage() {
   const [amount, setAmount] = useState('')
   const [duration, setDuration] = useState(168)
   const [customHours, setCustomHours] = useState('')
-  const [locks, setLocks] = useState(MOCK_LOCKS)
+  const [locks, setLocks] = useState<TimeLock[]>([])
   const [creating, setCreating] = useState(false)
   const [canceling, setCanceling] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchLocks = useCallback(async () => {
+    try {
+      const res = await fetch('/api/time-lock')
+      if (!res.ok) throw new Error('Failed to load locks')
+      const data = await res.json()
+      setLocks(data.locks || [])
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load data')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchLocks() }, [fetchLocks])
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setLocks(prev => [{
-      id: String(Date.now()),
-      asset,
-      amount: amount || '0',
-      unlockDate: new Date(Date.now() + (duration || parseInt(customHours) || 168) * 3600000).toISOString().split('T')[0],
-      status: 'locked',
-      progress: 0,
-    }, ...prev])
-    setCreating(false)
-    setAmount('')
+    setError(null)
+    try {
+      const hours = duration || parseInt(customHours) || 168
+      const res = await fetch('/api/time-lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', asset, amount: amount || '0', durationHours: hours }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to create lock')
+      }
+      setAmount('')
+      await fetchLocks()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create lock')
+    } finally {
+      setCreating(false)
+    }
   }
 
   const handleCancel = async (id: string) => {
     setCanceling(id)
-    await new Promise(r => setTimeout(r, 1000))
-    setLocks(prev => prev.filter(l => l.id !== id))
-    setCanceling(null)
+    setError(null)
+    try {
+      const res = await fetch('/api/time-lock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel', id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to cancel lock')
+      }
+      await fetchLocks()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel lock')
+    } finally {
+      setCanceling(null)
+    }
   }
 
   return (
@@ -80,6 +124,13 @@ export default function TimeLockPage() {
           </h1>
           <p className="text-white/40 text-lg max-w-xl mx-auto">Lock your assets for a set duration. Prevent impulsive trades and protect against hacks.</p>
         </div>
+
+        {error && (
+          <div className="mb-6 p-4 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-sm text-[#ff3b3b]">
+            {error}
+            <button onClick={() => setError(null)} className="ml-3 text-xs underline">dismiss</button>
+          </div>
+        )}
 
         {/* Create Lock Form */}
         <form onSubmit={handleCreate} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-8 mb-8 hover:border-amber-500/20 transition-all duration-500">
@@ -122,46 +173,57 @@ export default function TimeLockPage() {
         <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
           <span className="text-amber-400">⏳</span> Active Locks
         </h2>
-        <div className="space-y-4">
-          {locks.map((l) => (
-            <div key={l.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 hover:border-white/[0.12] transition-all">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-lg">
-                    {l.status === 'unlocked' ? '🔓' : '🔒'}
+        {loading ? (
+          <div className="text-center py-12 text-white/30">Loading locks...</div>
+        ) : locks.length === 0 ? (
+          <div className="p-8 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-center">
+            <span className="text-4xl block mb-3">🔒</span>
+            <p className="text-white/30 text-sm">No locks created yet</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {locks.map((l) => (
+              <div key={l.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 hover:border-white/[0.12] transition-all">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-lg">
+                      {l.status === 'unlocked' ? '🔓' : l.status === 'cancelled' ? '❌' : '🔒'}
+                    </div>
+                    <div>
+                      <span className="font-semibold text-white/90">{l.amount} {l.asset}</span>
+                      <div className="text-xs text-white/40 mt-0.5">Unlocks: {l.unlockDate}</div>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-semibold text-white/90">{l.amount} {l.asset}</span>
-                    <div className="text-xs text-white/40 mt-0.5">Unlocks: {l.unlockDate}</div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-3 py-1 rounded-lg text-xs border ${
+                      l.status === 'unlocked' ? 'text-green-400 bg-green-500/10 border-green-500/20' :
+                      l.status === 'cancelled' ? 'text-white/30 bg-white/5 border-white/10' :
+                      'text-amber-400 bg-amber-500/10 border-amber-500/20'
+                    }`}>
+                      {l.status}
+                    </span>
+                    {l.status === 'locked' && (
+                      <button
+                        onClick={() => handleCancel(l.id)}
+                        disabled={canceling === l.id}
+                        className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-all disabled:opacity-50"
+                      >
+                        {canceling === l.id ? 'Canceling...' : 'Cancel'}
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`px-3 py-1 rounded-lg text-xs border ${
-                    l.status === 'unlocked' ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'
-                  }`}>
-                    {l.status}
-                  </span>
-                  {l.status === 'locked' && (
-                    <button
-                      onClick={() => handleCancel(l.id)}
-                      disabled={canceling === l.id}
-                      className="px-4 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-sm font-medium hover:bg-red-500/20 transition-all disabled:opacity-50"
-                    >
-                      {canceling === l.id ? 'Canceling...' : 'Cancel'}
-                    </button>
-                  )}
+                <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ${l.status === 'unlocked' ? 'bg-green-400' : 'bg-gradient-to-r from-amber-500 to-yellow-500'}`}
+                    style={{ width: `${l.progress}%` }}
+                  />
                 </div>
+                <div className="text-right text-xs text-white/30 mt-1">{l.progress}% elapsed</div>
               </div>
-              <div className="h-2 bg-white/[0.06] rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-1000 ${l.status === 'unlocked' ? 'bg-green-400' : 'bg-gradient-to-r from-amber-500 to-yellow-500'}`}
-                  style={{ width: `${l.progress}%` }}
-                />
-              </div>
-              <div className="text-right text-xs text-white/30 mt-1">{l.progress}% elapsed</div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </main>
   )

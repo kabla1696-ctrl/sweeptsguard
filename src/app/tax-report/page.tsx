@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 interface TaxEvent {
   id: string
@@ -15,31 +15,128 @@ interface TaxEvent {
   chain: string
 }
 
-const DEMO_EVENTS: TaxEvent[] = [
-  { id: '1', date: '2026-01-15', type: 'buy', asset: 'ETH', amount: 5, price: 3200, value: 16000, costBasis: 16000, gain: 0, chain: 'Ethereum' },
-  { id: '2', date: '2026-02-20', type: 'sell', asset: 'ETH', amount: 2, price: 3800, value: 7600, costBasis: 6400, gain: 1200, chain: 'Ethereum' },
-  { id: '3', date: '2026-03-10', type: 'swap', asset: 'ETH→ARB', amount: 1, price: 3500, value: 3500, costBasis: 3200, gain: 300, chain: 'Arbitrum' },
-  { id: '4', date: '2026-03-25', type: 'airdrop', asset: 'TOKEN', amount: 1000, price: 2.5, value: 2500, costBasis: 0, gain: 2500, chain: 'Ethereum' },
-  { id: '5', date: '2026-04-05', type: 'staking', asset: 'ETH', amount: 0.5, price: 3600, value: 1800, costBasis: 1600, gain: 200, chain: 'Ethereum' },
-  { id: '6', date: '2026-04-20', type: 'sell', asset: 'BTC', amount: 0.1, price: 95000, value: 9500, costBasis: 6200, gain: 3300, chain: 'Bitcoin' },
-]
+interface TaxSummary {
+  taxYear: number
+  country: string
+  costBasisMethod: string
+  totalGains: number
+  totalLosses: number
+  netGainLoss: number
+  shortTermGains: number
+  shortTermLosses: number
+  longTermGains: number
+  longTermLosses: number
+  totalIncome: number
+  totalFees: number
+  totalTransactions: number
+  assetBreakdown: Array<{
+    asset: string
+    totalBought: number
+    totalSold: number
+    realizedGain: number
+    avgCostBasis: number
+  }>
+  monthlyBreakdown: Array<{
+    month: string
+    gains: number
+    losses: number
+    income: number
+    transactions: number
+  }>
+}
 
 export default function TaxReportPage() {
-  const [events] = useState<TaxEvent[]>(DEMO_EVENTS)
+  const [events, setEvents] = useState<TaxEvent[]>([])
+  const [summary, setSummary] = useState<TaxSummary | null>(null)
   const [year, setYear] = useState('2026')
-  const [country, setCountry] = useState('us')
+  const [country, setCountry] = useState('US')
   const [costMethod, setCostMethod] = useState<'FIFO' | 'LIFO' | 'HIFO'>('FIFO')
   const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState<string | null>(null)
 
-  const totalGains = events.filter(e => e.gain > 0).reduce((s, e) => s + e.gain, 0)
-  const totalLosses = Math.abs(events.filter(e => e.gain < 0).reduce((s, e) => s + e.gain, 0))
-  const netGain = totalGains - totalLosses
-  const totalVolume = events.reduce((s, e) => s + e.value, 0)
-
-  const generateReport = () => {
+  const generateReport = useCallback(async () => {
     setGenerating(true)
-    setTimeout(() => setGenerating(false), 3000)
+    setError(null)
+
+    try {
+      const response = await fetch('/api/tax-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'generate',
+          year: parseInt(year),
+          country,
+          costMethod,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Report generation failed')
+      }
+
+      setSummary(data.summary)
+      setEvents(data.transactions || [])
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate report')
+    } finally {
+      setGenerating(false)
+    }
+  }, [year, country, costMethod])
+
+  // Generate report on initial load
+  useEffect(() => {
+    generateReport()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleExport = async (format: 'csv' | 'text') => {
+    setExporting(format)
+
+    try {
+      const response = await fetch('/api/tax-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: format === 'csv' ? 'export-csv' : 'export-text',
+          year: parseInt(year),
+          country,
+          costMethod,
+        }),
+      })
+
+      if (format === 'csv') {
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `sweeptsguard-tax-report-${year}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        const data = await response.json()
+        if (data.success && data.report) {
+          const blob = new Blob([data.report], { type: 'text/plain' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = data.filename || `tax-report-${year}.txt`
+          a.click()
+          URL.revokeObjectURL(url)
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Export failed')
+    } finally {
+      setExporting(null)
+    }
   }
+
+  const totalGains = summary?.totalGains ?? 0
+  const totalLosses = summary?.totalLosses ?? 0
+  const netGain = summary?.netGainLoss ?? 0
+  const totalVolume = events.reduce((s, e) => s + e.value, 0)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-green-950 to-gray-900 p-6">
@@ -54,7 +151,12 @@ export default function TaxReportPage() {
           </button>
         </div>
 
-        {/* Config */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
+            {error}
+          </div>
+        )}
+
         <div className="grid md:grid-cols-3 gap-4 mb-8">
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
             <label className="text-gray-400 text-sm mb-2 block">Tax Year</label>
@@ -67,12 +169,13 @@ export default function TaxReportPage() {
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
             <label className="text-gray-400 text-sm mb-2 block">Country</label>
             <select value={country} onChange={e => setCountry(e.target.value)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
-              <option value="us">🇺🇸 United States</option>
-              <option value="uk">🇬🇧 United Kingdom</option>
-              <option value="de">🇩🇪 Germany</option>
-              <option value="jp">🇯🇵 Japan</option>
-              <option value="in">🇮🇳 India</option>
-              <option value="bd">🇧🇩 Bangladesh</option>
+              <option value="US">🇺🇸 United States</option>
+              <option value="UK">🇬🇧 United Kingdom</option>
+              <option value="DE">🇩🇪 Germany</option>
+              <option value="JP">🇯🇵 Japan</option>
+              <option value="SG">🇸🇬 Singapore</option>
+              <option value="AU">🇦🇺 Australia</option>
+              <option value="CA">🇨🇦 Canada</option>
             </select>
           </div>
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
@@ -85,13 +188,12 @@ export default function TaxReportPage() {
           </div>
         </div>
 
-        {/* Summary */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {[
-            { label: 'Total Gains', value: `$${totalGains.toLocaleString()}`, color: 'text-green-400', icon: '📈' },
-            { label: 'Total Losses', value: `$${totalLosses.toLocaleString()}`, color: 'text-red-400', icon: '📉' },
-            { label: 'Net P/L', value: `$${netGain.toLocaleString()}`, color: netGain >= 0 ? 'text-green-400' : 'text-red-400', icon: '💰' },
-            { label: 'Total Volume', value: `$${totalVolume.toLocaleString()}`, color: 'text-blue-400', icon: '📊' },
+            { label: 'Total Gains', value: `$${totalGains.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: 'text-green-400', icon: '📈' },
+            { label: 'Total Losses', value: `$${totalLosses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: 'text-red-400', icon: '📉' },
+            { label: 'Net P/L', value: `$${netGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: netGain >= 0 ? 'text-green-400' : 'text-red-400', icon: '💰' },
+            { label: 'Total Volume', value: `$${totalVolume.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, color: 'text-blue-400', icon: '📊' },
           ].map((s, i) => (
             <div key={i} className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4 text-center">
               <div className="text-2xl mb-1">{s.icon}</div>
@@ -101,7 +203,27 @@ export default function TaxReportPage() {
           ))}
         </div>
 
-        {/* Events Table */}
+        {summary && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4 text-center">
+              <div className="text-lg font-bold text-green-400">${summary.shortTermGains.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="text-xs text-gray-400">Short-Term Gains</div>
+            </div>
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4 text-center">
+              <div className="text-lg font-bold text-red-400">${summary.shortTermLosses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="text-xs text-gray-400">Short-Term Losses</div>
+            </div>
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4 text-center">
+              <div className="text-lg font-bold text-green-400">${summary.longTermGains.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="text-xs text-gray-400">Long-Term Gains</div>
+            </div>
+            <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4 text-center">
+              <div className="text-lg font-bold text-purple-400">${summary.totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              <div className="text-xs text-gray-400">Total Income</div>
+            </div>
+          </div>
+        )}
+
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl overflow-hidden mb-8">
           <div className="p-4 border-b border-gray-700">
             <h2 className="text-white font-semibold">📝 Taxable Events ({events.length})</h2>
@@ -130,11 +252,11 @@ export default function TaxReportPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3 text-white font-medium text-sm">{e.asset}</td>
-                    <td className="px-4 py-3 text-right text-gray-300 text-sm">{e.amount}</td>
-                    <td className="px-4 py-3 text-right text-white text-sm">${e.value.toLocaleString()}</td>
-                    <td className="px-4 py-3 text-right text-gray-400 text-sm">${e.costBasis.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right text-gray-300 text-sm">{e.amount.toFixed(6)}</td>
+                    <td className="px-4 py-3 text-right text-white text-sm">${e.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-3 text-right text-gray-400 text-sm">${e.costBasis.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td className={`px-4 py-3 text-right font-medium text-sm ${e.gain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      {e.gain >= 0 ? '+' : ''}${e.gain.toLocaleString()}
+                      {e.gain >= 0 ? '+' : ''}${e.gain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-sm">{e.chain}</td>
                   </tr>
@@ -144,12 +266,23 @@ export default function TaxReportPage() {
           </div>
         </div>
 
-        {/* Export */}
         <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-6">
           <h2 className="text-white font-semibold mb-4">📥 Export Options</h2>
           <div className="flex flex-wrap gap-3">
-            <button className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium">📄 Download PDF</button>
-            <button className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium">📊 Download CSV</button>
+            <button
+              onClick={() => handleExport('csv')}
+              disabled={exporting === 'csv'}
+              className="bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium"
+            >
+              {exporting === 'csv' ? '⏳ Exporting...' : '📊 Download CSV'}
+            </button>
+            <button
+              onClick={() => handleExport('text')}
+              disabled={exporting === 'text'}
+              className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2 rounded-lg font-medium"
+            >
+              {exporting === 'text' ? '⏳ Exporting...' : '📄 Download Report'}
+            </button>
             <button className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-medium">📑 TurboTax Format</button>
             <button className="bg-yellow-600 hover:bg-yellow-700 text-white px-6 py-2 rounded-lg font-medium">📋 IRS Form 8949</button>
           </div>

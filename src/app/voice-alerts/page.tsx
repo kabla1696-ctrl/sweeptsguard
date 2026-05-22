@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import Link from 'next/link'
 
 const LANGUAGES = [
@@ -37,20 +37,114 @@ const URGENCY_COLORS: Record<string, string> = {
   low: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
 }
 
+const LANG_MAP: Record<string, string> = {
+  en: 'en-US',
+  es: 'es-ES',
+  zh: 'zh-CN',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  ar: 'ar-SA',
+  hi: 'hi-IN',
+  bn: 'bn-BD',
+}
+
 export default function VoiceAlertsPage() {
   const [language, setLanguage] = useState('en')
   const [voice, setVoice] = useState('aria')
   const [previewing, setPreviewing] = useState(false)
   const [alerts, setAlerts] = useState(ALERT_TYPES)
+  const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<string | null>(null)
 
-  const handlePreview = async () => {
+  const handlePreview = useCallback(async () => {
     setPreviewing(true)
-    await new Promise(r => setTimeout(r, 2000))
-    setPreviewing(false)
-  }
+    setSaveMessage(null)
+
+    try {
+      // Call the API to get the preview text
+      const response = await fetch('/api/voice-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'preview',
+          language,
+          voiceId: voice,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Preview failed')
+      }
+
+      // Use Web Speech API for actual TTS playback
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        const utterance = new SpeechSynthesisUtterance(data.preview.message || data.preview.text)
+        utterance.lang = data.preview.utterance?.lang || LANG_MAP[language] || 'en-US'
+        utterance.rate = data.preview.utterance?.rate || 1.0
+        utterance.volume = data.preview.utterance?.volume || 0.8
+
+        // Adjust pitch based on voice preset
+        switch (voice) {
+          case 'aria': utterance.pitch = 1.1; break
+          case 'marcus': utterance.pitch = 0.7; break
+          case 'nova': utterance.pitch = 1.2; break
+          case 'atlas': utterance.pitch = 0.9; break
+          default: utterance.pitch = 1.0
+        }
+
+        utterance.onend = () => setPreviewing(false)
+        utterance.onerror = () => setPreviewing(false)
+
+        window.speechSynthesis.cancel() // Cancel any ongoing speech
+        window.speechSynthesis.speak(utterance)
+
+        // Fallback timeout in case onend doesn't fire
+        setTimeout(() => setPreviewing(false), 10000)
+      } else {
+        // Web Speech API not available
+        setSaveMessage('Web Speech API not available in this browser')
+        setPreviewing(false)
+      }
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : 'Preview failed')
+      setPreviewing(false)
+    }
+  }, [language, voice])
 
   const toggleAlert = (id: string) => {
     setAlerts(prev => prev.map(a => a.id === id ? { ...a, enabled: !a.enabled } : a))
+  }
+
+  const handleSavePreferences = async () => {
+    setSaving(true)
+    setSaveMessage(null)
+
+    try {
+      const response = await fetch('/api/voice-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save-preferences',
+          language,
+          speed: 1.0,
+          volume: 80,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Save failed')
+      }
+
+      setSaveMessage('Preferences saved successfully!')
+    } catch (err) {
+      setSaveMessage(err instanceof Error ? err.message : 'Failed to save preferences')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -85,7 +179,6 @@ export default function VoiceAlertsPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Language & Voice */}
           <div className="space-y-6">
             <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
               <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -137,7 +230,6 @@ export default function VoiceAlertsPage() {
               </div>
             </div>
 
-            {/* Preview */}
             <button
               onClick={handlePreview}
               disabled={previewing}
@@ -145,9 +237,22 @@ export default function VoiceAlertsPage() {
             >
               {previewing ? '🔊 Playing Preview...' : '🔊 Preview Voice'}
             </button>
+
+            <button
+              onClick={handleSavePreferences}
+              disabled={saving}
+              className="w-full py-3 rounded-xl font-semibold text-sm bg-white/[0.05] border border-white/[0.08] text-white/60 hover:text-white hover:border-white/[0.15] transition-all disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : '💾 Save Preferences'}
+            </button>
+
+            {saveMessage && (
+              <div className={`p-3 rounded-xl text-sm text-center ${saveMessage.includes('success') || saveMessage.includes('saved') ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+                {saveMessage}
+              </div>
+            )}
           </div>
 
-          {/* Alert Configuration */}
           <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <span className="text-[#00ff87]">🔔</span> Alert Types
@@ -174,7 +279,6 @@ export default function VoiceAlertsPage() {
               ))}
             </div>
 
-            {/* Sound Library */}
             <div className="mt-6 pt-6 border-t border-white/[0.06]">
               <h3 className="text-sm font-semibold mb-3 text-white/60">🎵 Sound Library</h3>
               <div className="grid grid-cols-3 gap-2">

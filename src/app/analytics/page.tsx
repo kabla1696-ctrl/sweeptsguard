@@ -1,19 +1,49 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getAnalytics, clearAnalytics, type AnalyticsData } from '@/lib/analytics'
 import { CHAINS } from '@/lib/chains'
+
+interface AnalyticsData {
+  totalScans: number
+  totalRecoveries: number
+  successfulRecoveries: number
+  failedRecoveries: number
+  totalRecoveredUsd: number
+  revenueUsd: number
+  chainBreakdown: Record<number, number>
+  recentActivity: { id: string; timestamp: number; chainId: number; address: string; result: string; recoveryAttempted: boolean; recoverySuccess: boolean; valueRecoveredUsd?: number }[]
+  successRate: number
+}
 
 export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [mounted, setMounted] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const fetchAnalytics = async () => {
+    try {
+      const res = await fetch('/api/analytics')
+      const json = await res.json() as { success?: boolean; data?: AnalyticsData }
+      if (json.success && json.data) {
+        setData(json.data)
+      }
+    } catch {
+      // Fallback: show empty data
+      setData({
+        totalScans: 0, totalRecoveries: 0, successfulRecoveries: 0, failedRecoveries: 0,
+        totalRecoveredUsd: 0, revenueUsd: 0, chainBreakdown: {}, recentActivity: [], successRate: 0,
+      })
+    } finally {
+      setLoading(false)
+      setMounted(true)
+    }
+  }
 
   useEffect(() => {
-    setMounted(true)
-    setData(getAnalytics())
+    fetchAnalytics()
   }, [])
 
-  if (!mounted || !data) {
+  if (!mounted || loading || !data) {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full" />
@@ -44,7 +74,14 @@ export default function AnalyticsPage() {
             <p className="text-[var(--muted)] mt-1">Local analytics — no data leaves your device</p>
           </div>
           <button
-            onClick={() => { clearAnalytics(); setData(getAnalytics()); }}
+            onClick={async () => {
+              await fetch('/api/analytics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'clear' }),
+              })
+              fetchAnalytics()
+            }}
             className="px-4 py-2 text-sm bg-red-500/10 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
           >
             Clear Data
@@ -139,7 +176,7 @@ export default function AnalyticsPage() {
 
         {/* Footer note */}
         <p className="text-center text-xs text-[var(--muted)] mt-8">
-          🔒 All analytics stored locally in your browser. No external tracking.
+          🔒 Analytics aggregated server-side. Track events via the /api/analytics endpoint.
         </p>
       </div>
     </div>

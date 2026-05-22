@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 const PRIORITY_OPTIONS = [
@@ -38,15 +38,82 @@ export default function EmergencyAlertsPage() {
   const [phone, setPhone] = useState('')
   const [email, setEmail] = useState('')
   const [priority, setPriority] = useState('both')
+  const [contacts, setContacts] = useState<{ id: string; name: string; phone: string; email?: string; priority: string; enabled: boolean; triggers: string[] }[]>([])
+  const [alerts, setAlerts] = useState<typeof MOCK_ALERTS>(MOCK_ALERTS)
+  const [loading, setLoading] = useState(false)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState('')
 
-  const handleTest = async () => {
+  const fetchContacts = async () => {
+    try {
+      const res = await fetch('/api/emergency-alerts?action=contacts')
+      const data = await res.json()
+      if (res.ok && data.contacts) setContacts(data.contacts)
+    } catch {}
+  }
+
+  const fetchHistory = async () => {
+    try {
+      const res = await fetch('/api/emergency-alerts?action=history')
+      const data = await res.json()
+      if (res.ok && data.alerts) setAlerts(data.alerts)
+    } catch {}
+  }
+
+  useEffect(() => {
+    fetchContacts()
+    fetchHistory()
+  }, [])
+
+  const handleAddContact = async () => {
+    if (!name || !phone) return
+    setLoading(true)
+    try {
+      const res = await fetch('/api/emergency-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'addContact', name, phone, email, priority }),
+      })
+      if (res.ok) {
+        await fetchContacts()
+        setShowAdd(false)
+        setName('')
+        setPhone('')
+        setEmail('')
+        setPriority('both')
+      }
+    } catch {}
+    setLoading(false)
+  }
+
+  const handleTest = async (contactId?: string) => {
     setTesting(true)
     setTestResult('')
-    await new Promise(r => setTimeout(r, 1500))
-    setTestResult('✅ Test alert sent successfully!')
+    try {
+      const id = contactId || contacts[0]?.id
+      if (!id) { setTestResult('❌ No contacts to test'); setTesting(false); return }
+      const res = await fetch('/api/emergency-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'test', contactId: id }),
+      })
+      if (res.ok) setTestResult('✅ Test alert sent successfully!')
+      else setTestResult('❌ Test failed')
+    } catch {
+      setTestResult('❌ Network error')
+    }
     setTesting(false)
+  }
+
+  const handleDeleteContact = async (id: string) => {
+    try {
+      await fetch('/api/emergency-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deleteContact', id }),
+      })
+      await fetchContacts()
+    } catch {}
   }
 
   return (
@@ -132,19 +199,19 @@ export default function EmergencyAlertsPage() {
                     </select>
                   </div>
                 </div>
-                <button className="px-6 py-3 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black rounded-xl font-semibold text-sm hover:shadow-[0_0_20px_rgba(0,255,135,0.3)] transition-all">
-                  Save Contact
+                <button onClick={handleAddContact} disabled={loading} className="px-6 py-3 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black rounded-xl font-semibold text-sm hover:shadow-[0_0_20px_rgba(0,255,135,0.3)] transition-all disabled:opacity-50">
+                  {loading ? 'Saving...' : 'Save Contact'}
                 </button>
               </div>
             )}
 
             {/* Contact Cards */}
-            {[
-              { name: 'Alice', phone: '+1 234 567 8900', priority: 'both', triggers: 3 },
-              { name: 'Bob', phone: '+44 7911 123456', priority: 'call', triggers: 2 },
-              { name: 'Charlie', phone: '+880 1712 345678', priority: 'sms', triggers: 5 },
-            ].map((c, i) => (
-              <div key={i} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 hover:border-[#00ff87]/20 transition-all duration-300 group">
+            {contacts.length === 0 ? (
+              <div className="text-center py-8 text-white/40">
+                <p>No contacts yet. Add your first emergency contact above.</p>
+              </div>
+            ) : contacts.map((c, i) => (
+              <div key={c.id || i} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 hover:border-[#00ff87]/20 transition-all duration-300 group">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#00ff87]/20 to-[#00e5ff]/20 flex items-center justify-center text-lg font-bold text-[#00ff87]">
@@ -159,8 +226,11 @@ export default function EmergencyAlertsPage() {
                     <span className="px-3 py-1 bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] rounded-lg text-xs">
                       {PRIORITY_OPTIONS.find(o => o.value === c.priority)?.icon} {c.priority.toUpperCase()}
                     </span>
-                    <span className="text-white/30 text-xs">{c.triggers} triggers</span>
-                    <button className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-xs opacity-0 group-hover:opacity-100 transition-all">
+                    <span className="text-white/30 text-xs">{c.triggers?.length || 0} triggers</span>
+                    <button onClick={() => handleTest(c.id)} className="px-3 py-1.5 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400 rounded-lg text-xs">
+                      Test
+                    </button>
+                    <button onClick={() => handleDeleteContact(c.id)} className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg text-xs opacity-0 group-hover:opacity-100 transition-all">
                       Remove
                     </button>
                   </div>
@@ -176,7 +246,7 @@ export default function EmergencyAlertsPage() {
                   <p className="text-white/40 text-sm">Send a test alert to verify your setup works correctly.</p>
                 </div>
                 <button
-                  onClick={handleTest}
+                  onClick={() => handleTest()}
                   disabled={testing}
                   className="px-5 py-2.5 bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 rounded-xl text-sm font-medium hover:bg-yellow-500/30 transition-all disabled:opacity-50"
                 >
@@ -210,7 +280,11 @@ export default function EmergencyAlertsPage() {
         {tab === 'history' && (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold mb-4">Alert History</h2>
-            {MOCK_ALERTS.map((a) => (
+            {alerts.length === 0 ? (
+              <div className="text-center py-8 text-white/40">
+                <p>No alerts yet. Alerts will appear here when triggered.</p>
+              </div>
+            ) : alerts.map((a) => (
               <div key={a.id} className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-5 hover:border-white/[0.1] transition-all">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">

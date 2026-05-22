@@ -51,6 +51,15 @@ export default function WhiteLabelPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // White-label config state
+  const [wlPlatformName, setWlPlatformName] = useState('')
+  const [wlPrimaryColor, setWlPrimaryColor] = useState('#10b981')
+  const [wlSecondaryColor, setWlSecondaryColor] = useState('#6366f1')
+  const [wlWebhookUrl, setWlWebhookUrl] = useState('')
+  const [wlConfigs, setWlConfigs] = useState<Record<string, unknown>[]>([])
+  const [wlLoading, setWlLoading] = useState(false)
+  const [wlSuccess, setWlSuccess] = useState('')
+
   const handleGenerateKey = async () => {
     if (!apiEmail || !apiEmail.includes('@')) {
       setError('Valid email required')
@@ -71,6 +80,55 @@ export default function WhiteLabelPage() {
       setError('Failed to generate API key')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchConfigs = async () => {
+    try {
+      const res = await fetch('/api/white-label')
+      const json = await res.json() as { success?: boolean; data?: { configs: Record<string, unknown>[] } }
+      if (json.success && json.data) {
+        setWlConfigs(json.data.configs)
+      }
+    } catch {
+      // silently fail
+    }
+  }
+
+  const handleRegisterPlatform = async () => {
+    if (!apiEmail || !apiEmail.includes('@')) {
+      setError('Valid email required for registration')
+      return
+    }
+    if (!wlPlatformName || wlPlatformName.trim().length < 2) {
+      setError('Platform name must be at least 2 characters')
+      return
+    }
+    setWlLoading(true)
+    setError('')
+    try {
+      const res = await fetch('/api/white-label', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register',
+          email: apiEmail,
+          platformName: wlPlatformName,
+          tier: 'free',
+        }),
+      })
+      const json = await res.json() as { success?: boolean; error?: string }
+      if (!res.ok || !json.success) {
+        setError(json.error || 'Registration failed')
+        return
+      }
+      setWlSuccess('Platform registered!')
+      setTimeout(() => setWlSuccess(''), 3000)
+      fetchConfigs()
+    } catch {
+      setError('Registration failed')
+    } finally {
+      setWlLoading(false)
     }
   }
 
@@ -223,6 +281,81 @@ export default function WhiteLabelPage() {
                   <p className="text-green-400 font-semibold mb-2">✅ API Key Generated!</p>
                   <code className="text-sm font-mono text-white break-all">{apiKeyResult}</code>
                   <p className="text-xs text-white/30 mt-2">Save this key — it won&apos;t be shown again.</p>
+                </div>
+              )}
+            </div>
+
+            {/* White-Label Registration */}
+            <div className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
+              <h2 className="text-lg font-bold mb-4">🎨 Register Platform</h2>
+              <p className="text-white/40 text-sm mb-4">Register your platform for white-label integration</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <input
+                  type="text"
+                  value={wlPlatformName}
+                  onChange={e => setWlPlatformName(e.target.value)}
+                  placeholder="Platform name"
+                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
+                />
+                <input
+                  type="email"
+                  value={apiEmail}
+                  onChange={e => setApiEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                <div>
+                  <label className="text-white/30 text-xs mb-1 block">Primary Color</label>
+                  <input
+                    type="color"
+                    value={wlPrimaryColor}
+                    onChange={e => setWlPrimaryColor(e.target.value)}
+                    className="w-full h-10 rounded-lg cursor-pointer bg-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-white/30 text-xs mb-1 block">Secondary Color</label>
+                  <input
+                    type="color"
+                    value={wlSecondaryColor}
+                    onChange={e => setWlSecondaryColor(e.target.value)}
+                    className="w-full h-10 rounded-lg cursor-pointer bg-transparent"
+                  />
+                </div>
+                <input
+                  type="url"
+                  value={wlWebhookUrl}
+                  onChange={e => setWlWebhookUrl(e.target.value)}
+                  placeholder="Webhook URL (optional)"
+                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm self-end"
+                />
+              </div>
+              <button
+                onClick={handleRegisterPlatform}
+                disabled={wlLoading}
+                className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
+              >
+                {wlLoading ? 'Registering...' : '🚀 Register Platform'}
+              </button>
+
+              {wlSuccess && (
+                <p className="text-green-400 text-sm mt-3">✅ {wlSuccess}</p>
+              )}
+
+              {wlConfigs.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-white/30 text-xs font-semibold">Registered Platforms:</p>
+                  {wlConfigs.map((cfg, i) => (
+                    <div key={i} className="p-3 bg-white/[0.02] rounded-lg flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-white/70">{(cfg as Record<string, unknown>).platformName as string || 'Unknown'}</p>
+                        <p className="text-xs text-white/30">{(cfg as Record<string, unknown>).tier as string || 'free'} tier</p>
+                      </div>
+                      <span className="text-xs px-2 py-1 bg-green-500/10 text-green-400 rounded-full">Active</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
