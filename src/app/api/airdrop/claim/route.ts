@@ -7,6 +7,43 @@ import { captureError } from '@/lib/sentry'
 
 const PLATFORM_FEE_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 const PLATFORM_FEE_PERCENT = 20
+const REFERRER_COMMISSION_RATE = 0.05 // 5% of platform fee
+
+// In-memory claim tracking store
+const claimTrackingStore: Array<{
+  referralCode: string
+  claimerWallet: string
+  claimAmount: number
+  platformFee: number
+  referrerCommission: number
+  timestamp: string
+  status: string
+}> = []
+
+function recordReferralClaim(
+  referralCode: string | null,
+  walletAddress: string,
+  claimAmountRaw: string,
+  tokenDecimals: number
+) {
+  if (!referralCode) return
+  try {
+    const claimAmount = parseFloat(ethers.formatUnits(claimAmountRaw, tokenDecimals))
+    const platformFee = claimAmount * (PLATFORM_FEE_PERCENT / 100)
+    const referrerCommission = platformFee * REFERRER_COMMISSION_RATE
+    claimTrackingStore.push({
+      referralCode,
+      claimerWallet: walletAddress.toLowerCase(),
+      claimAmount,
+      platformFee,
+      referrerCommission,
+      timestamp: new Date().toISOString(),
+      status: 'completed',
+    })
+  } catch {
+    console.warn('[Referral] Failed to record claim tracking')
+  }
+}
 
 // ============================================================
 // Rate Limiting — simple in-memory per-IP sliding window
@@ -571,7 +608,13 @@ export async function POST(request: NextRequest) {
       claimData,
       merkleProof,
       tokenAmount,
+      referralCode,
     } = body
+
+    // Extract referral code from body or cookie
+    const refCode = referralCode
+      || request.cookies.get('sweeptsguard_referral')?.value
+      || null
 
     // Validate action against known values
     const VALID_ACTIONS = new Set(['preview', 'claim', 'sign', 'execute-signed', 'antidrain-rescue'])
@@ -883,12 +926,14 @@ export async function POST(request: NextRequest) {
         )
 
         if (bundleResult.success) {
+          recordReferralClaim(refCode, walletAddress, claimableRaw || '0', 18)
           return NextResponse.json({
             success: true,
             bundleHash: bundleResult.bundleHash,
             blockNumber: bundleResult.blockNumber,
             executionMethod: 'flashbots',
-            message: 'Claim executed via Flashbots atomic bundle — both TXs in same block'
+            message: 'Claim executed via Flashbots atomic bundle — both TXs in same block',
+            referralTracked: !!refCode,
           })
         }
 
@@ -975,13 +1020,15 @@ export async function POST(request: NextRequest) {
       ])
 
       if (claimReceipt && claimReceipt.status === 1) {
+        recordReferralClaim(refCode, walletAddress, claimableRaw || '0', 18)
         return NextResponse.json({
           success: true,
           fundTxHash: fundTxResponse.hash,
           claimTxHash: claimTxResponse.hash,
           blockNumber: claimReceipt.blockNumber,
           executionMethod: strategy.method,
-          message: `Claim executed via ${strategy.description}`
+          message: `Claim executed via ${strategy.description}`,
+          referralTracked: !!refCode,
         })
       }
 
@@ -1220,12 +1267,14 @@ export async function POST(request: NextRequest) {
       const receipt = await tx.wait(1, 60000).catch(() => null)
 
       if (receipt && receipt.status === 1) {
+        recordReferralClaim(refCode, walletAddress, claimableRaw || '0', 18)
         return NextResponse.json({
           success: true,
           txHash: tx.hash,
           blockNumber: receipt.blockNumber,
           executionMethod: 'eip712-signature',
           message: 'Claim executed via EIP-712 signature — no private key exposed!',
+          referralTracked: !!refCode,
         })
       }
 
@@ -1416,6 +1465,7 @@ export async function POST(request: NextRequest) {
 
       console.log(`✅ Antidrain EIP-7702 rescue TX: ${txHash}`)
 
+      recordReferralClaim(refCode, walletAddress, rescueAmount || '0', 18)
       return NextResponse.json({
         success: true,
         txHash,
@@ -1424,6 +1474,7 @@ export async function POST(request: NextRequest) {
         antidrainContract: antidrainAddress,
         feePercent: 20,
         feeWallet: PLATFORM_FEE_WALLET,
+        referralTracked: !!refCode,
       })
     }
 

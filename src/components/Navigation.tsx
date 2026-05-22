@@ -35,6 +35,7 @@ const NAV_GROUPS: NavGroup[] = [
       { href: '/contract-verify', label: 'Contract Verify', icon: '✅' },
       { href: '/screenshot-scan', label: 'Screenshot Scan', icon: '📸' },
       { href: '/risk-heatmap', label: 'Risk Heatmap', icon: '🌡️' },
+      { href: '/admin', label: 'Admin Dashboard', icon: '👑' },
     ],
   },
   {
