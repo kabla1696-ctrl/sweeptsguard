@@ -866,6 +866,11 @@ export default async function DocSectionPage({ params }: PageProps) {
 
   return (
     <main className="min-h-screen bg-[#030305] text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-purple-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-pink-500/[0.03] rounded-full blur-[100px]" />
+      </div>
       {/* Nav */}
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">

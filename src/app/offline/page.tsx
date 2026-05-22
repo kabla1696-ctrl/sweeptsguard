@@ -31,6 +31,11 @@ export default function OfflinePage() {
 
   return (
     <main className="min-h-screen bg-[#030305] text-white flex items-center justify-center px-6">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-gray-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-white-500/[0.03] rounded-full blur-[100px]" />
+      </div>
       <div className="max-w-md text-center">
         {/* Icon */}
         <div className="text-6xl mb-6">🛡️</div>
