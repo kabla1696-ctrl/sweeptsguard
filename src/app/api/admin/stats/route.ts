@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-
-const ADMIN_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
+import { requireAdmin } from '@/lib/adminAuth'
+import { rateLimit, getClientIp } from '@/lib/rateLimit'
 
 // Shared in-memory stores (same as parent admin route)
 const claimsStore: Array<{
@@ -22,10 +22,16 @@ const payoutsStore: Array<{
  */
 export async function GET(request: NextRequest) {
   try {
-    const wallet = request.headers.get('x-wallet-address')
+    // Rate limit
+    const ip = getClientIp(request)
+    const rl = rateLimit(ip, 30, 60_000)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
 
-    // Allow stats without strict admin check for dashboard loading
-    // The page-level check handles access control
+    const auth = requireAdmin(request)
+    const isAdmin = auth.authorized
+
     const totalPlatformFees = claimsStore.reduce((sum, c) => sum + c.platformFee, 0)
     const totalReferrerCommissions = claimsStore.reduce((sum, c) => sum + c.referrerCommission, 0)
     const totalPaidOut = payoutsStore.reduce((sum, p) => sum + p.amount, 0)
@@ -37,7 +43,7 @@ export async function GET(request: NextRequest) {
       netRevenue: totalPlatformFees - totalReferrerCommissions,
       totalReferrers: referralsStore.length,
       pendingPayouts: totalReferrerCommissions - totalPaidOut,
-      isAdmin: wallet?.toLowerCase() === ADMIN_WALLET.toLowerCase(),
+      isAdmin,
     })
   } catch {
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

@@ -355,10 +355,16 @@ export function getStoredPayouts(): PayoutRecord[] {
 /**
  * Get admin stats (aggregated from localStorage + API)
  */
-export async function getAdminStats(): Promise<AdminStats> {
+export async function getAdminStats(auth?: { wallet: string; signature: string; timestamp: number }): Promise<AdminStats> {
   // Try API first
   try {
-    const res = await fetch('/api/admin/stats');
+    const headers: Record<string, string> = {}
+    if (auth) {
+      headers['x-admin-wallet'] = auth.wallet
+      headers['x-admin-signature'] = auth.signature
+      headers['x-admin-timestamp'] = auth.timestamp.toString()
+    }
+    const res = await fetch('/api/admin/stats', { headers });
     if (res.ok) {
       return await res.json();
     }
@@ -391,7 +397,8 @@ export async function getAdminStats(): Promise<AdminStats> {
 export async function markAsPaid(
   referralCode: string,
   amount: number,
-  txHash: string
+  txHash: string,
+  auth?: { wallet: string; signature: string; timestamp: number }
 ): Promise<void> {
   const payout: PayoutRecord = {
     referralCode,
@@ -409,9 +416,15 @@ export async function markAsPaid(
 
   // Send to API
   try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (auth) {
+      headers['x-admin-wallet'] = auth.wallet
+      headers['x-admin-signature'] = auth.signature
+      headers['x-admin-timestamp'] = auth.timestamp.toString()
+    }
     await fetch('/api/admin/payout', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ referralCode, amount, txHash }),
     });
   } catch {

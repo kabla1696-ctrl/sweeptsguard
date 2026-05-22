@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCountries } from '@/lib/analytics'
 import { syncMiddlewareVisits } from '@/lib/analyticsSync'
-
-const ADMIN_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
+import { requireAdmin } from '@/lib/adminAuth'
+import { rateLimit, getClientIp } from '@/lib/rateLimit'
 
 export async function GET(request: NextRequest) {
   try {
-    const wallet = request.headers.get('x-wallet-address')
-    if (!wallet || wallet.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
-      return NextResponse.json({ error: 'Access denied. Admin wallet required.' }, { status: 403 })
+    const ip = getClientIp(request)
+    const rl = rateLimit(ip, 30, 60_000)
+    if (!rl.allowed) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
+
+    const auth = requireAdmin(request)
+    if (!auth.authorized) {
+      return NextResponse.json({ error: auth.error || 'Access denied' }, { status: 403 })
     }
 
     syncMiddlewareVisits()

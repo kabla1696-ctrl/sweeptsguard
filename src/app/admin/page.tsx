@@ -59,6 +59,8 @@ const ADMIN_WALLET = '0x7A3725154a2E6468F9549334394802e9E2822C2A'
 export default function AdminPage() {
   const [connectedWallet, setConnectedWallet] = useState<string>('')
   const [isAdmin, setIsAdmin] = useState(false)
+  const [adminAuth, setAdminAuth] = useState<{ wallet: string; signature: string; timestamp: number } | null>(null)
+  const [authError, setAuthError] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<AdminStats>({
     totalClaims: 0,
@@ -83,7 +85,7 @@ export default function AdminPage() {
   const loadData = useCallback(async () => {
     try {
       const [adminStats, storedReferrers, storedClaims, storedPayouts] = await Promise.all([
-        getAdminStats(),
+        getAdminStats(adminAuth || undefined),
         Promise.resolve(getStoredReferrers()),
         Promise.resolve(getStoredClaims()),
         Promise.resolve(getStoredPayouts()),
@@ -95,12 +97,17 @@ export default function AdminPage() {
     } catch (err) {
       console.error('[Admin] Failed to load data:', err)
     }
-  }, [])
+  }, [adminAuth])
 
   const loadAnalytics = useCallback(async () => {
+    if (!adminAuth) return
     try {
       setAnalyticsLoading(true)
-      const headers = { 'x-wallet-address': ADMIN_WALLET }
+      const headers = {
+        'x-admin-wallet': adminAuth.wallet,
+        'x-admin-signature': adminAuth.signature,
+        'x-admin-timestamp': adminAuth.timestamp.toString(),
+      }
       const [overview, realtime, countries] = await Promise.all([
         fetch('/api/admin/analytics/overview', { headers }).then(r => r.json()),
         fetch('/api/admin/analytics/realtime', { headers }).then(r => r.json()),
@@ -114,20 +121,35 @@ export default function AdminPage() {
     } finally {
       setAnalyticsLoading(false)
     }
-  }, [])
+  }, [adminAuth])
 
   useEffect(() => {
     async function init() {
       setLoading(true)
       try {
         // Check for ethereum provider
-        if (typeof window !== 'undefined' && (window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<string[]> } }).ethereum) {
-          const eth = (window as unknown as { ethereum: { request: (args: { method: string }) => Promise<string[]> } }).ethereum
+        if (typeof window !== 'undefined' && (window as unknown as { ethereum?: { request: (args: { method: string; params?: string[] }) => Promise<string[]> } }).ethereum) {
+          const eth = (window as unknown as { ethereum: { request: (args: { method: string; params?: string[] }) => Promise<string[]> } }).ethereum
           const accounts = await eth.request({ method: 'eth_accounts' })
           if (accounts.length > 0) {
             const wallet = accounts[0]
             setConnectedWallet(wallet)
-            setIsAdmin(wallet.toLowerCase() === ADMIN_WALLET.toLowerCase())
+
+            if (wallet.toLowerCase() === ADMIN_WALLET.toLowerCase()) {
+              // Auto-sign if already connected
+              const timestamp = Date.now()
+              const message = `SweepGuard Admin Access\nTimestamp: ${timestamp}`
+              try {
+                const signature = await eth.request({
+                  method: 'personal_sign',
+                  params: [message, wallet],
+                })
+                setAdminAuth({ wallet, signature, timestamp })
+                setIsAdmin(true)
+              } catch {
+                setAuthError('Signature required for admin access')
+              }
+            }
           }
         }
       } catch {
@@ -149,13 +171,36 @@ export default function AdminPage() {
 
   const handleConnect = async () => {
     try {
-      if (typeof window !== 'undefined' && (window as unknown as { ethereum?: { request: (args: { method: string }) => Promise<string[]> } }).ethereum) {
-        const eth = (window as unknown as { ethereum: { request: (args: { method: string }) => Promise<string[]> } }).ethereum
+      if (typeof window !== 'undefined' && (window as unknown as { ethereum?: { request: (args: { method: string; params?: string[] }) => Promise<string[]> } }).ethereum) {
+        const eth = (window as unknown as { ethereum: { request: (args: { method: string; params?: string[] }) => Promise<string[]> } }).ethereum
         const accounts = await eth.request({ method: 'eth_requestAccounts' })
         if (accounts.length > 0) {
           const wallet = accounts[0]
           setConnectedWallet(wallet)
-          setIsAdmin(wallet.toLowerCase() === ADMIN_WALLET.toLowerCase())
+
+          if (wallet.toLowerCase() !== ADMIN_WALLET.toLowerCase()) {
+            setAuthError('This wallet is not authorized as admin')
+            setIsAdmin(false)
+            return
+          }
+
+          // Sign admin message
+          const timestamp = Date.now()
+          const message = `SweepGuard Admin Access\nTimestamp: ${timestamp}`
+
+          try {
+            const signature = await eth.request({
+              method: 'personal_sign',
+              params: [message, wallet],
+            })
+
+            setAdminAuth({ wallet, signature, timestamp })
+            setIsAdmin(true)
+            setAuthError('')
+          } catch {
+            setAuthError('Signature required for admin access')
+            setIsAdmin(false)
+          }
         }
       }
     } catch {
@@ -164,10 +209,10 @@ export default function AdminPage() {
   }
 
   const handlePayout = async () => {
-    if (!payoutModal || !txHash.trim() || !txHash.startsWith('0x')) return
+    if (!payoutModal || !txHash.trim() || !txHash.startsWith('0x') || !adminAuth) return
     setProcessing(true)
     try {
-      await markAsPaid(payoutModal.code, payoutModal.amount, txHash.trim())
+      await markAsPaid(payoutModal.code, payoutModal.amount, txHash.trim(), adminAuth)
       await loadData()
       setPayoutModal(null)
       setTxHash('')
@@ -218,7 +263,7 @@ export default function AdminPage() {
             </span>
           </h1>
           <p className="text-white/40 mb-8 text-center max-w-md">
-            This page is restricted to the admin wallet. Connect the authorized wallet to access the dashboard.
+            {authError || 'This page is restricted to the admin wallet. Connect the authorized wallet to access the dashboard.'}
           </p>
           {!connectedWallet ? (
             <button
