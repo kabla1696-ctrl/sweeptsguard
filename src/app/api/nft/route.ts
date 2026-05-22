@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     // Scan all chains
     const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('NFT scan timed out')), 120000)
+      setTimeout(() => reject(new Error('NFT scan timed out')), 300000)
     )
 
     const result = await Promise.race([
