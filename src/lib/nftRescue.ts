@@ -4,6 +4,7 @@ import { CHAINS } from './chains'
 // ============================================================
 // NFT RESCUE SYSTEM
 // Scan and rescue ERC-721 and ERC-1155 tokens from compromised wallets
+// Uses Explorer APIs for discovery (full history) + RPC for verification
 // ============================================================
 
 // NFT ABI — minimal interface for transfer operations
@@ -26,13 +27,6 @@ const ERC1155_ABI = [
   'event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)'
 ]
 
-// Transfer event topic (ERC-721 and ERC-20 share the same signature)
-const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
-// ERC-1155 TransferSingle topic
-const TRANSFER_SINGLE_TOPIC = '0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62'
-// ERC-1155 TransferBatch topic
-const TRANSFER_BATCH_TOPIC = '0x4a39dc06d4c0dbc64b70af90fd698a233a51805f7d3a3de0e5e0f2d2b4c6e7f2'
-
 export interface NFTItem {
   contractAddress: string
   tokenId: string
@@ -42,7 +36,7 @@ export interface NFTItem {
   collection: string
   tokenURI?: string
   image?: string
-  amount?: string // For ERC-1155, the balance held
+  amount?: string
   chainId: number
   chainName: string
 }
@@ -55,45 +49,178 @@ export interface NFTTransferTx {
   nft: NFTItem
 }
 
-// Block range limits per chain (same as fundRecovery)
-const CHAIN_BLOCK_RANGES: Record<number, number> = {
-  1: 2000,
-  8453: 5000,
-  56: 5000,
-  42161: 10000,
-  137: 5000,
-  10: 5000,
-  43114: 5000,
-  250: 5000,
-  81457: 5000,
-  324: 5000,
-  59144: 5000,
-  5000: 5000,
-  534352: 5000,
-  100: 5000,
-  7000: 5000,
-  80094: 5000,
-  57073: 5000,
-  1868: 5000,
-  1329: 5000,
-  1116: 5000,
-  1625: 5000,
-  25: 5000,
-  1101: 5000,
-  169: 5000,
-  34443: 5000,
-  196: 5000,
-  43111: 5000,
-  8217: 5000,
-  2818: 5000,
-  1923: 5000,
-  10143: 5000,
-  7777777: 5000,
+// Popular NFT contracts per chain — always check these
+const POPULAR_NFTS: Record<number, string[]> = {
+  1: [
+    '0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d', // BAYC
+    '0x60e4d786628fea6478f785a6d7e704777c86a7c6', // MAYC
+    '0xed5af388653567af2f388e6224dc7c4b3241c544', // Azuki
+    '0x49cf6f5d44e70224e2e23fdcdd2c053f30ada28b', // CloneX
+    '0x34d85c9cdeb23fa97cb08333b511ac86e1c4e258', // Otherdeed
+    '0x23581767a106ae21c074b2276d25e5c3e136a68b', // Moonbirds
+    '0x8a90cab2b38dba80c64b7734e58ee1db38b8992e', // Doodles
+    '0x1a92f7381b9f03921564a437210bb9396471050c', // Cool Cats
+    '0xbd3531da5cf5857e7cfaa92426877b022e612cf8', // Pudgy Penguins
+    '0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb', // CryptoPunks
+    '0x42069abfe407c60cf4ae4112bedaea3a18d66c38', // Art Blocks
+    '0x059edd72cd0db4a4b32d37e3b57b292269348216', // Art Blocks Curated
+    '0xa7d8d9ef8d8ce8992df33d8b8cf4aebabd5bd270', // Art Blocks Flex
+    '0x9c8ff314c9bc7f6e59a9d9225fb22946401cfdf1', // Autoglyphs
+    '0x6ba6f2207e343923ba692e5aed68f0a98b083894', // Meebits
+    '0x348fc118bcc65a92dc033a951af153d14d945312', // CloneX v2
+    '0xe785e82358879f061bc3dcac6f0444462d8b5ce6', // World of Women
+    '0x524cab2ec69124574082676e6f654a18df49a048', // Loot
+    '0x7bd29408f11d2bfc23c34f18275bbf23ce28d2c4', // Mfers
+    '0x2ee6af0dff301b00e837fd8cc7c68f1330938c08', // DeGods
+    '0x1d20a51f088492a0f1c57f94f2862b2edf27efb4', // Rug Radio
+    '0x5af0d9827e0c53e4799bb226655a1de152a425a5', // Milady
+    '0x8821bee2ba0df28761aff835bb1c2a18e4f280d8', // Remilio Babies
+    '0x39ee2c7b3cb8f0500f6765585990628f7e69b31f', // Redacted Remilio Babies
+  ],
+  8453: [
+    '0x9d771b00e30e3b596eb4a1f32b2e98c3e6e2d2e6', // Base NFTs
+    '0x31b1650e390a4bc30509af396021ac71a6440404', // Base Ape
+    '0x2c1c6134a2b7e8db398a5ff9c4c0c0b46e21ea4e', // OKX NFT
+  ],
+  56: [
+    '0x0a803ee0a40f1e00616050d0d1fa04005918b5e0', // BSC NFTs
+    '0x196d609b08604e41d24e8804b8b4b8c822e02e04', // Pancake Squad
+    '0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82', // PancakeSwap
+  ],
+  42161: [
+    '0xf1d1f5da2e6e44e3a36e1a5e7d61a2c8f0a1f8c4', // Arbitrum NFTs
+  ],
+  137: [
+    '0x2953399124f0cbb46d2cbacd8a89cf0599974963', // OpenSea Polygon
+    '0x3c9e7f3b8a1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f', // Polygon NFTs
+  ],
+}
+
+// ============================================================
+// METHOD 1: Use Explorer API to discover NFTs (best — full history)
+// ============================================================
+async function scanViaExplorer(
+  address: string,
+  chainId: number
+): Promise<{ contracts: Set<string>; tokenIds: Map<string, Set<string>> }> {
+  const chain = CHAINS[chainId]
+  if (!chain) return { contracts: new Set(), tokenIds: new Map() }
+
+  const contracts = new Set<string>()
+  const tokenIds = new Map<string, Set<string>>()
+
+  // Try explorer API (most chains have Etherscan-compatible APIs)
+  const apiKey = process.env.ETHERSCAN_API_KEY || process.env.NEXT_PUBLIC_ETHERSCAN_API_KEY || ''
+  const baseUrl = chain.explorerApi
+
+  if (!baseUrl) return { contracts, tokenIds }
+
+  try {
+    // Get ERC-721 transfers
+    const erc721Url = `${baseUrl}?module=account&action=tokennfttx&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
+    const erc721Res = await fetch(erc721Url, { signal: AbortSignal.timeout(15000) })
+    const erc721Data = await erc721Res.json()
+
+    if (erc721Data.status === '1' && Array.isArray(erc721Data.result)) {
+      for (const tx of erc721Data.result) {
+        const contract = tx.contractAddress?.toLowerCase()
+        if (contract) {
+          contracts.add(contract)
+          if (!tokenIds.has(contract)) tokenIds.set(contract, new Set())
+          // Only add tokenIds where this address is the current owner (received, not sent)
+          if (tx.to?.toLowerCase() === address.toLowerCase()) {
+            tokenIds.get(contract)!.add(tx.tokenID)
+          }
+        }
+      }
+    }
+
+    // Get ERC-1155 transfers
+    const erc1155Url = `${baseUrl}?module=account&action=token1155tx&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${apiKey}`
+    const erc1155Res = await fetch(erc1155Url, { signal: AbortSignal.timeout(15000) })
+    const erc1155Data = await erc1155Res.json()
+
+    if (erc1155Data.status === '1' && Array.isArray(erc1155Data.result)) {
+      for (const tx of erc1155Data.result) {
+        const contract = tx.contractAddress?.toLowerCase()
+        if (contract) {
+          contracts.add(contract)
+          if (!tokenIds.has(contract)) tokenIds.set(contract, new Set())
+          if (tx.to?.toLowerCase() === address.toLowerCase()) {
+            tokenIds.get(contract)!.add(tx.tokenID)
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.log(`⚠️ Explorer API failed for chain ${chainId}: ${err}`)
+  }
+
+  return { contracts, tokenIds }
+}
+
+// ============================================================
+// METHOD 2: Use RPC getLogs to discover NFTs (fallback — recent blocks only)
+// ============================================================
+async function scanViaRPC(
+  address: string,
+  chainId: number,
+  provider: ethers.JsonRpcProvider
+): Promise<{ contracts: Set<string>; tokenIds: Map<string, Set<string>> }> {
+  const contracts = new Set<string>()
+  const tokenIds = new Map<string, Set<string>>()
+
+  const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'
+  const TRANSFER_SINGLE_TOPIC = '0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62'
+
+  try {
+    const currentBlock = await provider.getBlockNumber()
+    // Scan last 100k blocks (~2 weeks on ETH, more on L2s)
+    const fromBlock = Math.max(0, currentBlock - 100000)
+    const walletTopic = ethers.zeroPadValue(address, 32)
+
+    // ERC-721 Transfer events TO this wallet
+    const logs = await provider.getLogs({
+      fromBlock,
+      toBlock: currentBlock,
+      topics: [TRANSFER_TOPIC, null, walletTopic]
+    }).catch(() => [])
+
+    for (const log of logs) {
+      if (log.topics.length === 4) {
+        const contract = log.address.toLowerCase()
+        contracts.add(contract)
+        if (!tokenIds.has(contract)) tokenIds.set(contract, new Set())
+        tokenIds.get(contract)!.add(BigInt(log.topics[3]).toString())
+      }
+    }
+
+    // ERC-1155 TransferSingle events TO this wallet
+    const singleLogs = await provider.getLogs({
+      fromBlock,
+      toBlock: currentBlock,
+      topics: [TRANSFER_SINGLE_TOPIC, null, null, walletTopic]
+    }).catch(() => [])
+
+    for (const log of singleLogs) {
+      const contract = log.address.toLowerCase()
+      contracts.add(contract)
+      if (!tokenIds.has(contract)) tokenIds.set(contract, new Set())
+      try {
+        const decoded = ethers.AbiCoder.defaultAbiCoder().decode(['uint256', 'uint256'], log.data)
+        tokenIds.get(contract)!.add(decoded[0].toString())
+      } catch { /* skip */ }
+    }
+  } catch (err) {
+    console.log(`⚠️ RPC scan failed for chain ${chainId}: ${err}`)
+  }
+
+  return { contracts, tokenIds }
 }
 
 // ============================================================
 // SCAN NFTs owned by address on a specific chain
-// Uses Transfer event logs to discover NFT contracts, then verifies ownership
+// Tries Explorer API first, falls back to RPC
 // ============================================================
 export async function scanNFTs(
   address: string,
@@ -107,110 +234,25 @@ export async function scanNFTs(
   const processedContracts = new Set<string>()
 
   try {
-    const currentBlock = await provider.getBlockNumber()
-    const maxBlockRange = CHAIN_BLOCK_RANGES[chainId] || 5000
-    // Scan last 30 days of blocks (approx 7200 blocks/day on ETH, 5000/day on L2s)
-    const scanBlocks = Math.min(maxBlockRange * 50, 500000)
-    const fromBlock = Math.max(0, currentBlock - scanBlocks)
-
-    const walletTopic = ethers.zeroPadValue(address, 32)
-
-    // ── Step 1: Discover ERC-721 contracts via Transfer events TO this wallet ──
-    // ERC-721 Transfer has 3 topics: signature, from, to (tokenId is data/indexed as topic[3])
-    // But ERC-721 Transfer event has tokenId as the 3rd indexed param
-    // Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
-    // topics: [TRANSFER_TOPIC, from, to, tokenId]
-    // We want: to = address, and check if it's ERC-721 (3 indexed topics)
-    const erc721LogsTo = await provider.getLogs({
-      fromBlock,
-      toBlock: currentBlock,
-      topics: [TRANSFER_TOPIC, null, walletTopic]
-    }).catch(() => [])
-
-    // Discover unique contract addresses
-    for (const log of erc721LogsTo) {
-      const contractAddr = log.address.toLowerCase()
-      if (!processedContracts.has(contractAddr) && log.topics.length === 4) {
-        processedContracts.add(contractAddr)
-      }
+    // ── Step 1: Discover contracts via Explorer API (full history) ──
+    const explorerResult = await scanViaExplorer(address, chainId)
+    for (const contract of explorerResult.contracts) {
+      processedContracts.add(contract)
     }
 
-    // Also check FROM this wallet
-    const erc721LogsFrom = await provider.getLogs({
-      fromBlock,
-      toBlock: currentBlock,
-      topics: [TRANSFER_TOPIC, walletTopic, null]
-    }).catch(() => [])
-
-    for (const log of erc721LogsFrom) {
-      const contractAddr = log.address.toLowerCase()
-      if (!processedContracts.has(contractAddr) && log.topics.length === 4) {
-        processedContracts.add(contractAddr)
-      }
+    // ── Step 2: Also try RPC discovery (recent blocks) ──
+    const rpcResult = await scanViaRPC(address, chainId, provider)
+    for (const contract of rpcResult.contracts) {
+      processedContracts.add(contract)
     }
 
-    // ── Step 2: Discover ERC-1155 contracts via TransferSingle events ──
-    const erc1155SingleLogs = await provider.getLogs({
-      fromBlock,
-      toBlock: currentBlock,
-      topics: [TRANSFER_SINGLE_TOPIC, null, null, walletTopic]
-    }).catch(() => [])
-
-    for (const log of erc1155SingleLogs) {
-      processedContracts.add(log.address.toLowerCase())
+    // ── Step 3: Add popular NFT contracts ──
+    const popular = POPULAR_NFTS[chainId] || []
+    for (const contract of popular) {
+      processedContracts.add(contract.toLowerCase())
     }
 
-    // Also check FROM for ERC-1155
-    const erc1155SingleLogsFrom = await provider.getLogs({
-      fromBlock,
-      toBlock: currentBlock,
-      topics: [TRANSFER_SINGLE_TOPIC, null, walletTopic, null]
-    }).catch(() => [])
-
-    for (const log of erc1155SingleLogsFrom) {
-      processedContracts.add(log.address.toLowerCase())
-    }
-
-    // ── Step 3: Discover ERC-1155 contracts via TransferBatch events ──
-    const erc1155BatchLogs = await provider.getLogs({
-      fromBlock,
-      toBlock: currentBlock,
-      topics: [TRANSFER_BATCH_TOPIC, null, null, walletTopic]
-    }).catch(() => [])
-
-    for (const log of erc1155BatchLogs) {
-      processedContracts.add(log.address.toLowerCase())
-    }
-
-    // ── Step 4: Also check popular NFT contracts directly ──
-    const popularNFTs: Record<number, string[]> = {
-      1: [
-        '0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d', // BAYC
-        '0x60e4d786628fea6478f785a6d7e704777c86a7c6', // MAYC
-        '0xed5af388653567af2f388e6224dc7c4b3241c544', // Azuki
-        '0x49cf6f5d44e70224e2e23fdcdd2c053f30ada28b', // CloneX
-        '0x34d85c9cdeb23fa97cb08333b511ac86e1c4e258', // Otherdeed
-        '0x23581767a106ae21c074b2276d25e5c3e136a68b', // Moonbirds
-        '0x8a90cab2b38dba80c64b7734e58ee1db38b8992e', // Doodles
-        '0x1a92f7381b9f03921564a437210bb9396471050c', // Cool Cats
-        '0xbd3531da5cf5857e7cfaa92426877b022e612cf8', // Pudgy Penguins
-        '0xb47e3cd837ddf8e4c57f05d70ab865de6e193bbb', // CryptoPunks
-      ],
-      8453: [
-        '0x9d771b00e30e3b596eb4a1f32b2e98c3e6e2d2e6', // Base NFTs
-      ],
-      56: [
-        '0x0a803ee0a40f1e00616050d0d1fa04005918b5e0', // BSC NFTs
-      ],
-    }
-
-    const popularContracts = popularNFTs[chainId] || []
-    for (const contractAddr of popularContracts) {
-      if (processedContracts.has(contractAddr)) continue
-      processedContracts.add(contractAddr)
-    }
-
-    // ── Step 5: For each discovered contract, check if it's ERC-721 or ERC-1155 ──
+    // ── Step 4: For each discovered contract, check ownership ──
     for (const contractAddr of processedContracts) {
       try {
         // Try ERC-721 first
@@ -218,7 +260,7 @@ export async function scanNFTs(
         const balance = await erc721Contract.balanceOf(address).catch(() => null)
 
         if (balance !== null && balance > BigInt(0)) {
-          // It's ERC-721
+          // It's ERC-721 with tokens
           let collectionName = 'Unknown Collection'
           let collectionSymbol = ''
           try {
@@ -226,100 +268,96 @@ export async function scanNFTs(
             collectionSymbol = await erc721Contract.symbol()
           } catch { /* keep defaults */ }
 
-          const tokenIdCount = Number(balance)
-          const maxTokensToScan = Math.min(tokenIdCount, 100) // Cap at 100 per collection
+          // Get token IDs — try multiple methods
+          const ownedTokenIds: string[] = []
 
-          for (let i = 0; i < maxTokensToScan; i++) {
-            try {
-              const tokenId = await erc721Contract.tokenOfOwnerByIndex(address, i)
-              let tokenURI: string | undefined
-              let image: string | undefined
-
+          // Method A: tokenOfOwnerByIndex (ERC-721 Enumerable)
+          try {
+            const count = Number(balance)
+            const max = Math.min(count, 100)
+            for (let i = 0; i < max; i++) {
               try {
-                tokenURI = await erc721Contract.tokenURI(tokenId)
-                if (tokenURI) image = await resolveNFTImage(tokenURI)
-              } catch { /* tokenURI may not exist */ }
-
-              nfts.push({
-                contractAddress: contractAddr,
-                tokenId: tokenId.toString(),
-                tokenType: 'ERC-721',
-                name: `#${tokenId.toString()}`,
-                symbol: collectionSymbol,
-                collection: collectionName,
-                tokenURI,
-                image,
-                chainId,
-                chainName: chain.name
-              })
-            } catch {
-              // tokenOfOwnerByIndex may not be supported
-              // Fall back: check if ownerOf works for known tokenIds from Transfer logs
+                const tokenId = await erc721Contract.tokenOfOwnerByIndex(address, i)
+                ownedTokenIds.push(tokenId.toString())
+              } catch { break } // Not enumerable
             }
-          }
+          } catch { /* not enumerable */ }
 
-          // If tokenOfOwnerByIndex failed, try extracting tokenIds from Transfer logs
-          if (nfts.filter(n => n.contractAddress === contractAddr).length === 0) {
-            const tokenIds = extractTokenIdsFromLogs(erc721LogsTo, contractAddr, address)
-            for (const tokenId of tokenIds) {
+          // Method B: Use known token IDs from explorer/RPC discovery
+          if (ownedTokenIds.length === 0) {
+            const explorerIds = explorerResult.tokenIds.get(contractAddr) || new Set()
+            const rpcIds = rpcResult.tokenIds.get(contractAddr) || new Set()
+            const allKnownIds = new Set([...explorerIds, ...rpcIds])
+
+            for (const tokenId of allKnownIds) {
               try {
                 const owner = await erc721Contract.ownerOf(tokenId)
                 if (owner.toLowerCase() === address.toLowerCase()) {
-                  let tokenURI: string | undefined
-                  let image: string | undefined
-                  try {
-                    tokenURI = await erc721Contract.tokenURI(tokenId)
-                    if (tokenURI) image = await resolveNFTImage(tokenURI)
-                  } catch { /* ok */ }
-
-                  nfts.push({
-                    contractAddress: contractAddr,
-                    tokenId: tokenId.toString(),
-                    tokenType: 'ERC-721',
-                    name: `#${tokenId.toString()}`,
-                    symbol: collectionSymbol,
-                    collection: collectionName,
-                    tokenURI,
-                    image,
-                    chainId,
-                    chainName: chain.name
-                  })
+                  ownedTokenIds.push(tokenId)
                 }
               } catch { /* skip */ }
             }
           }
 
-          continue // Already processed as ERC-721
+          // Build NFT items
+          for (const tokenId of ownedTokenIds) {
+            let tokenURI: string | undefined
+            let image: string | undefined
+            try {
+              tokenURI = await erc721Contract.tokenURI(tokenId)
+              if (tokenURI) image = await resolveNFTImage(tokenURI)
+            } catch { /* ok */ }
+
+            nfts.push({
+              contractAddress: contractAddr,
+              tokenId,
+              tokenType: 'ERC-721',
+              name: `#${tokenId}`,
+              symbol: collectionSymbol,
+              collection: collectionName,
+              tokenURI,
+              image,
+              chainId,
+              chainName: chain.name
+            })
+          }
+
+          continue
         }
 
         // Try ERC-1155
         const erc1155Contract = new ethers.Contract(contractAddr, ERC1155_ABI, provider)
-        const tokenIds = extractERC1155TokenIds(
-          [...erc1155SingleLogs, ...erc1155BatchLogs],
-          contractAddr,
-          address
-        )
+        const explorerIds = explorerResult.tokenIds.get(contractAddr) || new Set()
+        const rpcIds = rpcResult.tokenIds.get(contractAddr) || new Set()
+        const allTokenIds = new Set([...explorerIds, ...rpcIds])
+
+        // If we have no known token IDs, try common ones (0, 1, 2, etc.)
+        if (allTokenIds.size === 0) {
+          for (let i = 0; i < 10; i++) {
+            allTokenIds.add(String(i))
+          }
+        }
 
         let collectionUri = ''
         try {
           collectionUri = await erc1155Contract.uri(0)
         } catch { /* ok */ }
 
-        for (const tokenId of tokenIds) {
+        for (const tokenId of allTokenIds) {
           try {
             const bal = await erc1155Contract.balanceOf(address, tokenId)
             if (bal > BigInt(0)) {
               let image: string | undefined
               try {
                 const uri = await erc1155Contract.uri(tokenId)
-                image = await resolveNFTImage(uri.replace('{id}', tokenId.toString(16).padStart(64, '0')))
+                image = await resolveNFTImage(uri.replace('{id}', BigInt(tokenId).toString(16).padStart(64, '0')))
               } catch { /* ok */ }
 
               nfts.push({
                 contractAddress: contractAddr,
-                tokenId: tokenId.toString(),
+                tokenId,
                 tokenType: 'ERC-1155',
-                name: `#${tokenId.toString()}`,
+                name: `#${tokenId}`,
                 symbol: '',
                 collection: collectionUri || 'ERC-1155 Collection',
                 tokenURI: collectionUri,
@@ -343,93 +381,7 @@ export async function scanNFTs(
 }
 
 // ============================================================
-// Extract token IDs from Transfer logs for a specific contract + recipient
-// ============================================================
-function extractTokenIdsFromLogs(
-  logs: ethers.Log[],
-  contractAddress: string,
-  recipientAddress: string
-): bigint[] {
-  const tokenIds = new Set<string>()
-  const addrLower = contractAddress.toLowerCase()
-
-  for (const log of logs) {
-    if (log.address.toLowerCase() === addrLower && log.topics.length === 4) {
-      const to = '0x' + log.topics[2].slice(26)
-      if (to.toLowerCase() === recipientAddress.toLowerCase()) {
-        tokenIds.add(BigInt(log.topics[3]).toString())
-      }
-    }
-  }
-
-  return Array.from(tokenIds).map(id => BigInt(id))
-}
-
-// ============================================================
-// Extract ERC-1155 token IDs from TransferSingle/TransferBatch logs
-// ============================================================
-function extractERC1155TokenIds(
-  logs: ethers.Log[],
-  contractAddress: string,
-  address: string
-): bigint[] {
-  const tokenIds = new Set<string>()
-  const addrLower = contractAddress.toLowerCase()
-  const addrPadded = ethers.zeroPadValue(address, 32).toLowerCase()
-
-  for (const log of logs) {
-    if (log.address.toLowerCase() !== addrLower) continue
-
-    if (log.topics[0] === TRANSFER_SINGLE_TOPIC && log.topics.length >= 4) {
-      // TransferSingle: operator, from, to, id
-      const from = log.topics[2]
-      const to = log.topics[3]
-      if (from.toLowerCase() === addrPadded || to.toLowerCase() === addrPadded) {
-        // tokenId is in the data (not topics) for TransferSingle
-        // Actually tokenId is topics[3], value is in data
-        // Wait — let me re-check. TransferSingle signature:
-        // event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 indexed id, uint256 value)
-        // So topics = [sig, operator, from, to], and id+value are in data
-        // But we have 4 topics (sig + 3 indexed), so id might be topic[3] or in data
-        // Standard ERC-1155: id is NOT indexed, it's in data
-        // Let me handle both cases
-        try {
-          const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-            ['uint256', 'uint256'],
-            log.data
-          )
-          tokenIds.add(decoded[0].toString())
-        } catch {
-          // If data decoding fails, try topic[3]
-          if (log.topics.length > 3) {
-            tokenIds.add(BigInt(log.topics[3]).toString())
-          }
-        }
-      }
-    } else if (log.topics[0] === TRANSFER_BATCH_TOPIC && log.topics.length >= 4) {
-      // TransferBatch: operator, from, to, ids[], values[]
-      const from = log.topics[2]
-      const to = log.topics[3]
-      if (from.toLowerCase() === addrPadded || to.toLowerCase() === addrPadded) {
-        try {
-          const decoded = ethers.AbiCoder.defaultAbiCoder().decode(
-            ['uint256[]', 'uint256[]'],
-            log.data
-          )
-          for (const id of decoded[0]) {
-            tokenIds.add(id.toString())
-          }
-        } catch { /* skip */ }
-      }
-    }
-  }
-
-  return Array.from(tokenIds).map(id => BigInt(id))
-}
-
-// ============================================================
 // Resolve NFT image from token URI
-// Supports: IPFS, Arweave, HTTP(S), and base64 data URIs
 // ============================================================
 async function resolveNFTImage(tokenURI: string): Promise<string | undefined> {
   if (!tokenURI) return undefined
@@ -454,7 +406,7 @@ async function resolveNFTImage(tokenURI: string): Promise<string | undefined> {
       return resolveImageUrl(json.image)
     }
 
-    // HTTP(S) — fetch metadata and extract image
+    // HTTP(S)
     if (tokenURI.startsWith('http')) {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 5000)
@@ -496,14 +448,6 @@ export function createNFTTransferTx(
   nonce: number,
   gasParams: { maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint; gasPrice?: bigint; type: number }
 ): NFTTransferTx {
-  const baseTxParams = {
-    chainId: nft.chainId,
-    nonce,
-    ...(gasParams.type === 2
-      ? { type: 2, maxFeePerGas: gasParams.maxFeePerGas, maxPriorityFeePerGas: gasParams.maxPriorityFeePerGas }
-      : { gasPrice: gasParams.gasPrice })
-  }
-
   if (nft.tokenType === 'ERC-721') {
     const iface = new ethers.Interface(ERC721_ABI)
     const data = iface.encodeFunctionData('safeTransferFrom', [from, to, BigInt(nft.tokenId)])
@@ -515,7 +459,6 @@ export function createNFTTransferTx(
       nft
     }
   } else {
-    // ERC-1155
     const iface = new ethers.Interface(ERC1155_ABI)
     const amount = nft.amount ? BigInt(nft.amount) : 1n
     const data = iface.encodeFunctionData('safeTransferFrom', [from, to, BigInt(nft.tokenId), amount, '0x'])
@@ -530,7 +473,7 @@ export function createNFTTransferTx(
 }
 
 // ============================================================
-// BATCH NFT TRANSFER — Create transactions for multiple NFTs
+// BATCH NFT TRANSFER
 // ============================================================
 export function batchNFTTransfer(
   nfts: NFTItem[],
@@ -561,7 +504,7 @@ export async function scanNFTsAllChains(
   address: string,
   chainIds?: number[]
 ): Promise<{ nfts: NFTItem[]; failedChains: number[] }> {
-  const chains = chainIds || Object.keys(CHAINS).map(Number).filter(id => id !== 0 && id !== 10143) // Exclude 0G and Monad testnet
+  const chains = chainIds || Object.keys(CHAINS).map(Number).filter(id => id !== 0 && id !== 10143)
   const allNfts: NFTItem[] = []
   const failedChains: number[] = []
 
@@ -592,7 +535,7 @@ export async function scanNFTsAllChains(
 }
 
 // ============================================================
-// GET GAS PARAMS (shared helper)
+// GET GAS PARAMS
 // ============================================================
 export async function getNFTGasParams(
   provider: ethers.JsonRpcProvider,
