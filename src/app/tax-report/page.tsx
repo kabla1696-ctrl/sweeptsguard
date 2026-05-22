@@ -77,7 +77,7 @@ export default function TaxReportPage() {
           </div>
           <div className="bg-gray-800/50 backdrop-blur-sm border border-gray-700 rounded-xl p-4">
             <label className="text-gray-400 text-sm mb-2 block">Cost Basis Method</label>
-            <select value={costMethod} onChange={e => setCostMethod(e.target.value as any)} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
+            <select value={costMethod} onChange={e => setCostMethod(e.target.value as 'FIFO' | 'LIFO' | 'HIFO')} className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white">
               <option value="FIFO">FIFO (First In, First Out)</option>
               <option value="LIFO">LIFO (Last In, First Out)</option>
               <option value="HIFO">HIFO (Highest In, First Out)</option>

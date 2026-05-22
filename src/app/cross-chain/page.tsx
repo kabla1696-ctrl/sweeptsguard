@@ -111,7 +111,7 @@ export default function CrossChainPage() {
           {[{ key: 'wallets', label: '🔗 Linked Wallets' }, { key: 'flows', label: '💸 Fund Flows' }, { key: 'graph', label: '📊 Visual Graph' }].map(v => (
             <button
               key={v.key}
-              onClick={() => setView(v.key as any)}
+              onClick={() => setView(v.key as 'wallets' | 'flows' | 'graph')}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition ${view === v.key ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
             >
               {v.label}
