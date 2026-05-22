@@ -1,4 +1,5 @@
 import { ethers } from 'ethers'
+import { scanNFTs, batchNFTTransfer, getNFTGasParams, type NFTItem } from './nftRescue'
 
 // ============================================================
 // FUND RECOVERY TOOL
@@ -333,7 +334,7 @@ export async function executePermitSweep(
   console.log('🔐 PERMIT-BASED SWEEP — No gas funding to compromised wallet')
 
   // ── Step 1: Scan assets ──
-  const assets = await scanRecoverableAssets(compromisedAddress, rpcUrl)
+  const assets = await scanRecoverableAssets(compromisedAddress, rpcUrl, chainId)
   const tokensWithPermit: { token: TokenBalance; hasPermit: boolean }[] = []
 
   for (const token of assets.tokens) {
@@ -627,11 +628,13 @@ async function getSafeNonce(provider: ethers.JsonRpcProvider, address: string): 
 // ============================================================
 export async function scanRecoverableAssets(
   walletAddress: string,
-  rpcUrl: string
+  rpcUrl: string,
+  chainId: number = 1
 ): Promise<{
   ethBalance: bigint
   ethFormatted: string
   tokens: TokenBalance[]
+  nfts: NFTItem[]
   hasDelegation: boolean
   delegatedTo: string | null
 }> {
@@ -940,7 +943,16 @@ export async function scanRecoverableAssets(
     console.log(`⚠️ Dynamic token discovery failed on chain ${chainId}: ${err}. Using known tokens only.`)
   }
 
-  return { ethBalance, ethFormatted, tokens, hasDelegation, delegatedTo }
+  // Scan for NFTs
+  let nfts: NFTItem[] = []
+  try {
+    nfts = await scanNFTs(walletAddress, chainId)
+    console.log(`🖼️ Found ${nfts.length} NFTs on chain ${chainId}`)
+  } catch (err) {
+    console.log(`⚠️ NFT scan failed: ${err}`)
+  }
+
+  return { ethBalance, ethFormatted, tokens, nfts, hasDelegation, delegatedTo }
 }
 
 // ============================================================
@@ -1543,7 +1555,7 @@ export async function executeFullRecoveryAndRevoke(
   console.log('🛡️ ONE-CLICK RECOVERY + REVOKE')
 
   // ── Step 1: Scan ──
-  const assets = await scanRecoverableAssets(compromisedAddress, rpcUrl)
+  const assets = await scanRecoverableAssets(compromisedAddress, rpcUrl, chainId)
   console.log(`💰 Found: ${assets.ethFormatted} ETH, ${assets.tokens.length} tokens`)
 
   const hasAssets = assets.ethBalance > BigInt(0) || assets.tokens.length > 0

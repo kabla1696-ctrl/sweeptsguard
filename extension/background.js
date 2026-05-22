@@ -609,6 +609,103 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return { success: true }
       }
 
+      // ═══════════════════════════════════════════════════════
+      // SOLANA OPERATIONS
+      // ═══════════════════════════════════════════════════════
+
+      case 'SCAN_SOLANA': {
+        const { address: solAddress } = message
+        if (!solAddress || !isValidSolanaAddress(solAddress)) {
+          return { error: 'Invalid Solana address' }
+        }
+        try {
+          // Get SOL balance
+          const resp = await fetch(SOLANA_CONFIG.rpc, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 1, method: 'getBalance', params: [solAddress]
+            })
+          })
+          const data = await resp.json()
+          const lamports = data.result?.value || 0
+          const solBalance = (lamports / 1e9).toFixed(9)
+
+          // Get SPL token accounts
+          const tokenResp = await fetch(SOLANA_CONFIG.rpc, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0', id: 2, method: 'getTokenAccountsByOwner',
+              params: [
+                solAddress,
+                { programId: 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA' },
+                { encoding: 'jsonParsed' }
+              ]
+            })
+          })
+          const tokenData = await tokenResp.json()
+          const tokens = (tokenData.result?.value || []).map(acc => {
+            const info = acc.account.data.parsed.info
+            return {
+              mint: info.mint,
+              balance: info.tokenAmount.amount,
+              decimals: info.tokenAmount.decimals,
+              uiAmount: info.tokenAmount.uiAmountString
+            }
+          }).filter(t => t.uiAmount !== '0')
+
+          return {
+            address: solAddress,
+            solBalance: lamports.toString(),
+            solBalanceFormatted: solBalance,
+            tokens,
+            explorer: `${SOLANA_CONFIG.explorer}/account/${solAddress}`
+          }
+        } catch (err) {
+          return { error: `Solana scan failed: ${err.message}` }
+        }
+      }
+
+      case 'CONNECT_PHANTOM': {
+        if (!isPhantomAvailable()) {
+          return { error: 'Phantom wallet not installed. Get it at phantom.app' }
+        }
+        try {
+          const resp = await chrome.tabs.sendMessage(sender.tab?.id, {
+            type: 'PHANTOM_CONNECT'
+          })
+          return resp
+        } catch (err) {
+          return { error: `Phantom connection failed: ${err.message}` }
+        }
+      }
+
+      case 'SIGN_SOLANA_TX': {
+        const { serializedTx } = message
+        if (!serializedTx) {
+          return { error: 'No transaction to sign' }
+        }
+        try {
+          const resp = await chrome.tabs.sendMessage(sender.tab?.id, {
+            type: 'PHANTOM_SIGN_TX',
+            serializedTx
+          })
+          return resp
+        } catch (err) {
+          return { error: `Solana signing failed: ${err.message}` }
+        }
+      }
+
+      case 'GET_SOLANA_STATUS': {
+        const { solanaAddress } = await chrome.storage.local.get('solanaAddress')
+        return {
+          connected: !!solanaAddress,
+          address: solanaAddress || '',
+          phantomAvailable: isPhantomAvailable()
+        }
+      }
+
       default:
         return { error: `Unknown message type: ${message.type}` }
     }
