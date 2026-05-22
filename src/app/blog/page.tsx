@@ -1,105 +1,179 @@
+import type { Metadata } from 'next'
 import Link from 'next/link'
-import { posts, getAllTags } from '@/lib/blog'
 
-export const metadata = {
-  title: 'Blog — SweepGuard',
-  description: 'Crypto security guides, wallet recovery tutorials, and Web3 safety tips from the SweepGuard team.',
+export const metadata: Metadata = {
+  title: 'SweepGuard Blog — Crypto Security Guides & Wallet Protection Tips',
+  description: 'Learn how to protect your crypto wallet from hackers, drainers, and phishing attacks. Expert guides on Flashbots, EIP-7702, token approvals, multi-chain security, and fund recovery.',
+  keywords: ['crypto security blog', 'wallet protection guide', 'recover hacked wallet', 'flashbots tutorial', 'eip-7702 guide', 'crypto drainer protection', 'token approval safety', 'multi-chain security'],
   openGraph: {
-    title: 'Blog — SweepGuard',
-    description: 'Crypto security guides, wallet recovery tutorials, and Web3 safety tips.',
+    title: 'SweepGuard Blog — Crypto Security Guides & Wallet Protection Tips',
+    description: 'Expert guides on protecting your crypto wallet from hackers, drainers, and phishing attacks.',
+    url: 'https://sweeptsguard.vercel.app/blog',
+    siteName: 'SweepGuard',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'SweepGuard Blog — Crypto Security Guides',
+    description: 'Expert guides on protecting your crypto wallet from hackers and drainers.',
+  },
+  alternates: {
+    canonical: 'https://sweeptsguard.vercel.app/blog',
   },
 }
 
+const articles = [
+  {
+    slug: 'how-to-recover-hacked-wallet',
+    title: 'How to Recover a Hacked Crypto Wallet in 2025',
+    description: 'Step-by-step guide to recovering funds from a compromised wallet using Flashbots, EIP-7702 delegation, and auto-sweep strategies.',
+    category: 'Recovery',
+    readTime: '8 min',
+    date: '2025-05-22',
+    featured: true,
+  },
+  {
+    slug: 'flashbots-private-transactions',
+    title: 'Flashbots Private Transactions: Complete Guide',
+    description: 'Learn how to use Flashbots to send private transactions that bypass the public mempool, preventing MEV attacks and sandwich bots.',
+    category: 'Security',
+    readTime: '10 min',
+    date: '2025-05-20',
+    featured: true,
+  },
+  {
+    slug: 'eip-7702-delegation-guide',
+    title: 'EIP-7702 Delegation: Rescue Funds from Compromised Wallets',
+    description: 'Complete guide to EIP-7702 wallet delegation — rescue trapped funds from compromised wallets without exposing private keys.',
+    category: 'Technology',
+    readTime: '12 min',
+    date: '2025-05-18',
+    featured: true,
+  },
+  {
+    slug: 'crypto-drainer-protection',
+    title: 'How to Protect Your Wallet from Crypto Drainers',
+    description: 'Comprehensive guide to identifying and protecting against crypto drainer contracts, phishing sites, and malicious token approvals.',
+    category: 'Protection',
+    readTime: '7 min',
+    date: '2025-05-15',
+  },
+  {
+    slug: 'multi-chain-wallet-security',
+    title: 'Multi-Chain Wallet Security: Best Practices for 33+ EVM Chains',
+    description: 'Learn how to secure your wallet across Ethereum, Base, Arbitrum, Polygon, and 30+ other EVM chains with unified security strategies.',
+    category: 'Guide',
+    readTime: '9 min',
+    date: '2025-05-12',
+  },
+  {
+    slug: 'token-approval-safety',
+    title: 'Token Approval Safety: How to Revoke Dangerous Approvals',
+    description: 'Understanding ERC-20 token approvals, unlimited approvals risk, and how to safely revoke dangerous token permissions.',
+    category: 'Tutorial',
+    readTime: '6 min',
+    date: '2025-05-10',
+  },
+]
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'Blog',
+  name: 'SweepGuard Blog',
+  description: 'Crypto security guides and wallet protection tips',
+  url: 'https://sweeptsguard.vercel.app/blog',
+  publisher: {
+    '@type': 'Organization',
+    name: 'SweepGuard',
+    url: 'https://sweeptsguard.vercel.app',
+  },
+  blogPost: articles.map(a => ({
+    '@type': 'BlogPosting',
+    headline: a.title,
+    description: a.description,
+    url: `https://sweeptsguard.vercel.app/blog/${a.slug}`,
+    datePublished: a.date,
+    author: { '@type': 'Organization', name: 'SweepGuard' },
+  })),
+}
+
 export default function BlogPage() {
-  const tags = getAllTags()
-
   return (
-    <main className="min-h-screen bg-[#030305] text-white">
-      {/* Nav */}
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl">🛡️</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
-        </Link>
-        <Link href="/" className="text-sm text-zinc-400 hover:text-white transition">← Home</Link>
-      </nav>
-
-      <div className="max-w-5xl mx-auto px-6 py-10">
-        {/* Header */}
-        <div className="mb-10">
-          <h1 className="text-4xl font-bold mb-3">📝 Blog</h1>
-          <p className="text-zinc-400 text-lg">Crypto security guides, wallet recovery tutorials, and Web3 safety tips.</p>
+    <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <main className="min-h-screen bg-[#030305] text-white">
+        <div className="fixed inset-0 pointer-events-none">
+          <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-green-500/[0.04] rounded-full blur-[120px]" />
+          <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-cyan-500/[0.03] rounded-full blur-[100px]" />
         </div>
 
-        {/* Tags */}
-        <div className="flex flex-wrap gap-2 mb-8">
-          {tags.map(tag => (
-            <span key={tag} className="text-xs px-3 py-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] text-zinc-400">
-              #{tag}
-            </span>
-          ))}
-        </div>
+        <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
+          <header className="mb-12">
+            <h1 className="text-4xl md:text-5xl font-black mb-4">
+              📚 SweepGuard <span className="bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent">Blog</span>
+            </h1>
+            <p className="text-white/40 text-lg max-w-2xl">
+              Expert guides on crypto wallet security, fund recovery, and protecting your assets from hackers and drainers.
+            </p>
+          </header>
 
-        {/* Posts Grid */}
-        <div className="grid gap-6">
-          {posts.map((post, i) => (
-            <article key={post.slug} className={`group ${i === 0 ? '' : ''}`}>
-              <Link href={`/blog/${post.slug}`} className="block">
-                <div className="bg-[#111118] border border-white/[0.06] rounded-xl p-6 hover:border-green-500/20 transition-all duration-200">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1">
-                      {i === 0 && (
-                        <span className="inline-block text-xs px-2.5 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 mb-3">
-                          Latest
-                        </span>
-                      )}
-                      <h2 className="text-xl font-semibold group-hover:text-green-400 transition-colors">
-                        {post.title}
-                      </h2>
+          {/* Featured Articles */}
+          <section className="mb-12">
+            <h2 className="text-xl font-bold mb-6 text-white/60">Featured</h2>
+            <div className="grid md:grid-cols-3 gap-6">
+              {articles.filter(a => a.featured).map(article => (
+                <Link key={article.slug} href={`/blog/${article.slug}`}
+                  className="group p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl hover:border-green-500/20 hover:bg-green-500/[0.02] transition-all">
+                  <span className="text-xs text-green-400 font-medium">{article.category}</span>
+                  <h3 className="text-lg font-bold mt-2 mb-3 group-hover:text-green-400 transition-colors">{article.title}</h3>
+                  <p className="text-white/40 text-sm mb-4 line-clamp-2">{article.description}</p>
+                  <div className="flex items-center gap-3 text-xs text-white/30">
+                    <span>{article.date}</span>
+                    <span>•</span>
+                    <span>{article.readTime} read</span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+
+          {/* All Articles */}
+          <section>
+            <h2 className="text-xl font-bold mb-6 text-white/60">All Articles</h2>
+            <div className="space-y-4">
+              {articles.map(article => (
+                <Link key={article.slug} href={`/blog/${article.slug}`}
+                  className="group flex items-start gap-6 p-6 bg-white/[0.02] border border-white/[0.06] rounded-2xl hover:border-green-500/20 hover:bg-green-500/[0.02] transition-all">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <span className="text-xs text-green-400 font-medium px-2 py-0.5 bg-green-500/10 rounded-full">{article.category}</span>
+                      <span className="text-xs text-white/30">{article.date}</span>
+                      <span className="text-xs text-white/30">•</span>
+                      <span className="text-xs text-white/30">{article.readTime} read</span>
                     </div>
+                    <h3 className="text-lg font-bold mb-2 group-hover:text-green-400 transition-colors">{article.title}</h3>
+                    <p className="text-white/40 text-sm">{article.description}</p>
                   </div>
+                  <span className="text-white/20 group-hover:text-green-400 transition-colors text-2xl">→</span>
+                </Link>
+              ))}
+            </div>
+          </section>
 
-                  <p className="text-zinc-400 text-sm mb-4 leading-relaxed">
-                    {post.excerpt}
-                  </p>
-
-                  <div className="flex items-center gap-4 text-xs text-zinc-500">
-                    <time dateTime={post.date}>
-                      {new Date(post.date).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                      })}
-                    </time>
-                    <span>·</span>
-                    <span>{post.readTime} read</span>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2 mt-4">
-                    {post.tags.map(tag => (
-                      <span key={tag} className="text-xs px-2 py-1 rounded bg-white/[0.04] text-zinc-500 border border-white/[0.04]">
-                        #{tag}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </Link>
-            </article>
-          ))}
+          {/* Newsletter */}
+          <section className="mt-16 p-8 bg-gradient-to-br from-green-500/[0.06] to-cyan-500/[0.06] border border-green-500/20 rounded-2xl text-center">
+            <h2 className="text-2xl font-bold mb-3">🛡️ Stay Protected</h2>
+            <p className="text-white/40 mb-6">Get the latest crypto security tips delivered to your inbox.</p>
+            <div className="flex gap-3 max-w-md mx-auto">
+              <input type="email" placeholder="your@email.com"
+                className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 text-sm" />
+              <button className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm">
+                Subscribe
+              </button>
+            </div>
+          </section>
         </div>
-
-        {/* Newsletter CTA */}
-        <div className="mt-12 bg-[#111118] border border-white/[0.06] rounded-xl p-8 text-center">
-          <h3 className="text-xl font-semibold mb-2">Stay Updated</h3>
-          <p className="text-zinc-400 text-sm mb-4">Get the latest crypto security tips and SweepGuard updates.</p>
-          <Link
-            href="/dashboard"
-            className="inline-block px-6 py-2.5 rounded-lg bg-gradient-to-r from-green-500 to-emerald-500 text-black font-semibold text-sm hover:brightness-110 transition"
-          >
-            Get Started Free →
-          </Link>
-        </div>
-      </div>
-    </main>
+      </main>
+    </>
   )
 }

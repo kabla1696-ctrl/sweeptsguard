@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /_next/
+
+Sitemap: https://sweeptsguard.vercel.app/sitemap.xml
+
+# Crawl-delay for polite bots
+Crawl-delay: 1
