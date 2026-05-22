@@ -20,6 +20,7 @@ import {
   type DrainerMapStats,
   type HeatmapDataPoint,
 } from '@/lib/drainerMap'
+import type { DrainerInfo } from '@/lib/draindb'
 
 type View = 'map' | 'feed' | 'clusters' | 'stats'
 
@@ -32,7 +33,7 @@ export default function DrainerMapPage() {
   const [heatmap, setHeatmap] = useState<HeatmapDataPoint[]>([])
   const [stolenByChain, setStolenByChain] = useState<{ chainId: number; chainName: string; icon: string; totalUsd: number; percentage: number }[]>([])
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<{ drainers: any[]; clusters: DrainerCluster[] } | null>(null)
+  const [searchResults, setSearchResults] = useState<{ drainers: DrainerInfo[]; clusters: DrainerCluster[] } | null>(null)
   const [period, setPeriod] = useState<'24h' | '7d' | '30d'>('24h')
   const [periodStats, setPeriodStats] = useState<ReturnType<typeof getStatsByPeriod> | null>(null)
   const [selectedChain, setSelectedChain] = useState<number | null>(null)

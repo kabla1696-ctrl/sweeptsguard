@@ -11,10 +11,24 @@ const THREAT_TYPES = [
   { type: 'Fake Airdrop', severity: 'high', icon: '🎁' },
 ]
 
+interface ScreenshotThreat {
+  type: string
+  detail: string
+  severity: string
+  confidence: number
+}
+
+interface ScreenshotResult {
+  threats: ScreenshotThreat[]
+  safeElements: string[]
+  recommendation: string
+  overallRisk: string
+}
+
 export default function ScreenshotScanPage() {
   const [dragging, setDragging] = useState(false)
   const [scanning, setScanning] = useState(false)
-  const [result, setResult] = useState<any>(null)
+  const [result, setResult] = useState<ScreenshotResult | null>(null)
   const [fileName, setFileName] = useState('')
 
   const handleDrop = useCallback((e: React.DragEvent) => {

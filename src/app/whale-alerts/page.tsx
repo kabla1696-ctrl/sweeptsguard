@@ -1,467 +1,177 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState } from 'react'
 import Link from 'next/link'
-import { isValidAddress } from '@/lib/validation'
-import {
-  whaleAlerts,
-  type WhaleAlert,
-  type WhaleTransaction,
-  type WhaleWallet,
-  type WhaleAlertConfig,
-  DEFAULT_WHALE_CONFIG,
-} from '@/lib/whaleAlert'
 
-type Tab = 'alerts' | 'transactions' | 'watchlist' | 'settings'
+type AlertLevel = 'info' | 'warning' | 'critical'
+type WhaleCategory = 'fund' | 'exchange' | 'defi' | 'individual' | 'unknown'
+type TxType = 'buy' | 'sell' | 'transfer' | 'approve'
+
+interface WhaleTransaction {
+  hash: string
+  chainName: string
+  fromLabel: string
+  toLabel: string
+  tokenSymbol: string
+  amountFormatted: string
+  usdValue: number
+  timestamp: string
+  type: TxType
+  suspicious: boolean
+  suspiciousReasons: string[]
+}
+
+const LEVEL_STYLES: Record<AlertLevel, { bg: string; text: string; border: string; icon: string }> = {
+  info: { bg: 'bg-[#00e5ff]/10', text: 'text-[#00e5ff]', border: 'border-[#00e5ff]/20', icon: 'ℹ️' },
+  warning: { bg: 'bg-yellow-500/10', text: 'text-yellow-400', border: 'border-yellow-500/20', icon: '⚠️' },
+  critical: { bg: 'bg-[#ff3b3b]/10', text: 'text-[#ff3b3b]', border: 'border-[#ff3b3b]/20', icon: '🚨' },
+}
+const TX_TYPE_STYLES: Record<TxType, { color: string; icon: string }> = {
+  buy: { color: 'text-[#00ff87]', icon: '📈' },
+  sell: { color: 'text-[#ff3b3b]', icon: '📉' },
+  transfer: { color: 'text-[#00e5ff]', icon: '↔️' },
+  approve: { color: 'text-yellow-400', icon: '🔓' },
+}
+
+const MOCK_TXS: WhaleTransaction[] = [
+  { hash: '0xabc...111', chainName: 'Ethereum', fromLabel: 'Binance Hot Wallet', toLabel: 'Unknown Wallet', tokenSymbol: 'ETH', amountFormatted: '15,000 ETH', usdValue: 45_000_000, timestamp: new Date(Date.now() - 600000).toISOString(), type: 'transfer', suspicious: true, suspiciousReasons: ['Large transfer to new wallet', 'No prior activity'] },
+  { hash: '0xdef...222', chainName: 'Base', fromLabel: 'Whale Fund Alpha', toLabel: 'Uniswap V3', tokenSymbol: 'USDC', amountFormatted: '25,000,000 USDC', usdValue: 25_000_000, timestamp: new Date(Date.now() - 1800000).toISOString(), type: 'sell', suspicious: false, suspiciousReasons: [] },
+  { hash: '0xghi...333', chainName: 'Ethereum', fromLabel: 'Jump Trading', toLabel: 'Unknown DEX', tokenSymbol: 'PEPE', amountFormatted: '500B PEPE', usdValue: 8_500_000, timestamp: new Date(Date.now() - 3600000).toISOString(), type: 'buy', suspicious: true, suspiciousReasons: ['Buying suspicious memecoin', 'Known pump pattern'] },
+  { hash: '0xjkl...444', chainName: 'Arbitrum', fromLabel: 'Wintermute', toLabel: 'Aave V3', tokenSymbol: 'ARB', amountFormatted: '5,000,000 ARB', usdValue: 5_200_000, timestamp: new Date(Date.now() - 7200000).toISOString(), type: 'transfer', suspicious: false, suspiciousReasons: [] },
+  { hash: '0xmn...555', chainName: 'Ethereum', fromLabel: 'Alameda Wallet', toLabel: 'Tornado Cash', tokenSymbol: 'ETH', amountFormatted: '3,200 ETH', usdValue: 9_600_000, timestamp: new Date(Date.now() - 10800000).toISOString(), type: 'transfer', suspicious: true, suspiciousReasons: ['Transfer to Tornado Cash', 'Sanctioned entity wallet'] },
+]
 
 export default function WhaleAlertsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('alerts')
-  const [alerts, setAlerts] = useState<WhaleAlert[]>([])
-  const [transactions, setTransactions] = useState<WhaleTransaction[]>([])
-  const [watchlist, setWatchlist] = useState<WhaleWallet[]>([])
-  const [config, setConfig] = useState<WhaleAlertConfig>(DEFAULT_WHALE_CONFIG)
-  const [stats, setStats] = useState({ totalWhales: 0, totalAlerts: 0, unreadAlerts: 0, recentTxCount: 0 })
-  const [scanning, setScanning] = useState(false)
-  const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
+  const [txs] = useState<WhaleTransaction[]>(MOCK_TXS)
+  const [filterType, setFilterType] = useState<TxType | 'all' | 'suspicious'>('all')
+  const [minValue, setMinValue] = useState(1_000_000)
 
-  // Add wallet form
-  const [newAddr, setNewAddr] = useState('')
-  const [newLabel, setNewLabel] = useState('')
-  const [newCategory, setNewCategory] = useState<WhaleWallet['category']>('individual')
-  const [newEstValue, setNewEstValue] = useState('')
+  const filtered = txs.filter(tx => {
+    if (filterType === 'suspicious') return tx.suspicious
+    if (filterType !== 'all' && tx.type !== filterType) return false
+    return tx.usdValue >= minValue
+  })
 
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const totalVolume = txs.reduce((s, tx) => s + tx.usdValue, 0)
+  const suspiciousCount = txs.filter(tx => tx.suspicious).length
 
-  const refreshData = useCallback(() => {
-    setAlerts(whaleAlerts.getAlerts(100))
-    setTransactions(whaleAlerts.getRecentTransactions(100))
-    setWatchlist(whaleAlerts.getWatchlist())
-    setConfig(whaleAlerts.getConfig())
-    setStats(whaleAlerts.getStats())
-  }, [])
-
-  useEffect(() => {
-    refreshData()
-    // Auto-refresh every 5s
-    pollingRef.current = setInterval(refreshData, 5000)
-    return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current)
-    }
-  }, [refreshData])
-
-  const handleScan = async () => {
-    setScanning(true)
-    setError('')
-    try {
-      await whaleAlerts.scanAllChains()
-      refreshData()
-      setSuccess('Scan complete')
-      setTimeout(() => setSuccess(''), 2000)
-    } catch (err) {
-      setError('Scan failed. Check RPC connections.')
-    } finally {
-      setScanning(false)
-    }
-  }
-
-  const handleAddWallet = () => {
-    setError('')
-    if (!newAddr || !isValidAddress(newAddr)) {
-      setError('Invalid wallet address')
-      return
-    }
-    if (!newLabel.trim()) {
-      setError('Label is required')
-      return
-    }
-
-    const wallet: WhaleWallet = {
-      address: newAddr.trim(),
-      label: newLabel.trim(),
-      estimatedValue: parseFloat(newEstValue) || 0,
-      chains: [1, 8453, 42161],
-      lastActivity: new Date().toISOString(),
-      category: newCategory,
-    }
-
-    whaleAlerts.addWatchlistWallet(wallet)
-    setNewAddr('')
-    setNewLabel('')
-    setNewEstValue('')
-    setSuccess(`Added "${wallet.label}" to watchlist`)
-    setTimeout(() => setSuccess(''), 2000)
-    refreshData()
-  }
-
-  const handleRemoveWallet = (addr: string) => {
-    whaleAlerts.removeWatchlistWallet(addr)
-    setSuccess('Removed from watchlist')
-    setTimeout(() => setSuccess(''), 2000)
-    refreshData()
-  }
-
-  const handleConfigUpdate = (updates: Partial<WhaleAlertConfig>) => {
-    whaleAlerts.updateConfig(updates)
-    setConfig(whaleAlerts.getConfig())
-    setSuccess('Settings updated')
-    setTimeout(() => setSuccess(''), 2000)
-  }
-
-  const markAllRead = () => {
-    whaleAlerts.markAllRead()
-    refreshData()
-  }
-
-  const getTimeAgo = (ts: string) => {
-    const diff = Date.now() - new Date(ts).getTime()
-    if (diff < 60000) return 'just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return `${Math.floor(diff / 86400000)}d ago`
-  }
-
-  const formatUSD = (val: number) => {
-    if (val >= 1_000_000_000) return `$${(val / 1_000_000_000).toFixed(1)}B`
-    if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(1)}M`
-    if (val >= 1_000) return `$${(val / 1_000).toFixed(0)}K`
-    return `$${val.toFixed(0)}`
-  }
-
-  const alertLevelColors = {
-    info: { bg: 'bg-blue-500/10', border: 'border-blue-500/20', text: 'text-blue-400', icon: '🐋' },
-    warning: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400', icon: '⚠️' },
-    critical: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400', icon: '🚨' },
-  }
-
-  const txTypeColors = {
-    buy: 'text-green-400 bg-green-500/15',
-    sell: 'text-red-400 bg-red-500/15',
-    transfer: 'text-blue-400 bg-blue-500/15',
-    approve: 'text-yellow-400 bg-yellow-500/15',
-  }
-
-  const categoryIcons = {
-    fund: '🏦',
-    exchange: '🏛️',
-    defi: '🔮',
-    individual: '👤',
-    unknown: '❓',
+  const formatUSD = (v: number) => {
+    if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1)}B`
+    if (v >= 1_000_000) return `$${(v / 1_000_000).toFixed(1)}M`
+    return `$${v.toLocaleString()}`
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+    <main className="min-h-screen bg-gradient-to-b from-[#050507] via-[#0a0a0f] to-[#050507] text-white">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 right-1/3 w-[500px] h-[500px] bg-[#00e5ff]/3 rounded-full blur-[150px]" />
+        <div className="absolute bottom-1/4 left-1/4 w-[400px] h-[400px] bg-[#a855f7]/3 rounded-full blur-[150px]" />
+      </div>
+
+      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05] relative z-10">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-[#00ff87] to-[#00e5ff] bg-clip-text text-transparent">SweepGuard</span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
           <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
+          <Link href="/whale-alerts" className="text-sm text-[#00e5ff] font-medium">Whale Alerts</Link>
         </div>
       </nav>
 
-      <div className="max-w-6xl mx-auto px-6 py-12">
+      <div className="max-w-5xl mx-auto px-6 py-12 relative z-10">
         {/* Header */}
-        <div className="flex items-start justify-between mb-10">
-          <div className="flex items-center gap-3">
-            <span className="text-4xl">🐋</span>
-            <div>
-              <h1 className="text-3xl font-bold">Whale Alerts</h1>
-              <p className="text-white/40">Track whale wallets and get alerted on suspicious token movements</p>
-            </div>
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] text-xs font-medium mb-6">
+            🐋 WHALE TRACKING
           </div>
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold text-sm disabled:opacity-50 hover:from-blue-500 hover:to-cyan-500 transition-all flex items-center gap-2"
-          >
-            {scanning ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25" /><path d="M4 12a8 8 0 018-8" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-                Scanning...
-              </>
-            ) : '🔍 Scan Now'}
-          </button>
+          <h1 className="text-5xl font-black mb-3 bg-gradient-to-r from-[#00e5ff] via-[#a855f7] to-[#00e5ff] bg-clip-text text-transparent">
+            🐋 Whale Alerts
+          </h1>
+          <p className="text-white/40 text-lg max-w-xl mx-auto">
+            Track whale movements, detect suspicious transactions, and stay ahead of market movers
+          </p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-            <p className="text-white/40 text-xs mb-1">Tracked Whales</p>
-            <p className="text-2xl font-bold text-blue-400">{stats.totalWhales}</p>
-          </div>
-          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-            <p className="text-white/40 text-xs mb-1">Total Alerts</p>
-            <p className="text-2xl font-bold text-yellow-400">{stats.totalAlerts}</p>
-          </div>
-          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-            <p className="text-white/40 text-xs mb-1">Unread</p>
-            <p className="text-2xl font-bold text-red-400">{stats.unreadAlerts}</p>
-          </div>
-          <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
-            <p className="text-white/40 text-xs mb-1">Recent Transactions</p>
-            <p className="text-2xl font-bold text-green-400">{stats.recentTxCount}</p>
-          </div>
-        </div>
-
-        {/* Toasts */}
-        {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6 flex items-center gap-2">
-            <span>❌</span> {error}
-            <button onClick={() => setError('')} className="ml-auto text-red-400/50 hover:text-red-400">✕</button>
-          </div>
-        )}
-        {success && (
-          <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-green-400 text-sm mb-6 flex items-center gap-2">
-            <span>✅</span> {success}
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="flex gap-1 mb-8 p-1 bg-white/[0.02] border border-white/[0.05] rounded-xl w-fit">
-          {(['alerts', 'transactions', 'watchlist', 'settings'] as Tab[]).map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all relative ${
-                activeTab === tab
-                  ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                  : 'text-white/40 hover:text-white/70'
-              }`}
-            >
-              {tab === 'alerts' ? '🔔 Alerts' : tab === 'transactions' ? '📊 Transactions' : tab === 'watchlist' ? '👁️ Watchlist' : '⚙️ Settings'}
-              {tab === 'alerts' && stats.unreadAlerts > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center">{stats.unreadAlerts}</span>
-              )}
-            </button>
+          {[
+            { label: 'Total Volume', value: formatUSD(totalVolume), icon: '💰', color: '#00e5ff' },
+            { label: 'Transactions', value: txs.length, icon: '📊', color: '#a855f7' },
+            { label: 'Suspicious', value: suspiciousCount, icon: '🚨', color: '#ff3b3b' },
+            { label: 'Chains Tracked', value: 6, icon: '⛓️', color: '#00ff87' },
+          ].map(s => (
+            <div key={s.label} className="p-5 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl hover:border-white/[0.12] transition-all">
+              <span className="text-2xl">{s.icon}</span>
+              <p className="text-2xl font-black mt-2" style={{ color: s.color }}>{s.value}</p>
+              <p className="text-white/30 text-xs mt-1">{s.label}</p>
+            </div>
           ))}
         </div>
 
-        {/* Alerts Tab */}
-        {activeTab === 'alerts' && (
-          <div className="space-y-4">
-            {alerts.length > 0 && (
-              <div className="flex justify-end mb-2">
-                <button onClick={markAllRead} className="text-xs text-white/30 hover:text-white/60 transition-colors">Mark all read</button>
-              </div>
-            )}
-            {alerts.length > 0 ? alerts.map(alert => {
-              const colors = alertLevelColors[alert.level]
-              return (
-                <div key={alert.id} className={`p-5 rounded-xl ${colors.bg} border ${colors.border} ${!alert.read ? 'ring-1 ring-blue-500/20' : ''} transition-all`}>
-                  <div className="flex items-start gap-4">
-                    <span className="text-2xl">{colors.icon}</span>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-sm">{alert.title}</h3>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>{alert.level}</span>
-                        {!alert.read && <span className="w-2 h-2 bg-blue-400 rounded-full" />}
-                      </div>
-                      <p className="text-white/60 text-sm mb-2">{alert.message}</p>
-                      <div className="flex items-center gap-4 text-xs text-white/30">
-                        <span className="font-mono">{alert.whaleLabel}</span>
-                        <span>{alert.chainName}</span>
-                        <span>{alert.amount} {alert.tokenSymbol}</span>
-                        {alert.usdValue > 0 && <span className="text-green-400/60">{formatUSD(alert.usdValue)}</span>}
-                        <a href={`https://etherscan.io/tx/${alert.txHash}`} target="_blank" rel="noopener noreferrer" className="text-blue-400/50 hover:text-blue-400 transition-colors">
-                          {alert.txHash.slice(0, 10)}... ↗
-                        </a>
-                        <span className="ml-auto">{getTimeAgo(alert.timestamp)}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            }) : (
-              <div className="p-12 rounded-2xl bg-white/[0.02] border border-white/[0.05] text-center">
-                <span className="text-4xl block mb-3">🔔</span>
-                <p className="text-white/40 text-sm">No alerts yet</p>
-                <p className="text-white/20 text-xs mt-1">Whale alerts will appear here when suspicious activity is detected</p>
-              </div>
-            )}
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          {(['all', 'suspicious', 'buy', 'sell', 'transfer', 'approve'] as const).map(f => (
+            <button key={f} onClick={() => setFilterType(f)} className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all capitalize ${filterType === f ? 'bg-white/10 text-white border border-white/20' : 'bg-white/[0.03] text-white/30 border border-white/[0.06] hover:text-white/60'}`}>
+              {f === 'all' ? '🔍 All' : f === 'suspicious' ? '🚨 Suspicious' : `${TX_TYPE_STYLES[f].icon} ${f}`}
+            </button>
+          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-white/30 text-xs">Min Value:</span>
+            <select value={minValue} onChange={e => setMinValue(Number(e.target.value))} className="px-3 py-1.5 bg-white/[0.03] border border-white/[0.06] rounded-lg text-xs text-white focus:outline-none">
+              <option value={100000}>$100K</option>
+              <option value={1000000}>$1M</option>
+              <option value={5000000}>$5M</option>
+              <option value={10000000}>$10M</option>
+            </select>
           </div>
-        )}
+        </div>
 
-        {/* Transactions Tab */}
-        {activeTab === 'transactions' && (
-          <div className="space-y-3">
-            {transactions.length > 0 ? transactions.map((tx, i) => (
-              <div key={`${tx.hash}-${i}`} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:border-white/[0.1] transition-all">
-                <div className="flex items-center gap-4">
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${txTypeColors[tx.type]}`}>
-                    {tx.type.toUpperCase()}
-                  </span>
-                  {tx.suspicious && <span className="text-xs px-2 py-1 rounded-full bg-red-500/15 text-red-400">⚠️ SUSPICIOUS</span>}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-sm">
-                      <span className="text-white/70 font-medium">{tx.fromLabel}</span>
-                      <span className="text-white/20">→</span>
-                      <span className="text-white/70 font-medium">{tx.toLabel}</span>
+        {/* Transaction Feed */}
+        <div className="space-y-3">
+          {filtered.map((tx, i) => {
+            const txStyle = TX_TYPE_STYLES[tx.type]
+            return (
+              <div key={i} className={`p-5 bg-white/[0.03] backdrop-blur-xl border rounded-2xl transition-all duration-300 ${tx.suspicious ? 'border-[#ff3b3b]/15 hover:border-[#ff3b3b]/30' : 'border-white/[0.06] hover:border-white/[0.12]'}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-2xl ${tx.suspicious ? 'bg-[#ff3b3b]/10 border border-[#ff3b3b]/20' : 'bg-white/[0.05] border border-white/[0.06]'}`}>
+                      <span className={txStyle.color}>{txStyle.icon}</span>
                     </div>
-                    <p className="text-white/30 text-xs mt-0.5">
-                      {tx.amountFormatted} {tx.tokenSymbol} on {tx.chainName}
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-bold text-sm">{tx.amountFormatted}</h4>
+                        <span className={`text-sm font-bold ${txStyle.color}`}>{tx.type.toUpperCase()}</span>
+                        <span className="px-2 py-0.5 rounded text-[10px] bg-white/[0.05] text-white/30">{tx.chainName}</span>
+                        {tx.suspicious && <span className="px-2 py-0.5 rounded text-[10px] bg-[#ff3b3b]/10 text-[#ff3b3b] border border-[#ff3b3b]/20">🚨 SUSPICIOUS</span>}
+                      </div>
+                      <p className="text-white/40 text-xs">
+                        <span className="text-white/60">{tx.fromLabel}</span> → <span className="text-white/60">{tx.toLabel}</span>
+                      </p>
+                      <p className="text-white/20 text-[10px] font-mono mt-0.5">{tx.hash}</p>
                       {tx.suspiciousReasons.length > 0 && (
-                        <span className="text-red-400/60 ml-2">({tx.suspiciousReasons.join(', ')})</span>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {tx.suspiciousReasons.map((r, j) => (
+                            <span key={j} className="px-2 py-0.5 rounded text-[10px] bg-[#ff3b3b]/5 text-[#ff3b3b]/60 border border-[#ff3b3b]/10">{r}</span>
+                          ))}
+                        </div>
                       )}
-                    </p>
+                    </div>
                   </div>
                   <div className="text-right">
-                    <span className="text-white/20 text-xs">{getTimeAgo(tx.timestamp)}</span>
-                    <a href={`https://etherscan.io/tx/${tx.hash}`} target="_blank" rel="noopener noreferrer" className="block text-blue-400/40 text-xs hover:text-blue-400 transition-colors mt-0.5">
-                      {tx.hash.slice(0, 8)}... ↗
-                    </a>
+                    <p className="text-lg font-bold" style={{ color: txStyle.color }}>{formatUSD(tx.usdValue)}</p>
+                    <p className="text-white/20 text-[10px]">{new Date(tx.timestamp).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
-            )) : (
-              <div className="p-12 rounded-2xl bg-white/[0.02] border border-white/[0.05] text-center">
-                <span className="text-4xl block mb-3">📊</span>
-                <p className="text-white/40 text-sm">No transactions recorded</p>
-                <p className="text-white/20 text-xs mt-1">Run a scan to detect whale activity</p>
-              </div>
-            )}
-          </div>
-        )}
+            )
+          })}
+        </div>
 
-        {/* Watchlist Tab */}
-        {activeTab === 'watchlist' && (
-          <div className="space-y-6">
-            {/* Add wallet form */}
-            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm">
-              <h3 className="text-lg font-semibold mb-4">Add Whale to Watchlist</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                <input
-                  type="text"
-                  value={newAddr}
-                  onChange={e => setNewAddr(e.target.value)}
-                  placeholder="Wallet address (0x...)"
-                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-blue-500/40 text-sm font-mono"
-                />
-                <input
-                  type="text"
-                  value={newLabel}
-                  onChange={e => setNewLabel(e.target.value)}
-                  placeholder="Label (e.g. Whale Fund #1)"
-                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-blue-500/40 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <select
-                  value={newCategory}
-                  onChange={e => setNewCategory(e.target.value as WhaleWallet['category'])}
-                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white/70 focus:outline-none focus:border-blue-500/40 text-sm appearance-none cursor-pointer"
-                >
-                  <option value="individual" className="bg-[#0a0a0f]">👤 Individual</option>
-                  <option value="fund" className="bg-[#0a0a0f]">🏦 Fund</option>
-                  <option value="exchange" className="bg-[#0a0a0f]">🏛️ Exchange</option>
-                  <option value="defi" className="bg-[#0a0a0f]">🔮 DeFi</option>
-                  <option value="unknown" className="bg-[#0a0a0f]">❓ Unknown</option>
-                </select>
-                <input
-                  type="text"
-                  value={newEstValue}
-                  onChange={e => setNewEstValue(e.target.value)}
-                  placeholder="Est. value USD (optional)"
-                  className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-blue-500/40 text-sm"
-                />
-                <button
-                  onClick={handleAddWallet}
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold text-sm hover:from-blue-500 hover:to-cyan-500 transition-all"
-                >
-                  + Add to Watchlist
-                </button>
-              </div>
-            </div>
-
-            {/* Watchlist */}
-            <div className="space-y-3">
-              {watchlist.map(whale => (
-                <div key={whale.address} className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.05] hover:border-blue-500/20 transition-all">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <span className="text-2xl">{categoryIcons[whale.category]}</span>
-                      <div>
-                        <p className="font-medium text-sm">{whale.label}</p>
-                        <p className="text-white/30 text-xs font-mono">{whale.address.slice(0, 10)}...{whale.address.slice(-8)}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-blue-400">{formatUSD(whale.estimatedValue)}</p>
-                        <p className="text-white/20 text-xs capitalize">{whale.category}</p>
-                      </div>
-                      <button
-                        onClick={() => handleRemoveWallet(whale.address)}
-                        className="text-red-400/40 hover:text-red-400 text-xs transition-colors px-2 py-1"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Settings Tab */}
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.06] backdrop-blur-sm">
-              <h3 className="text-lg font-semibold mb-4">Alert Configuration</h3>
-              <div className="space-y-4">
-                <label className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl cursor-pointer hover:border-blue-500/20 transition-all">
-                  <div>
-                    <p className="text-sm font-medium">Enable Alerts</p>
-                    <p className="text-white/30 text-xs">Receive whale activity alerts</p>
-                  </div>
-                  <button
-                    onClick={() => handleConfigUpdate({ enabled: !config.enabled })}
-                    className={`w-12 h-6 rounded-full transition-all ${config.enabled ? 'bg-green-500' : 'bg-white/10'}`}
-                  >
-                    <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${config.enabled ? 'translate-x-6' : 'translate-x-0.5'}`} />
-                  </button>
-                </label>
-
-                <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
-                  <label className="text-sm font-medium block mb-2">Minimum Transaction Value (USD)</label>
-                  <div className="flex items-center gap-3">
-                    <span className="text-white/30 text-sm">$</span>
-                    <input
-                      type="number"
-                      value={config.minValueUSD}
-                      onChange={e => handleConfigUpdate({ minValueUSD: Number(e.target.value) })}
-                      className="flex-1 px-3 py-2 bg-white/[0.03] border border-white/[0.06] rounded-lg text-sm text-white focus:outline-none focus:border-blue-500/40"
-                    />
-                    <span className="text-white/30 text-xs">USD</span>
-                  </div>
-                  <p className="text-white/20 text-xs mt-1">Only alert on transactions above this value</p>
-                </div>
-
-                {[
-                  { key: 'alertOnBuy' as const, label: 'Alert on Whale Buys', desc: 'Notify when whales buy tokens' },
-                  { key: 'alertOnSell' as const, label: 'Alert on Whale Sells', desc: 'Notify when whales sell tokens' },
-                  { key: 'alertOnTransfer' as const, label: 'Alert on Transfers', desc: 'Notify on large whale transfers' },
-                  { key: 'suspiciousTokenAlerts' as const, label: 'Suspicious Token Alerts', desc: 'Alert when whales buy new/suspicious tokens' },
-                  { key: 'watchlistOnly' as const, label: 'Watchlist Only', desc: 'Only alert on watchlisted wallets' },
-                ].map(({ key, label, desc }) => (
-                  <label key={key} className="flex items-center justify-between p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl cursor-pointer hover:border-blue-500/20 transition-all">
-                    <div>
-                      <p className="text-sm font-medium">{label}</p>
-                      <p className="text-white/30 text-xs">{desc}</p>
-                    </div>
-                    <button
-                      onClick={() => handleConfigUpdate({ [key]: !config[key] })}
-                      className={`w-12 h-6 rounded-full transition-all ${config[key] ? 'bg-green-500' : 'bg-white/10'}`}
-                    >
-                      <div className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${config[key] ? 'translate-x-6' : 'translate-x-0.5'}`} />
-                    </button>
-                  </label>
-                ))}
-              </div>
-            </div>
+        {filtered.length === 0 && (
+          <div className="p-12 bg-white/[0.02] border border-white/[0.06] rounded-2xl text-center">
+            <span className="text-4xl block mb-3">🐋</span>
+            <p className="text-white/30 text-sm">No whale transactions match your filters</p>
           </div>
         )}
       </div>
