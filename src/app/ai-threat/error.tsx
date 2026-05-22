@@ -22,25 +22,28 @@ export default function AIThreatError({
   }, [error])
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white flex items-center justify-center">
+    <main className="min-h-screen bg-gradient-to-b from-[#050507] via-[#0a0a0f] to-[#050507] text-white flex items-center justify-center">
       <div className="max-w-md mx-auto text-center px-6">
-        <span className="text-6xl block mb-6">🧠</span>
-        <h1 className="text-2xl font-bold mb-3 text-red-400">Threat Analysis Error</h1>
+        <div className="relative mb-8">
+          <div className="absolute inset-0 rounded-full bg-[#a855f7]/10 blur-[40px]" />
+          <span className="relative text-6xl block">🧠</span>
+        </div>
+        <h1 className="text-2xl font-bold mb-3 bg-gradient-to-r from-[#a855f7] to-[#c084fc] bg-clip-text text-transparent">AI Analysis Error</h1>
         <p className="text-white/40 text-sm mb-8">
-          The AI threat engine encountered an error. This has been logged.
+          The threat intelligence engine encountered an error. This has been logged.
         </p>
         <div className="flex gap-3 justify-center">
           <button
             onClick={reset}
-            className="px-6 py-3 bg-purple-600 rounded-xl font-semibold text-sm hover:bg-purple-500 transition-all"
+            className="px-6 py-3 bg-gradient-to-r from-[#a855f7] to-[#c084fc] rounded-xl font-semibold text-sm hover:shadow-[0_0_30px_rgba(168,85,247,0.3)] transition-all"
           >
             Retry
           </button>
           <a
-            href="/scan"
-            className="px-6 py-3 bg-white/10 rounded-xl font-semibold text-sm hover:bg-white/20 transition-all"
+            href="/dashboard"
+            className="px-6 py-3 bg-white/[0.05] backdrop-blur-xl border border-white/[0.08] rounded-xl font-semibold text-sm hover:bg-white/[0.08] transition-all"
           >
-            Back to Scanner
+            Dashboard
           </a>
         </div>
       </div>

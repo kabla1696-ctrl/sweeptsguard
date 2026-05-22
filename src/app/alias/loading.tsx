@@ -1,10 +1,14 @@
-export default function Loading() {
+export default function AliasLoading() {
   return (
-    <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-      <div className="flex flex-col items-center gap-4">
-        <div className="w-12 h-12 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
-        <span className="text-white/30 text-sm">Loading Address Aliases...</span>
+    <main className="min-h-screen bg-gradient-to-b from-[#050507] via-[#0a0a0f] to-[#050507] text-white flex items-center justify-center">
+      <div className="text-center">
+        <div className="relative">
+          <div className="w-16 h-16 border-2 border-violet-500/20 rounded-full animate-spin">
+            <div className="absolute top-0 left-0 w-16 h-16 border-2 border-transparent border-t-violet-400 rounded-full animate-spin" />
+          </div>
+        </div>
+        <p className="mt-6 text-white/40 text-sm animate-pulse">Loading Address Alias...</p>
       </div>
-    </div>
+    </main>
   )
 }

@@ -4,20 +4,29 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createWalletManager, type ManagedWallet } from '@/lib/walletManager'
 
+const CHAIN_ICONS: Record<number, string> = {
+  1: '⟠',
+  8453: '🔵',
+  56: '🔶',
+  42161: '🔵',
+  137: '🟣',
+  10: '🔴',
+}
+
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<ManagedWallet[]>([])
   const [newAddress, setNewAddress] = useState('')
   const [newSafeAddress, setNewSafeAddress] = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [mounted, setMounted] = useState(false)
+  const [validationError, setValidationError] = useState('')
+  const [showAdd, setShowAdd] = useState(false)
 
   useEffect(() => {
     setMounted(true)
     const manager = createWalletManager()
     setWallets(manager.getAll())
   }, [])
-
-  const [validationError, setValidationError] = useState('')
 
   const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 
@@ -36,7 +45,7 @@ export default function WalletsPage() {
       return
     }
     const manager = createWalletManager()
-    const wallet = manager.add({
+    manager.add({
       address: newAddress,
       safeAddress: newSafeAddress || undefined,
       label: newLabel || `Wallet ${newAddress.slice(0, 8)}...`,
@@ -47,6 +56,7 @@ export default function WalletsPage() {
     setNewAddress('')
     setNewSafeAddress('')
     setNewLabel('')
+    setShowAdd(false)
   }
 
   const removeWallet = (id: string) => {
@@ -62,140 +72,186 @@ export default function WalletsPage() {
   }
 
   if (!mounted) {
-    return <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-      <div className="inline-flex items-center gap-3 text-white/30">
-        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-        Loading...
-      </div>
-    </div>
+    return (
+      <main className="min-h-screen bg-gradient-to-br from-[#050507] via-[#0a0a0f] to-[#050507] flex items-center justify-center">
+        <div className="inline-flex items-center gap-3 text-gray-500">
+          <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          Loading...
+        </div>
+      </main>
+    )
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl">🛡️</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
-        </Link>
-        <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
-          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
-        </div>
-      </nav>
+    <main className="min-h-screen bg-gradient-to-br from-[#050507] via-[#0a0a0f] to-[#050507] text-white">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/3 left-1/4 w-96 h-96 bg-[#00ff87]/3 rounded-full blur-[128px]" />
+        <div className="absolute bottom-1/3 right-1/4 w-80 h-80 bg-[#00e5ff]/3 rounded-full blur-[128px]" />
+      </div>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">Wallet Manager</h1>
-        <p className="text-white/40 mb-8">Manage multiple compromised wallets from one dashboard</p>
-
-        {/* Help Text */}
-        <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
-          <h3 className="text-blue-400 font-semibold text-sm mb-2">💡 What's this for?</h3>
-          <p className="text-white/50 text-sm">If you have multiple compromised wallets, add them here. You can quickly switch between them and launch protection from the Dashboard. The <span className="text-white font-medium">active wallet</span> is used by default when you visit the Dashboard.</p>
-        </div>
-
-        {/* Add Wallet Form */}
-        <div className="p-6 bg-white/[0.02] border border-white/[0.05] rounded-2xl mb-8">
-          <h2 className="text-lg font-semibold mb-4">Add Wallet</h2>
-          <p className="text-white/30 text-xs mb-4">Enter the addresses of your compromised wallet and a safe wallet to sweep funds to.</p>
-          <div className="grid md:grid-cols-3 gap-4 mb-4">
-            <input
-              type="text"
-              value={newAddress}
-              onChange={e => setNewAddress(e.target.value)}
-              placeholder="Compromised address (0x...)"
-              aria-label="Compromised wallet address"
-              className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-            />
-            <input
-              type="text"
-              value={newSafeAddress}
-              onChange={e => setNewSafeAddress(e.target.value)}
-              placeholder="Safe address (0x...)"
-              aria-label="Safe wallet address"
-              className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
-            />
-            <input
-              type="text"
-              value={newLabel}
-              onChange={e => setNewLabel(e.target.value)}
-              placeholder="Label (optional)"
-              aria-label="Wallet label"
-              className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
-            />
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-10 animate-[fade-in_0.6s_ease-out]">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+              👛 Wallet Manager
+            </h1>
+            <p className="text-gray-400 text-sm sm:text-base">Manage multiple compromised wallets from one dashboard</p>
           </div>
-          {validationError && (
-            <p className="text-red-400 text-sm mb-3">{validationError}</p>
-          )}
           <button
-            onClick={addWallet}
-            disabled={!newAddress}
-            aria-label="Add wallet to manager"
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50 hover:from-green-500 hover:to-emerald-500 transition-all"
+            onClick={() => setShowAdd(!showAdd)}
+            className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black font-semibold rounded-xl text-sm hover:shadow-[0_0_30px_rgba(0,255,135,0.3)] transition-all duration-300 active:scale-95"
           >
-            ➕ Add Wallet
+            <span className="text-lg">+</span> Add Wallet
           </button>
         </div>
 
-        {/* Wallet List */}
+        {/* Add Wallet Form */}
+        {showAdd && (
+          <div className="mb-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 animate-[slide-up_0.4s_ease-out]">
+            <h2 className="text-lg font-semibold mb-1">Add New Wallet</h2>
+            <p className="text-gray-500 text-xs mb-5">Enter the addresses of your compromised wallet and a safe wallet to sweep funds to.</p>
+            <div className="grid sm:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Compromised Address</label>
+                <input
+                  type="text"
+                  value={newAddress}
+                  onChange={e => setNewAddress(e.target.value)}
+                  placeholder="0x..."
+                  aria-label="Compromised wallet address"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00ff87]/40 focus:shadow-[0_0_15px_rgba(0,255,135,0.08)] text-sm font-mono transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Safe Address</label>
+                <input
+                  type="text"
+                  value={newSafeAddress}
+                  onChange={e => setNewSafeAddress(e.target.value)}
+                  placeholder="0x..."
+                  aria-label="Safe wallet address"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00e5ff]/40 focus:shadow-[0_0_15px_rgba(0,229,255,0.08)] text-sm font-mono transition-all"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Label</label>
+                <input
+                  type="text"
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  placeholder="My wallet"
+                  aria-label="Wallet label"
+                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 text-sm transition-all"
+                />
+              </div>
+            </div>
+            {validationError && (
+              <p className="text-[#ff3b3b] text-sm mb-3">{validationError}</p>
+            )}
+            <div className="flex gap-3">
+              <button
+                onClick={addWallet}
+                disabled={!newAddress}
+                aria-label="Add wallet to manager"
+                className="px-6 py-3 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black font-semibold rounded-xl text-sm disabled:opacity-40 hover:shadow-[0_0_20px_rgba(0,255,135,0.2)] transition-all active:scale-95"
+              >
+                Add Wallet
+              </button>
+              <button
+                onClick={() => setShowAdd(false)}
+                className="px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-400 hover:text-white hover:bg-white/10 transition-all"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Wallet Cards */}
         {wallets.length === 0 ? (
-          <div className="text-center py-12 text-white/30">
-            <p className="text-lg mb-2">No wallets added yet</p>
-            <p className="text-sm">Add your first compromised wallet above</p>
+          <div className="text-center py-20 animate-[fade-in_0.6s_ease-out]">
+            <div className="relative inline-block mb-6">
+              <div className="absolute inset-0 bg-[#00ff87]/10 blur-3xl rounded-full" />
+              <span className="text-7xl relative">👛</span>
+            </div>
+            <p className="text-gray-500 text-lg mb-2">No wallets added yet</p>
+            <p className="text-gray-600 text-sm">Click &quot;Add Wallet&quot; to get started</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {wallets.map(wallet => (
+          <div className="grid sm:grid-cols-2 gap-4">
+            {wallets.map((wallet, idx) => (
               <div
                 key={wallet.id}
-                className={`p-5 rounded-2xl border transition-all ${
+                className={`group relative bg-white/5 backdrop-blur-xl border rounded-2xl p-6 transition-all duration-300 hover:-translate-y-1 animate-[fade-in_0.5s_ease-out_both] ${
                   wallet.isActive
-                    ? 'bg-green-500/10 border-green-500/20'
-                    : 'bg-white/[0.02] border-white/[0.05]'
+                    ? 'border-[#00ff87]/30 shadow-[0_0_30px_rgba(0,255,135,0.08)]'
+                    : 'border-white/10 hover:border-white/20'
                 }`}
+                style={{ animationDelay: `${idx * 100}ms` }}
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold">{wallet.label}</h3>
-                      {wallet.isActive && (
-                        <span className="text-xs bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">Active</span>
-                      )}
-                    </div>
-                    <p className="text-white/40 text-sm font-mono">{wallet.address}</p>
-                    {wallet.safeAddress && (
-                      <p className="text-white/30 text-xs font-mono mt-1">→ {wallet.safeAddress}</p>
-                    )}
+                {/* Active indicator */}
+                {wallet.isActive && (
+                  <div className="absolute top-4 right-4">
+                    <span className="flex items-center gap-1.5 text-[10px] px-2.5 py-1 rounded-full bg-[#00ff87]/10 text-[#00ff87] border border-[#00ff87]/20">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#00ff87] animate-pulse" />
+                      Active
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    {!wallet.isActive && (
-                      <button
-                        onClick={() => setActive(wallet.id)}
-                        aria-label="Set wallet as active"
-                        title="Set as default wallet on Dashboard"
-                      className="px-3 py-1.5 text-xs bg-green-500/10 border border-green-500/20 text-green-400 rounded-lg hover:bg-green-500/20 transition-colors"
-                      >
-                        Set Active
-                      </button>
-                    )}
-                    <Link
-                      href={`/dashboard?address=${wallet.address}`}
-                      className="px-3 py-1.5 text-xs bg-white/[0.05] border border-white/[0.1] rounded-lg hover:bg-white/[0.08] transition-colors"
-                    >
-                      Dashboard
-                    </Link>
+                )}
+
+                <div className="mb-4">
+                  <h3 className="font-semibold text-white text-lg">{wallet.label}</h3>
+                  <p className="text-gray-500 text-xs font-mono mt-1 break-all">{wallet.address}</p>
+                  {wallet.safeAddress && (
+                    <p className="text-gray-600 text-xs font-mono mt-1 flex items-center gap-1">
+                      <span className="text-[#00ff87]">→</span> {wallet.safeAddress}
+                    </p>
+                  )}
+                </div>
+
+                {/* Chain icons */}
+                <div className="flex gap-1 mb-5">
+                  {(wallet.chainIds || [1, 8453, 56, 42161, 137, 10]).map(cid => (
+                    <span key={cid} className="w-6 h-6 rounded-full bg-white/5 border border-white/5 flex items-center justify-center text-[10px]" title={`Chain ${cid}`}>
+                      {CHAIN_ICONS[cid] || '⛓'}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-2 flex-wrap">
+                  {!wallet.isActive && (
                     <button
-                      onClick={() => removeWallet(wallet.id)}
-                      aria-label={`Remove wallet ${wallet.label}`}
-                      className="px-3 py-1.5 text-xs bg-red-500/10 border border-red-500/20 text-red-400 rounded-lg hover:bg-red-500/20 transition-colors"
+                      onClick={() => setActive(wallet.id)}
+                      aria-label="Set wallet as active"
+                      className="px-3 py-1.5 text-xs bg-[#00ff87]/10 border border-[#00ff87]/20 text-[#00ff87] rounded-lg hover:bg-[#00ff87]/20 transition-all"
                     >
-                      Remove
+                      Set Active
                     </button>
-                  </div>
+                  )}
+                  <Link
+                    href={`/dashboard?address=${wallet.address}`}
+                    className="px-3 py-1.5 text-xs bg-[#00e5ff]/10 border border-[#00e5ff]/20 text-[#00e5ff] rounded-lg hover:bg-[#00e5ff]/20 transition-all"
+                  >
+                    Dashboard
+                  </Link>
+                  <Link
+                    href={`/scan?address=${wallet.address}`}
+                    className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 text-gray-400 rounded-lg hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    Scan
+                  </Link>
+                  <button
+                    onClick={() => removeWallet(wallet.id)}
+                    aria-label={`Remove wallet ${wallet.label}`}
+                    className="px-3 py-1.5 text-xs bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 text-[#ff3b3b] rounded-lg hover:bg-[#ff3b3b]/20 transition-all ml-auto"
+                  >
+                    Remove
+                  </button>
                 </div>
               </div>
             ))}

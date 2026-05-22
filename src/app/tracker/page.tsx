@@ -35,11 +35,7 @@ export default function TrackerPage() {
 
   const trackFunds = async () => {
     if (!address) { setError('Please enter a wallet address'); return }
-    try {
-      ethers.getAddress(address)
-    } catch {
-      setError('Invalid EVM address format'); return
-    }
+    try { ethers.getAddress(address) } catch { setError('Invalid EVM address format'); return }
 
     abortRef.current?.abort()
     const controller = new AbortController()
@@ -53,12 +49,8 @@ export default function TrackerPage() {
       const res = await fetch(`/api/track?address=${address}`, { signal: controller.signal })
       if (controller.signal.aborted) return
       const data = await res.json()
-
-      if (data.error) {
-        setError(data.error)
-      } else {
-        setTransfers(data.transfers || [])
-      }
+      if (data.error) setError(data.error)
+      else setTransfers(data.transfers || [])
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return
       setError('Failed to track funds. Please try again.')
@@ -67,195 +59,176 @@ export default function TrackerPage() {
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    trackFunds()
-  }
+  const formatDate = (timestamp: number) => new Date(timestamp).toLocaleString()
+  const getExplorerUrl = (chainId: number, hash: string) => `${getExplorerBaseUrl(chainId)}/tx/${hash}`
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
-  const getExplorerUrl = (chainId: number, hash: string) => {
-    return `${getExplorerBaseUrl(chainId)}/tx/${hash}`
-  }
+  const regular = transfers.filter(t => !t.isExchangeDeposit && !t.isDrainerTransfer)
+  const exchange = transfers.filter(t => t.isExchangeDeposit)
+  const drainer = transfers.filter(t => t.isDrainerTransfer)
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Nav */}
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="text-2xl">🛡️</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
-            SweepGuard
-          </span>
-        </Link>
-        <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/wallets" className="text-sm text-white/50 hover:text-white transition-colors">Wallets</Link>
-          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
+    <main className="min-h-screen bg-gradient-to-br from-[#050507] via-[#0a0a0f] to-[#050507] text-white">
+      <div className="fixed inset-0 pointer-events-none overflow-hidden">
+        <div className="absolute top-1/4 right-1/4 w-96 h-96 bg-[#00ff87]/3 rounded-full blur-[128px]" />
+        <div className="absolute bottom-1/4 left-1/4 w-80 h-80 bg-[#00e5ff]/3 rounded-full blur-[128px]" />
+      </div>
+
+      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
+        {/* Header */}
+        <div className="mb-10 animate-[fade-in_0.6s_ease-out]">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+            ⛓️ Fund Tracker
+          </h1>
+          <p className="text-gray-400 text-sm sm:text-base">Track where stolen funds have been sent across all chains</p>
         </div>
-      </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">Fund Tracker</h1>
-        <p className="text-white/40 mb-8">Track where stolen funds have been sent</p>
-
-        {/* Help Text */}
-        {!tracking && transfers.length === 0 && !error && (
-          <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
-            <h3 className="text-blue-400 font-semibold text-sm mb-2">💡 How Fund Tracking Works</h3>
-            <p className="text-white/50 text-sm">Enter a compromised wallet address and we'll scan all supported chains (Ethereum, Base, BSC, Arbitrum, Polygon, Optimism) to trace where the funds were sent. Transfers are classified as:</p>
-            <ul className="text-white/40 text-xs mt-2 space-y-1">
-              <li>• <span className="text-yellow-400">🏦 Exchange deposits</span> — funds sent to known exchanges (potential recovery targets)</li>
-              <li>• <span className="text-red-400">🚨 Drainer transfers</span> — transfers linked to known drainer contracts</li>
-              <li>• <span className="text-green-400">Regular</span> — other wallet-to-wallet transfers</li>
-            </ul>
+        {/* Input */}
+        <form onSubmit={e => { e.preventDefault(); trackFunds() }} className="mb-10 animate-[fade-in_0.6s_ease-out_0.1s_both]">
+          <div className="relative group">
+            <div className="absolute -inset-0.5 bg-gradient-to-r from-[#00ff87]/20 to-[#00e5ff]/20 rounded-2xl blur opacity-0 group-focus-within:opacity-100 transition-opacity duration-500" />
+            <div className="relative flex gap-2">
+              <div className="flex-1">
+                <AddressInput
+                  value={address}
+                  onChange={setAddress}
+                  onResolved={setResolvedAddress}
+                  placeholder="Enter wallet address (0x...) or ENS name"
+                  chainId={1}
+                  inputClassName="text-sm"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={tracking}
+                className="px-6 py-4 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black font-semibold rounded-2xl text-sm disabled:opacity-40 hover:shadow-[0_0_30px_rgba(0,255,135,0.3)] transition-all duration-300 active:scale-95"
+              >
+                {tracking ? '...' : '⛓️ Track'}
+              </button>
+            </div>
           </div>
-        )}
-
-        {/* Track Form */}
-        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
-          <div className="flex-1">
-            <AddressInput
-              value={address}
-              onChange={setAddress}
-              onResolved={setResolvedAddress}
-              placeholder="Enter wallet address to track (0x...) or ENS name"
-              chainId={1}
-              inputClassName="text-sm"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={tracking}
-            aria-label="Track fund movements"
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
-          >
-            {tracking ? 'Tracking...' : 'Track Funds'}
-          </button>
         </form>
 
-        {/* Error */}
         {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
-            {error}
-          </div>
+          <div className="p-4 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-[#ff3b3b] text-sm mb-6 animate-[fade-in_0.3s_ease-out]">{error}</div>
         )}
 
         {/* Loading */}
         {tracking && (
-          <div className="text-center py-12">
-            <div className="inline-flex items-center gap-3 text-green-400">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-              </svg>
-              Tracking fund movements...
-            </div>
+          <div className="space-y-4">
+            {[1,2,3,4,5].map(i => (
+              <div key={i} className="flex items-center gap-4 animate-pulse" style={{ animationDelay: `${i*100}ms` }}>
+                <div className="w-4 h-4 rounded-full bg-white/5 shrink-0" />
+                <div className="flex-1 h-16 bg-white/5 border border-white/10 rounded-xl" />
+              </div>
+            ))}
           </div>
         )}
 
         {/* Results */}
         {transfers.length > 0 && (
-          <div>
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-semibold">
-                Fund Movements ({transfers.length})
-              </h2>
-            </div>
-
-            <div className="space-y-3">
-              {transfers.map((transfer, i) => (
-                <div key={i} className={`p-4 rounded-xl border ${
-                  transfer.isExchangeDeposit
-                    ? 'bg-yellow-500/5 border-yellow-500/20'
-                    : transfer.isDrainerTransfer
-                    ? 'bg-red-500/5 border-red-500/20'
-                    : 'bg-white/[0.02] border-white/[0.05]'
-                }`}>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-white/30 text-xs">{transfer.chainName}</span>
-                        {transfer.isExchangeDeposit && (
-                          <span className="px-2 py-0.5 bg-yellow-500/20 rounded-full text-yellow-400 text-xs">
-                            🏦 {transfer.exchangeName}
-                          </span>
-                        )}
-                        {transfer.isDrainerTransfer && (
-                          <span className="px-2 py-0.5 bg-red-500/20 rounded-full text-red-400 text-xs">
-                            🚨 {transfer.drainerName}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-sm">
-                        <span className="text-white/50">From: </span>
-                        <span className="font-mono text-white/70">{transfer.from.slice(0, 8)}...{transfer.from.slice(-6)}</span>
-                      </div>
-
-                      <div className="text-sm mt-1">
-                        <span className="text-white/50">To: </span>
-                        <span className="font-mono text-white/70">{transfer.to.slice(0, 8)}...{transfer.to.slice(-6)}</span>
-                      </div>
-
-                      <div className="text-sm mt-2">
-                        <span className="text-green-400 font-semibold">{transfer.value} {transfer.asset}</span>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <a
-                        href={getExplorerUrl(transfer.chainId, transfer.hash)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-green-400/50 text-xs hover:text-green-400 font-mono"
-                      >
-                        {transfer.hash.slice(0, 10)}...
-                      </a>
-                      <div className="text-white/20 text-xs mt-1">
-                        {formatDate(transfer.timestamp)}
-                      </div>
-                    </div>
-                  </div>
+          <div className="animate-[fade-in_0.6s_ease-out]">
+            {/* Summary cards */}
+            <div className="grid grid-cols-3 gap-3 mb-8">
+              {[
+                { label: 'Regular', count: regular.length, color: '#00ff87', icon: '✓' },
+                { label: 'Exchange', count: exchange.length, color: '#fbbf24', icon: '🏦' },
+                { label: 'Drainer', count: drainer.length, color: '#ff3b3b', icon: '🚨' },
+              ].map((s, i) => (
+                <div
+                  key={s.label}
+                  className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 text-center transition-all duration-300 hover:-translate-y-0.5 animate-[fade-in_0.5s_ease-out_both]"
+                  style={{ animationDelay: `${i * 100}ms` }}
+                >
+                  <div className="text-2xl mb-1">{s.icon}</div>
+                  <div className="text-2xl font-bold" style={{ color: s.color }}>{s.count}</div>
+                  <div className="text-gray-500 text-xs">{s.label}</div>
                 </div>
               ))}
             </div>
 
-            {/* Summary */}
-            <div className="mt-8 p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
-              <h3 className="font-semibold mb-2">Summary</h3>
-              <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <div className="text-2xl font-bold text-green-400">
-                    {transfers.filter(t => !t.isExchangeDeposit && !t.isDrainerTransfer).length}
-                  </div>
-                  <div className="text-white/30 text-xs">Regular</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-yellow-400">
-                    {transfers.filter(t => t.isExchangeDeposit).length}
-                  </div>
-                  <div className="text-white/30 text-xs">Exchange</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-red-400">
-                    {transfers.filter(t => t.isDrainerTransfer).length}
-                  </div>
-                  <div className="text-white/30 text-xs">Drainer</div>
-                </div>
+            {/* Timeline */}
+            <h2 className="text-lg font-semibold mb-4 text-white/80">Fund Movements ({transfers.length})</h2>
+            <div className="relative">
+              {/* Timeline line */}
+              <div className="absolute left-[7px] top-0 bottom-0 w-px bg-white/5" />
+
+              <div className="space-y-4">
+                {transfers.map((transfer, i) => {
+                  const borderColor = transfer.isExchangeDeposit
+                    ? 'border-yellow-400/20'
+                    : transfer.isDrainerTransfer
+                    ? 'border-[#ff3b3b]/20'
+                    : 'border-white/10'
+                  const dotColor = transfer.isExchangeDeposit
+                    ? 'bg-yellow-400'
+                    : transfer.isDrainerTransfer
+                    ? 'bg-[#ff3b3b]'
+                    : 'bg-[#00ff87]'
+
+                  return (
+                    <div key={i} className="flex gap-4 animate-[fade-in_0.4s_ease-out_both]" style={{ animationDelay: `${i * 60}ms` }}>
+                      {/* Dot */}
+                      <div className="relative z-10 mt-5">
+                        <div className={`w-[15px] h-[15px] rounded-full ${dotColor} shadow-[0_0_8px_currentColor]`} />
+                      </div>
+
+                      {/* Card */}
+                      <div className={`flex-1 bg-white/5 backdrop-blur-xl border ${borderColor} rounded-xl p-4 transition-all duration-300 hover:-translate-y-0.5 hover:bg-white/[0.07]`}>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2 flex-wrap">
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-gray-500 border border-white/5">
+                                {transfer.chainName}
+                              </span>
+                              {transfer.isExchangeDeposit && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
+                                  🏦 {transfer.exchangeName}
+                                </span>
+                              )}
+                              {transfer.isDrainerTransfer && (
+                                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[#ff3b3b]/10 text-[#ff3b3b] border border-[#ff3b3b]/20">
+                                  🚨 {transfer.drainerName}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-xs text-gray-500 space-y-0.5">
+                              <p>From: <code className="text-gray-400 font-mono">{transfer.from.slice(0, 8)}...{transfer.from.slice(-6)}</code></p>
+                              <p>To: <code className="text-gray-400 font-mono">{transfer.to.slice(0, 8)}...{transfer.to.slice(-6)}</code></p>
+                            </div>
+                            <div className="mt-2">
+                              <span className="text-[#00ff87] font-semibold text-sm">{transfer.value} {transfer.asset}</span>
+                            </div>
+                          </div>
+                          <div className="text-right ml-4">
+                            <a
+                              href={getExplorerUrl(transfer.chainId, transfer.hash)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[#00ff87]/40 text-xs hover:text-[#00ff87] transition-colors font-mono"
+                            >
+                              {transfer.hash.slice(0, 10)}...
+                            </a>
+                            <div className="text-gray-600 text-xs mt-1">{formatDate(transfer.timestamp)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           </div>
         )}
 
-        {/* No results */}
+        {/* Empty state */}
         {!tracking && transfers.length === 0 && !error && (
-          <div className="text-center py-12 text-white/30">
-            <p className="text-lg mb-2">Enter a wallet address to track</p>
-            <p className="text-sm">We&apos;ll scan all chains for fund movements</p>
+          <div className="text-center py-20 animate-[fade-in_0.6s_ease-out]">
+            <div className="relative inline-block mb-6">
+              <div className="absolute inset-0 bg-[#00e5ff]/10 blur-3xl rounded-full" />
+              <span className="text-7xl relative">⛓️</span>
+            </div>
+            <p className="text-gray-500 text-lg mb-2">Enter a wallet address to track</p>
+            <p className="text-gray-600 text-sm">We&apos;ll scan all chains for fund movements</p>
           </div>
         )}
       </div>
