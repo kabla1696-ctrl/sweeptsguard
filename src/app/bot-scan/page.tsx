@@ -26,9 +26,80 @@ export default function BotScanPage() {
   const handleCommand = async (cmd: string) => {
     setScanning(true)
     setOutput(prev => [...prev, `$ ${cmd}`])
-    await new Promise(r => setTimeout(r, 1500))
-    setOutput(prev => [...prev, `✅ Command executed: ${cmd}`, ''])
+    try {
+      const trimmed = cmd.trim()
+      const parts = trimmed.split(/\s+/)
+      const command = parts[0]?.toLowerCase()
+
+      if (command === '/scan' && parts[1]) {
+        const address = parts[1]
+        const chainParam = parts[2] ? `&chainId=${getChainId(parts[2])}` : ''
+        const res = await fetch(`/api/bot-scan?address=${address}${chainParam}`)
+        const data = await res.json()
+        if (res.ok) {
+          const riskEmoji = data.riskLevel === 'critical' ? '🔴' : data.riskLevel === 'high' ? '🟠' : data.riskLevel === 'medium' ? '🟡' : data.riskLevel === 'low' ? '🟢' : '✅'
+          setOutput(prev => [...prev,
+            `${riskEmoji} Risk: ${data.riskScore}/100 (${data.riskLevel?.toUpperCase()})`,
+            `💰 Balance: ${data.balance} | Tokens: ${data.tokenCount} | NFTs: ${data.nftCount}`,
+            `🔓 Approvals: ${data.approvalCount} (${data.dangerousApprovals} dangerous)`,
+            data.summary,
+            ''
+          ])
+        } else {
+          setOutput(prev => [...prev, `❌ Error: ${data.error}`, ''])
+        }
+      } else if (command === '/stats') {
+        const res = await fetch('/api/bot-scan?action=analytics')
+        const data = await res.json()
+        if (res.ok) {
+          setOutput(prev => [...prev,
+            `📊 Total Scans: ${data.totalScans}`,
+            `📍 Unique Addresses: ${data.uniqueAddresses}`,
+            `👥 Unique Users: ${data.uniqueUsers}`,
+            `📅 Scans Today: ${data.scansToday}`,
+            `📈 Avg Risk: ${data.averageRiskScore?.toFixed(1)}/100`,
+            ''
+          ])
+        } else {
+          setOutput(prev => [...prev, `❌ Error: ${data.error}`, ''])
+        }
+      } else if (command === '/help' || command === '/start') {
+        setOutput(prev => [...prev,
+          '🛡️ SweepGuard Bot Scanner',
+          '  /scan <address> [chain] — Scan a wallet',
+          '  /stats — Bot statistics',
+          '  /help — Show this message',
+          ''
+        ])
+      } else if (parts[0]?.startsWith('0x')) {
+        // Direct address input treated as scan
+        const address = parts[0]
+        const chainParam = parts[1] ? `&chainId=${getChainId(parts[1])}` : ''
+        const res = await fetch(`/api/bot-scan?address=${address}${chainParam}`)
+        const data = await res.json()
+        if (res.ok) {
+          const riskEmoji = data.riskLevel === 'critical' ? '🔴' : data.riskLevel === 'high' ? '🟠' : data.riskLevel === 'medium' ? '🟡' : data.riskLevel === 'low' ? '🟢' : '✅'
+          setOutput(prev => [...prev,
+            `${riskEmoji} Risk: ${data.riskScore}/100 (${data.riskLevel?.toUpperCase()})`,
+            `💰 Balance: ${data.balance} | Tokens: ${data.tokenCount} | NFTs: ${data.nftCount}`,
+            data.summary,
+            ''
+          ])
+        } else {
+          setOutput(prev => [...prev, `❌ Error: ${data.error}`, ''])
+        }
+      } else {
+        setOutput(prev => [...prev, `❓ Unknown command. Type /help for available commands.`, ''])
+      }
+    } catch (err) {
+      setOutput(prev => [...prev, `❌ Network error: ${err instanceof Error ? err.message : 'Unknown'}`, ''])
+    }
     setScanning(false)
+  }
+
+  function getChainId(chain: string): number {
+    const map: Record<string, number> = { eth: 1, ethereum: 1, base: 8453, bnb: 56, bsc: 56, arb: 42161, arbitrum: 42161, poly: 137, polygon: 137, op: 10, optimism: 10 }
+    return map[chain.toLowerCase()] || 1
   }
 
   return (

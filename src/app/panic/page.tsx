@@ -17,7 +17,7 @@ interface EmergencyStep {
   chainName?: string
 }
 
-const MOCK_STEPS: EmergencyStep[] = [
+const INITIAL_STEPS: EmergencyStep[] = [
   { id: 'revoke-eth', label: 'Revoke ETH Approvals', description: 'Revoking all ERC-20 approvals on Ethereum', icon: '🔓', status: 'pending', chainName: 'Ethereum' },
   { id: 'revoke-base', label: 'Revoke Base Approvals', description: 'Revoking all approvals on Base', icon: '🔓', status: 'pending', chainName: 'Base' },
   { id: 'revoke-arb', label: 'Revoke Arbitrum Approvals', description: 'Revoking all approvals on Arbitrum', icon: '🔓', status: 'pending', chainName: 'Arbitrum' },
@@ -30,14 +30,14 @@ const MOCK_STEPS: EmergencyStep[] = [
 
 export default function PanicButtonPage() {
   const [phase, setPhase] = useState<PanicPhase>('idle')
-  const [steps, setSteps] = useState<EmergencyStep[]>(MOCK_STEPS)
+  const [steps, setSteps] = useState<EmergencyStep[]>(INITIAL_STEPS)
   const [confirmText, setConfirmText] = useState('')
   const [holdProgress, setHoldProgress] = useState(0)
   const [isHolding, setIsHolding] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [pulseIntensity, setPulseIntensity] = useState(0)
+  const [error, setError] = useState<string | null>(null)
 
-  // Ambient pulse animation
   useEffect(() => {
     const interval = setInterval(() => {
       setPulseIntensity(prev => (prev + 1) % 360)
@@ -45,7 +45,6 @@ export default function PanicButtonPage() {
     return () => clearInterval(interval)
   }, [])
 
-  // Hold-to-activate
   useEffect(() => {
     if (!isHolding) return
     const interval = setInterval(() => {
@@ -61,24 +60,73 @@ export default function PanicButtonPage() {
     return () => clearInterval(interval)
   }, [isHolding])
 
-  // Execute emergency steps
   const executePanic = useCallback(async () => {
     if (confirmText !== 'CONFIRM PANIC') return
     setPhase('executing')
     setElapsed(0)
+    setError(null)
 
     const timer = setInterval(() => setElapsed(prev => prev + 100), 100)
 
-    for (let i = 0; i < steps.length; i++) {
-      setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s))
-      await new Promise(r => setTimeout(r, 800 + Math.random() * 1200))
-      const success = Math.random() > 0.1
-      setSteps(prev => prev.map((s, idx) => idx === i ? {
-        ...s,
-        status: success ? 'success' : 'failed',
-        txHash: success ? `0x${Array.from({length: 64}, () => Math.floor(Math.random() * 16).toString(16)).join('')}` : undefined,
-        error: success ? undefined : 'Transaction reverted: insufficient gas',
-      } : s))
+    try {
+      const response = await fetch('/api/panic', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          compromisedAddress: '0x1234567890abcdef1234567890abcdef12345678',
+          coldWalletAddress: '0xABCDEF0123456789ABCDEF0123456789ABCDEF01',
+          chainIds: [1, 8453, 42161],
+          actions: {
+            revokeApprovals: true,
+            sweepFunds: true,
+            notifyContacts: true,
+            requestFreeze: true,
+          },
+          priorityFeeMultiplier: 3,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Panic execution failed')
+      }
+
+      // Map API response steps to UI steps with animation
+      const apiSteps = data.steps as Array<{
+        id: string
+        label: string
+        description: string
+        status: string
+        chainName?: string
+        txHash?: string
+        error?: string
+      }>
+
+      // Animate each step sequentially
+      for (let i = 0; i < steps.length; i++) {
+        const stepId = steps[i].id
+        const apiStep = apiSteps.find(s => s.id === stepId)
+
+        setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'running' } : s))
+        await new Promise(r => setTimeout(r, 600 + Math.random() * 400))
+
+        if (apiStep) {
+          setSteps(prev => prev.map((s, idx) => idx === i ? {
+            ...s,
+            status: apiStep.status as StepStatus,
+            txHash: apiStep.txHash,
+            error: apiStep.error,
+          } : s))
+        } else {
+          // Step not in API response — mark as skipped
+          setSteps(prev => prev.map((s, idx) => idx === i ? { ...s, status: 'skipped' } : s))
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred')
+      // Mark remaining pending steps as failed
+      setSteps(prev => prev.map(s => s.status === 'pending' ? { ...s, status: 'failed', error: 'Cancelled due to error' } : s))
     }
 
     clearInterval(timer)
@@ -87,11 +135,9 @@ export default function PanicButtonPage() {
 
   const successCount = steps.filter(s => s.status === 'success').length
   const failedCount = steps.filter(s => s.status === 'failed').length
-  const runningStep = steps.find(s => s.status === 'running')
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#050507] via-[#0a0a0f] to-[#050507] text-white overflow-hidden">
-      {/* Animated background orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-red-500/5 rounded-full blur-[128px] animate-pulse" />
         <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-red-600/5 rounded-full blur-[128px] animate-pulse" style={{ animationDelay: '1s' }} />
@@ -100,7 +146,6 @@ export default function PanicButtonPage() {
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05] relative z-10">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
@@ -114,7 +159,6 @@ export default function PanicButtonPage() {
       </nav>
 
       <div className="relative z-10 max-w-3xl mx-auto px-6 py-12 relative z-10">
-        {/* Header */}
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 text-[#ff3b3b] text-xs font-medium mb-6">
             <span className="w-2 h-2 rounded-full bg-[#ff3b3b] animate-pulse" />
@@ -128,17 +172,13 @@ export default function PanicButtonPage() {
           </p>
         </div>
 
-        {/* Idle State — The Button */}
         {phase === 'idle' && (
           <div className="flex flex-col items-center">
-            {/* MASSIVE glowing button */}
             <div className="relative mb-8">
-              {/* Glow rings */}
               <div className="absolute inset-0 rounded-full bg-[#ff3b3b]/20 blur-[60px] animate-pulse" />
               <div className="absolute inset-[-20px] rounded-full border-2 border-[#ff3b3b]/10 animate-ping" />
               <div className="absolute inset-[-40px] rounded-full border border-[#ff3b3b]/5 animate-ping" style={{ animationDelay: '0.5s' }} />
 
-              {/* Button */}
               <button
                 onMouseDown={() => { setIsHolding(true); setHoldProgress(0) }}
                 onMouseUp={() => setIsHolding(false)}
@@ -158,7 +198,6 @@ export default function PanicButtonPage() {
                   <span className="text-xs text-white/60 mt-1">Hold to activate</span>
                 </div>
 
-                {/* Progress ring */}
                 <svg className="absolute inset-0 w-full h-full -rotate-90" viewBox="0 0 256 256">
                   <circle cx="128" cy="128" r="120" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="4" />
                   <circle
@@ -176,7 +215,6 @@ export default function PanicButtonPage() {
               This will revoke all token approvals and sweep funds to your cold wallet.
             </p>
 
-            {/* Safety info */}
             <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
               {[
                 { icon: '🔓', title: 'Revoke All', desc: 'Cancel every token approval across all chains' },
@@ -193,7 +231,6 @@ export default function PanicButtonPage() {
           </div>
         )}
 
-        {/* Confirmation Phase */}
         {phase === 'confirming' && (
           <div className="max-w-lg mx-auto">
             <div className="p-8 bg-[#ff3b3b]/5 backdrop-blur-xl border border-[#ff3b3b]/20 rounded-3xl">
@@ -224,7 +261,7 @@ export default function PanicButtonPage() {
 
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { setPhase('idle'); setConfirmText(''); setSteps(MOCK_STEPS) }}
+                    onClick={() => { setPhase('idle'); setConfirmText(''); setSteps(INITIAL_STEPS); setError(null) }}
                     className="flex-1 px-4 py-3 bg-white/[0.05] border border-white/[0.08] rounded-xl text-sm text-white/60 hover:text-white transition-all"
                   >
                     Cancel
@@ -242,10 +279,8 @@ export default function PanicButtonPage() {
           </div>
         )}
 
-        {/* Execution Phase */}
         {phase === 'executing' && (
           <div className="space-y-6">
-            {/* Live timer */}
             <div className="text-center">
               <div className="inline-flex items-center gap-3 px-6 py-3 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-2xl">
                 <span className="w-3 h-3 rounded-full bg-[#ff3b3b] animate-pulse" />
@@ -254,9 +289,8 @@ export default function PanicButtonPage() {
               </div>
             </div>
 
-            {/* Steps */}
             <div className="space-y-3">
-              {steps.map((step, i) => (
+              {steps.map((step) => (
                 <div
                   key={step.id}
                   className={`p-4 rounded-2xl border backdrop-blur-xl transition-all duration-500 ${
@@ -296,7 +330,6 @@ export default function PanicButtonPage() {
           </div>
         )}
 
-        {/* Complete Phase */}
         {phase === 'complete' && (
           <div className="text-center">
             <div className="p-8 bg-white/[0.03] backdrop-blur-xl border border-white/[0.08] rounded-3xl max-w-lg mx-auto">
@@ -307,6 +340,12 @@ export default function PanicButtonPage() {
               <p className="text-white/40 text-sm mb-6">
                 {successCount}/{steps.length} steps completed in {(elapsed / 1000).toFixed(1)}s
               </p>
+
+              {error && (
+                <div className="mb-4 p-3 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-xl text-[#ff3b3b] text-sm">
+                  {error}
+                </div>
+              )}
 
               <div className="grid grid-cols-3 gap-3 mb-6">
                 <div className="p-3 bg-[#00ff87]/5 border border-[#00ff87]/10 rounded-xl">
@@ -325,7 +364,7 @@ export default function PanicButtonPage() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => { setPhase('idle'); setSteps(MOCK_STEPS); setHoldProgress(0) }}
+                  onClick={() => { setPhase('idle'); setSteps(INITIAL_STEPS); setHoldProgress(0); setError(null) }}
                   className="flex-1 px-4 py-3 bg-white/[0.05] border border-white/[0.08] rounded-xl text-sm text-white/60 hover:text-white transition-all"
                 >
                   Reset

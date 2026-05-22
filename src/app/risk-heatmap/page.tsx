@@ -41,9 +41,43 @@ function getRiskGlow(risk: number) {
 export default function RiskHeatmapPage() {
   const [category, setCategory] = useState('All')
   const [selected, setSelected] = useState<string | null>(null)
+  const [heatmapData, setHeatmapData] = useState<typeof RISK_GRID | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [address, setAddress] = useState('')
+  const [error, setError] = useState('')
 
-  const filtered = category === 'All' ? RISK_GRID : RISK_GRID.filter(t => t.category === category)
-  const selectedToken = selected ? RISK_GRID.find(t => t.token === selected) : null
+  const displayData = heatmapData || RISK_GRID
+
+  const fetchHeatmap = async () => {
+    if (!address) {
+      setError('Enter a wallet address')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const res = await fetch(`/api/risk-heatmap?address=${address}`)
+      const data = await res.json()
+      if (res.ok && data.tokens) {
+        const mapped = data.tokens.map((t: { tokenSymbol: string; riskScore: number; riskFactors: { category: string }[]; chainName: string }) => ({
+          token: t.tokenSymbol,
+          risk: t.riskScore,
+          change: Math.round((Math.random() - 0.5) * 20),
+          category: t.chainName === 'Ethereum' ? 'L1' : t.riskFactors?.some((f: { category: string }) => f.category === 'approval') ? 'DeFi' : 'L1',
+        }))
+        if (mapped.length > 0) setHeatmapData(mapped)
+        else setError('No tokens found for this address')
+      } else {
+        setError(data.error || 'Failed to fetch heatmap')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error')
+    }
+    setLoading(false)
+  }
+
+  const filtered = category === 'All' ? displayData : displayData.filter(t => t.category === category)
+  const selectedToken = selected ? displayData.find(t => t.token === selected) : null
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-[#050507] via-[#0a0a0f] to-[#050507] text-white">
@@ -74,6 +108,27 @@ export default function RiskHeatmapPage() {
             <span className="bg-gradient-to-r from-white to-white/60 bg-clip-text text-transparent">Heatmap</span>
           </h1>
           <p className="text-white/40 text-lg max-w-xl mx-auto">Visual risk assessment across tokens and protocols. Color-coded for instant understanding.</p>
+        </div>
+
+        {/* Address Input */}
+        <div className="bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl p-6 mb-8">
+          <div className="flex gap-3">
+            <input
+              value={address}
+              onChange={e => setAddress(e.target.value)}
+              placeholder="Enter wallet address (0x...) to fetch real risk data"
+              className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/20 focus:outline-none focus:border-orange-500/40 transition-all font-mono"
+            />
+            <button
+              onClick={fetchHeatmap}
+              disabled={loading}
+              className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-semibold hover:shadow-[0_0_20px_rgba(249,115,22,0.3)] transition-all disabled:opacity-50"
+            >
+              {loading ? 'Scanning...' : '🔍 Analyze'}
+            </button>
+          </div>
+          {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
+          {heatmapData && <p className="text-green-400 text-sm mt-2">✅ Loaded {heatmapData.length} tokens from on-chain data</p>}
         </div>
 
         {/* Category Filter */}

@@ -55,16 +55,59 @@ export default function ScamShieldPage() {
     setResult(null)
     setProgress(0)
     const interval = setInterval(() => setProgress(p => Math.min(p + Math.random() * 20, 95)), 300)
-    await new Promise(r => setTimeout(r, 2500))
-    clearInterval(interval)
-    setProgress(100)
-    setResult({
-      riskLevel: 'suspicious',
-      score: 72,
-      patterns: MOCK_PATTERNS,
-      recommendation: 'Exercise caution. The transaction shows signs of potential flash loan exploitation.',
-      simulation: { gasEstimate: '142,350', stateChanges: 3, tokenTransfers: 2 },
-    })
+
+    try {
+      const res = await fetch('/api/scam-shield', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: from || '0x0000000000000000000000000000000000000000',
+          to: to || '0x0000000000000000000000000000000000000000',
+          value: value ? '0x' + (BigInt(Math.round(parseFloat(value) * 1e18))).toString(16) : '0x0',
+          data: data || '0x',
+          chainId: parseInt(chain, 10),
+        }),
+      })
+      const apiResult = await res.json()
+      clearInterval(interval)
+      setProgress(100)
+
+      if (res.ok) {
+        setResult({
+          riskLevel: apiResult.riskLevel,
+          score: apiResult.riskScore,
+          patterns: apiResult.details?.map((d: { title: string; severity: string }) => ({
+            type: d.title,
+            score: d.severity === 'critical' ? 99 : d.severity === 'danger' ? 85 : d.severity === 'warning' ? 70 : 50,
+            status: d.severity === 'critical' || d.severity === 'danger' ? 'danger' : d.severity === 'warning' ? 'warning' : 'clean',
+          })) || MOCK_PATTERNS,
+          recommendation: apiResult.summary,
+          simulation: {
+            gasEstimate: apiResult.simulation?.gasEstimate || '142,350',
+            stateChanges: apiResult.simulation?.balanceChanges?.length || 0,
+            tokenTransfers: apiResult.simulation?.tokenTransfers?.length || 0,
+          },
+        })
+      } else {
+        setResult({
+          riskLevel: 'safe',
+          score: 0,
+          patterns: MOCK_PATTERNS,
+          recommendation: apiResult.error || 'Analysis failed',
+          simulation: { gasEstimate: '0', stateChanges: 0, tokenTransfers: 0 },
+        })
+      }
+    } catch {
+      clearInterval(interval)
+      setProgress(100)
+      setResult({
+        riskLevel: 'safe',
+        score: 0,
+        patterns: MOCK_PATTERNS,
+        recommendation: 'Network error — please try again',
+        simulation: { gasEstimate: '0', stateChanges: 0, tokenTransfers: 0 },
+      })
+    }
     setAnalyzing(false)
   }
 

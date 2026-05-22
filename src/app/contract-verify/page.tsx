@@ -3,9 +3,6 @@
 import { useState, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  verifyContract,
-  batchVerify,
-  getVerificationHistory,
   formatStatus,
   formatRisk,
   type VerificationResult,
@@ -43,8 +40,17 @@ export default function ContractVerifyPage() {
     setResult(null)
 
     try {
-      const res = await verifyContract(address.trim(), chainId)
-      setResult(res)
+      const res = await fetch('/api/contract-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: address.trim(), chainId }),
+      })
+      const json = await res.json() as { success?: boolean; data?: VerificationResult; error?: string }
+      if (!res.ok || !json.success || !json.data) {
+        setError(json.error || 'Verification failed')
+        return
+      }
+      setResult(json.data)
       setSuccess('Verification complete')
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
@@ -69,9 +75,18 @@ export default function ContractVerifyPage() {
     setError('')
 
     try {
-      const job = await batchVerify(addresses, chainId)
-      setBatchJob(job)
-      setSuccess(`Batch complete: ${job.results.length} contracts verified`)
+      const res = await fetch('/api/contract-verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addresses, chainId }),
+      })
+      const json = await res.json() as { success?: boolean; data?: BatchVerificationJob; error?: string }
+      if (!res.ok || !json.success || !json.data) {
+        setError(json.error || 'Batch verification failed')
+        return
+      }
+      setBatchJob(json.data)
+      setSuccess(`Batch complete: ${json.data.results.length} contracts verified`)
       setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
       setError('Batch verification failed')
@@ -80,8 +95,16 @@ export default function ContractVerifyPage() {
     }
   }, [batchAddresses, chainId])
 
-  const loadHistory = () => {
-    setHistory(getVerificationHistory(50))
+  const loadHistory = async () => {
+    try {
+      const res = await fetch('/api/contract-verify?limit=50')
+      const json = await res.json() as { success?: boolean; data?: VerificationResult[] }
+      if (json.success && json.data) {
+        setHistory(json.data)
+      }
+    } catch {
+      // silently fail
+    }
   }
 
   const severityColors: Record<string, { bg: string; text: string; border: string }> = {

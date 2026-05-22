@@ -14,31 +14,83 @@ interface Device {
   avatar: string
 }
 
-const DEMO_DEVICES: Device[] = [
-  { id: '1', name: 'Ledger Nano X', type: 'ledger', model: 'Nano X', firmware: '2.2.3', status: 'connected', accounts: [{ address: '0x1234...5678', chain: 'Ethereum', balance: '12.5 ETH' }, { address: '0x1234...5678', chain: 'Bitcoin', balance: '0.45 BTC' }], lastUsed: 'now', avatar: '🔐' },
-  { id: '2', name: 'Trezor Model T', type: 'trezor', model: 'Model T', firmware: '2.6.0', status: 'disconnected', accounts: [{ address: '0xabcd...ef01', chain: 'Ethereum', balance: '8.2 ETH' }], lastUsed: '2d ago', avatar: '🔑' },
-]
-
 export default function HardwareWalletPage() {
-  const [devices, setDevices] = useState<Device[]>(DEMO_DEVICES)
+  const [devices, setDevices] = useState<Device[]>([])
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
   const [signMethod, setSignMethod] = useState<'usb' | 'airgap'>('usb')
   const [unsignedTx, setUnsignedTx] = useState('')
   const [signedTx, setSignedTx] = useState('')
   const [signingStep, setSigningStep] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-  const connectDevice = (type: string) => {
-    alert(`Connecting to ${type}... Please connect your device via USB and unlock it.`)
+  // Fetch devices from API on mount
+  const fetchDevices = async () => {
+    try {
+      const res = await fetch('/api/hardware-wallet')
+      const json = await res.json() as { success?: boolean; data?: { devices: Device[] } }
+      if (json.success && json.data) {
+        setDevices(json.data.devices)
+      }
+    } catch {
+      setError('Failed to load devices')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const signTransaction = () => {
-    if (!unsignedTx) return
+  useState(() => { fetchDevices() })
+
+  const connectDevice = async (type: string) => {
+    try {
+      setError('')
+      const res = await fetch('/api/hardware-wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'connect', deviceType: type }),
+      })
+      const json = await res.json() as { success?: boolean; data?: Device; error?: string; message?: string }
+      if (!res.ok || !json.success) {
+        setError(json.error || 'Failed to connect device')
+        return
+      }
+      if (json.data) {
+        setDevices(prev => [...prev, json.data!])
+      }
+    } catch {
+      setError('Failed to connect device')
+    }
+  }
+
+  const signTransaction = async () => {
+    if (!unsignedTx || !selectedDevice) return
     setSigningStep(1)
-    setTimeout(() => setSigningStep(2), 2000)
-    setTimeout(() => {
+    setError('')
+    try {
+      setSigningStep(2)
+      const res = await fetch('/api/hardware-wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sign',
+          deviceId: selectedDevice.id,
+          unsignedTx,
+        }),
+      })
+      const json = await res.json() as { success?: boolean; data?: { signedTransaction: string }; error?: string }
+      if (!res.ok || !json.success) {
+        setError(json.error || 'Signing failed')
+        setSigningStep(0)
+        return
+      }
       setSigningStep(3)
-      setSignedTx('0x' + Array.from({ length: 128 }, () => Math.floor(Math.random() * 16).toString(16)).join(''))
-    }, 4000)
+      if (json.data) {
+        setSignedTx(json.data.signedTransaction)
+      }
+    } catch {
+      setError('Signing failed')
+      setSigningStep(0)
+    }
   }
 
   return (
@@ -48,6 +100,14 @@ export default function HardwareWalletPage() {
           <h1 className="text-3xl font-bold text-white mb-2">🔐 Hardware Wallet</h1>
           <p className="text-gray-400">Connect Ledger, Trezor, or use air-gapped signing</p>
         </div>
+
+        {/* Error Display */}
+        {error && (
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-center gap-2">
+            <span>❌</span> {error}
+            <button onClick={() => setError('')} className="ml-auto text-red-400/50 hover:text-red-400">✕</button>
+          </div>
+        )}
 
         {/* Connect Options */}
         <div className="grid md:grid-cols-3 gap-4 mb-8">
@@ -113,7 +173,7 @@ export default function HardwareWalletPage() {
             </div>
 
             {signingStep === 0 && (
-              <button onClick={signTransaction} disabled={!unsignedTx} className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-3 rounded-lg font-medium">
+              <button onClick={signTransaction} disabled={!unsignedTx || !selectedDevice} className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white py-3 rounded-lg font-medium">
                 Sign with Hardware Wallet
               </button>
             )}
