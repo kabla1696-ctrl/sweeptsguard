@@ -1,326 +1,592 @@
-// SweepGuard Extension — Fund Rescue Popup
-// Handles: Preview → Claim → Result
+// SweepGuard Wallet — Popup Script
+// Handles: password setup, wallet import, rescue, token management, history
 
-const API_BASE = 'https://sweeptsguard.vercel.app'
+const API_BASE = 'https://sweeptsguard.vercel.app';
+let currentImportType = null;
+let previewData = null;
+let currentStatus = null;
 
 // ── Visibility Toggle ─────────────────────────────────────────────────
 function toggleVisibility(inputId, btn) {
-  const input = document.getElementById(inputId)
+  const input = document.getElementById(inputId);
   if (input.type === 'password') {
-    input.type = 'text'
-    btn.textContent = '🔒'
+    input.type = 'text';
+    btn.textContent = '🔒';
   } else {
-    input.type = 'password'
-    btn.textContent = '👁️'
+    input.type = 'password';
+    btn.textContent = '👁️';
   }
 }
 
-// ── Step Navigation ───────────────────────────────────────────────────
-function setStep(n) {
-  document.getElementById('step1').className = n >= 1 ? 'step active' : 'step'
-  document.getElementById('step2').className = n >= 2 ? 'step active' : 'step'
-  document.getElementById('step3').className = n >= 3 ? 'step active' : 'step'
+// ── Initialize ────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  const status = await sendMessage({ type: 'GET_STATUS' });
+  currentStatus = status;
+
+  if (!status.hasPassword) {
+    showScreen('password-screen');
+  } else if (!status.unlocked) {
+    showScreen('unlock-screen');
+  } else {
+    showScreen('main-screen');
+    initMainScreen(status);
+  }
+
+  // Handle Enter key on unlock screen
+  document.getElementById('unlockPassword').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') unlockWallet();
+  });
+
+  // Handle Enter key on password screen
+  document.getElementById('confirmPassword').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') setPassword();
+  });
+});
+
+// ── Screen Management ─────────────────────────────────────────────────
+function showScreen(id) {
+  ['password-screen', 'unlock-screen', 'main-screen'].forEach(s => {
+    document.getElementById(s).className = 'hidden';
+  });
+  document.getElementById(id).className = 'content';
 }
 
-function showSection(id) {
-  ['setup-section', 'preview-section', 'result-section'].forEach(s => {
-    document.getElementById(s).className = 'hidden'
-  })
-  document.getElementById(id).className = ''
+// ── Password Setup ────────────────────────────────────────────────────
+async function setPassword() {
+  const password = document.getElementById('newPassword').value;
+  const confirm = document.getElementById('confirmPassword').value;
+
+  if (!password || password.length < 8) {
+    alert('Password must be at least 8 characters');
+    return;
+  }
+  if (password !== confirm) {
+    alert('Passwords do not match');
+    return;
+  }
+
+  const result = await sendMessage({ type: 'SET_PASSWORD', password });
+  if (result.success) {
+    showScreen('main-screen');
+    const status = await sendMessage({ type: 'GET_STATUS' });
+    currentStatus = status;
+    initMainScreen(status);
+  } else {
+    alert(result.error || 'Failed to set password');
+  }
 }
 
-function goBack() {
-  showSection('setup-section')
-  setStep(1)
+// ── Unlock ────────────────────────────────────────────────────────────
+async function unlockWallet() {
+  const password = document.getElementById('unlockPassword').value;
+  if (!password) return;
+
+  const result = await sendMessage({ type: 'UNLOCK', password });
+  if (result.success) {
+    showScreen('main-screen');
+    const status = await sendMessage({ type: 'GET_STATUS' });
+    currentStatus = status;
+    initMainScreen(status);
+  } else {
+    document.getElementById('unlock-error').className = '';
+    document.getElementById('unlock-error-msg').textContent = result.error || 'Wrong password';
+  }
 }
 
-function resetAll() {
-  document.getElementById('privateKey').value = ''
-  document.getElementById('safeWallet').value = ''
-  document.getElementById('sponsorKey').value = ''
-  document.getElementById('contractAddress').value = ''
-  document.getElementById('tokenAmount').value = ''
-  document.getElementById('claimData').value = ''
-  document.getElementById('merkleProof').value = ''
-  document.getElementById('chainSelect').value = ''
-  showSection('setup-section')
-  setStep(1)
+// ── Lock ──────────────────────────────────────────────────────────────
+async function lockWallet() {
+  await sendMessage({ type: 'LOCK' });
+  showScreen('unlock-screen');
+  document.getElementById('unlockPassword').value = '';
 }
 
-// ── Load Saved Values ─────────────────────────────────────────────────
-chrome.storage.local.get(['rescueConfig'], (result) => {
-  const config = result.rescueConfig || {}
-  if (config.safeWallet) document.getElementById('safeWallet').value = config.safeWallet
-  if (config.chainId) document.getElementById('chainSelect').value = config.chainId
-  if (config.contractAddress) document.getElementById('contractAddress').value = config.contractAddress
-})
+// ── Main Screen Init ──────────────────────────────────────────────────
+async function initMainScreen(status) {
+  // Populate chain selector
+  const select = document.getElementById('chainSelect');
+  select.innerHTML = '';
+  status.supportedChains.forEach(chain => {
+    const option = document.createElement('option');
+    option.value = '0x' + chain.id.toString(16);
+    option.textContent = `${chain.active ? '✅' : '⏳'} ${chain.name} (${chain.symbol})`;
+    if (!chain.active) option.disabled = true;
+    if (chain.id === status.chainId) option.selected = true;
+    select.appendChild(option);
+  });
 
-// ── Preview Claim ─────────────────────────────────────────────────────
-async function previewClaim() {
-  const privateKey = document.getElementById('privateKey').value.trim()
-  const safeWallet = document.getElementById('safeWallet').value.trim()
-  const sponsorKey = document.getElementById('sponsorKey').value.trim()
-  const chainId = parseInt(document.getElementById('chainSelect').value)
-  const contractAddress = document.getElementById('contractAddress').value.trim()
-  const tokenAmount = document.getElementById('tokenAmount').value.trim()
-  const claimData = document.getElementById('claimData').value.trim()
-  const merkleProof = document.getElementById('merkleProof').value.trim()
-
-  // Validate
-  if (!privateKey || !safeWallet || !sponsorKey || !chainId || !contractAddress) {
-    alert('Please fill in all required fields')
-    return
-  }
-  if (!privateKey.startsWith('0x') || privateKey.length < 64) {
-    alert('Invalid private key format')
-    return
-  }
-  if (!safeWallet.startsWith('0x') || safeWallet.length !== 42) {
-    alert('Invalid safe wallet address')
-    return
-  }
-  if (!sponsorKey.startsWith('0x') || sponsorKey.length < 64) {
-    alert('Invalid sponsor private key')
-    return
-  }
-  if (!contractAddress.startsWith('0x') || contractAddress.length !== 42) {
-    alert('Invalid contract address')
-    return
+  // Set safe recipient
+  if (status.safeRecipient) {
+    document.getElementById('safeRecipient').value = status.safeRecipient;
   }
 
-  // Save config
-  chrome.storage.local.set({ rescueConfig: { safeWallet, chainId, contractAddress } })
+  // Update wallet cards
+  updateWalletCards();
+  updateChainStatus();
+  loadHistory();
 
-  // Derive wallet address from private key
-  let walletAddress
-  try {
-    // Use ethers if available, otherwise derive manually
-    const pkBytes = hexToBytes(privateKey.slice(2))
-    // Simple secp256k1 public key derivation would be complex
-    // We'll let the API derive it from the private key
-    walletAddress = null // Will be set by API
-  } catch {
-    walletAddress = null
-  }
-
-  showSection('preview-section')
-  setStep(2)
-  document.getElementById('preview-loading').className = ''
-  document.getElementById('preview-content').className = 'hidden'
-  document.getElementById('preview-error').className = 'hidden'
-
-  try {
-    // First, derive the wallet address
-    const deriveRes = await fetch(`${API_BASE}/api/airdrop/claim`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'preview',
-        contractAddress,
-        chainId,
-        safeWallet,
-        walletAddress: safeWallet, // placeholder, will be overridden
-        sponsorAddress: null,
-        claimData: claimData || undefined,
-        merkleProof: merkleProof || undefined,
-        tokenAmount: tokenAmount || undefined,
-      }),
-    })
-
-    // Now do the real preview with derived address
-    // We need to derive the address from the private key
-    // For now, ask the user for the hacked wallet address
-    const hackedAddress = prompt('Enter the HACKED wallet address (0x...):')
-    if (!hackedAddress || !hackedAddress.startsWith('0x')) {
-      document.getElementById('preview-loading').className = 'hidden'
-      document.getElementById('preview-error').className = ''
-      document.getElementById('error-message').textContent = 'Hacked wallet address required'
-      return
+  // Save safe recipient on change
+  document.getElementById('safeRecipient').addEventListener('change', (e) => {
+    const addr = e.target.value.trim();
+    if (addr && addr.startsWith('0x') && addr.length === 42) {
+      chrome.runtime.sendMessage({ type: 'SET_SAFE_RECIPIENT', address: addr });
     }
+  });
+}
 
-    const response = await fetch(`${API_BASE}/api/airdrop/claim`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'preview',
+// ── Wallet Cards ──────────────────────────────────────────────────────
+async function updateWalletCards() {
+  const status = await sendMessage({ type: 'GET_STATUS' });
+
+  const compromisedAddr = document.getElementById('compromised-addr');
+  const compromisedStatus = document.getElementById('compromised-status');
+  if (status.hasCompromised) {
+    compromisedAddr.textContent = '✅ Imported';
+    compromisedStatus.textContent = '✅';
+    compromisedStatus.style.color = '#22c55e';
+  } else {
+    compromisedAddr.textContent = 'Not imported';
+    compromisedStatus.textContent = '❌';
+    compromisedStatus.style.color = '#ef4444';
+  }
+
+  const sponsorAddr = document.getElementById('sponsor-addr');
+  const sponsorStatus = document.getElementById('sponsor-status');
+  if (status.hasSponsor) {
+    sponsorAddr.textContent = '✅ Imported';
+    sponsorStatus.textContent = '✅';
+    sponsorStatus.style.color = '#22c55e';
+  } else {
+    sponsorAddr.textContent = 'Not imported';
+    sponsorStatus.textContent = '❌';
+    sponsorStatus.style.color = '#ef4444';
+  }
+}
+
+// ── Chain Status ──────────────────────────────────────────────────────
+async function updateChainStatus() {
+  const status = await sendMessage({ type: 'GET_STATUS' });
+  const statusEl = document.getElementById('chain-status');
+  const textEl = document.getElementById('chain-status-text');
+
+  if (status.isActive) {
+    statusEl.innerHTML = '<span class="dot"></span><span>SweepGuardRescuer deployed on ' +
+      status.chainName + ': 0xDB67...400F</span>';
+  } else {
+    statusEl.innerHTML = '<span class="dot dot-off"></span><span>' +
+      status.chainName + ' — Smart contract coming soon</span>';
+  }
+}
+
+// ── Chain Change ──────────────────────────────────────────────────────
+async function onChainChange() {
+  const select = document.getElementById('chainSelect');
+  const chainId = select.value;
+  await sendMessage({ type: 'SET_CHAIN', chainId });
+  updateChainStatus();
+}
+
+// ── Import Modal ──────────────────────────────────────────────────────
+function showImportModal(type) {
+  currentImportType = type;
+  document.getElementById('import-modal').className = '';
+  document.getElementById('import-title').textContent =
+    type === 'compromised' ? 'Import Compromised Wallet' : 'Import Sponsor Wallet';
+  document.getElementById('import-icon').textContent =
+    type === 'compromised' ? '⚠️' : '⛽';
+  document.getElementById('importPrivateKey').value = '';
+  document.getElementById('importPrivateKey').focus();
+}
+
+function closeImportModal() {
+  document.getElementById('import-modal').className = 'hidden';
+  currentImportType = null;
+}
+
+async function confirmImport() {
+  const privateKey = document.getElementById('importPrivateKey').value.trim();
+  if (!privateKey || !privateKey.startsWith('0x')) {
+    alert('Invalid private key format');
+    return;
+  }
+
+  const type = currentImportType;
+  closeImportModal();
+
+  const result = await sendMessage({
+    type: type === 'compromised' ? 'IMPORT_COMPROMISED_WALLET' : 'IMPORT_SPONSOR_WALLET',
+    privateKey,
+  });
+
+  if (result.success) {
+    updateWalletCards();
+  } else {
+    alert(result.error || 'Import failed');
+  }
+}
+
+// ── Tab Switching ─────────────────────────────────────────────────────
+function switchTab(tab) {
+  ['rescue', 'tokens', 'history'].forEach(t => {
+    document.getElementById(`${t}-tab`).className = t === tab ? 'content' : 'hidden';
+    document.getElementById(`tab-${t}`).className = t === tab ? 'tab active' : 'tab';
+  });
+
+  if (tab === 'tokens') refreshBalances();
+  if (tab === 'history') loadHistory();
+}
+
+// ── Preview Rescue ────────────────────────────────────────────────────
+async function previewRescue() {
+  const contractAddress = document.getElementById('contractAddress').value.trim();
+  const safeRecipient = document.getElementById('safeRecipient').value.trim();
+  const chainId = document.getElementById('chainSelect').value;
+  const tokenAmount = document.getElementById('tokenAmount').value.trim();
+  const claimData = document.getElementById('claimData').value.trim();
+  const merkleProof = document.getElementById('merkleProof').value.trim();
+
+  if (!contractAddress) {
+    alert('Contract address is required');
+    return;
+  }
+  if (!safeRecipient || !safeRecipient.startsWith('0x')) {
+    alert('Safe recipient address is required');
+    return;
+  }
+
+  // Get compromised wallet address
+  const status = await sendMessage({ type: 'GET_STATUS' });
+  if (!status.hasCompromised) {
+    alert('Please import compromised wallet first');
+    return;
+  }
+
+  // Ask for hacked wallet address
+  const hackedAddress = prompt('Enter the HACKED wallet address (0x...):');
+  if (!hackedAddress || !hackedAddress.startsWith('0x')) {
+    alert('Hacked wallet address required');
+    return;
+  }
+
+  // Save safe recipient
+  chrome.runtime.sendMessage({ type: 'SET_SAFE_RECIPIENT', address: safeRecipient });
+
+  // Show preview section
+  document.getElementById('preview-results').className = '';
+  document.getElementById('preview-loading').className = '';
+  document.getElementById('preview-content').className = 'hidden';
+  document.getElementById('preview-error').className = 'hidden';
+
+  try {
+    const chainIdNum = parseInt(chainId, 16);
+    const result = await sendMessage({
+      type: 'PREVIEW_RESCUE',
+      params: {
         contractAddress,
-        chainId,
-        safeWallet,
+        chainId: chainIdNum,
+        safeWallet: safeRecipient,
         walletAddress: hackedAddress,
-        sponsorPrivateKey: sponsorKey,
+        tokenAmount: tokenAmount || undefined,
         claimData: claimData || undefined,
         merkleProof: merkleProof || undefined,
-        tokenAmount: tokenAmount || undefined,
-      }),
-    })
+      },
+    });
 
-    const data = await response.json()
-    document.getElementById('preview-loading').className = 'hidden'
+    document.getElementById('preview-loading').className = 'hidden';
 
-    if (!response.ok || data.error) {
-      document.getElementById('preview-error').className = ''
-      document.getElementById('error-message').textContent = data.error || 'Preview failed'
-      if (data.contractWarnings?.length) {
-        document.getElementById('error-message').textContent += '\n\n' + data.contractWarnings.join('\n')
-      }
-      return
+    if (result.error) {
+      document.getElementById('preview-error').className = '';
+      document.getElementById('error-message').textContent = result.error;
+      return;
     }
 
-    // Show preview
-    document.getElementById('preview-content').className = ''
+    // Show preview content
+    document.getElementById('preview-content').className = '';
 
     // Token info
-    document.getElementById('token-name').textContent = `${data.tokenSymbol} (${data.tokenAddress?.slice(0, 10)}...)`
-    document.getElementById('claimable-amount').textContent = `${data.claimableAmount} ${data.tokenSymbol}`
-    document.getElementById('fee-amount').textContent = `${data.platformFeeAmount} ${data.tokenSymbol}`
-    document.getElementById('safe-amount').textContent = `${data.safeWalletAmount} ${data.tokenSymbol}`
+    document.getElementById('token-name').textContent =
+      `${result.tokenSymbol || 'Unknown'} (${(result.tokenAddress || '').slice(0, 10)}...)`;
+    document.getElementById('claimable-amount').textContent =
+      `${result.claimableAmount || '?'} ${result.tokenSymbol || ''}`;
+    document.getElementById('fee-amount').textContent =
+      `${result.platformFeeAmount || '?'} ${result.tokenSymbol || ''}`;
+    document.getElementById('safe-amount').textContent =
+      `${result.safeWalletAmount || '?'} ${result.tokenSymbol || ''}`;
 
     // Eligibility
-    const badge = document.getElementById('eligible-badge')
-    if (data.alreadyClaimed) {
-      badge.className = 'badge badge-red'
-      badge.textContent = '❌ Already Claimed'
-    } else if (data.eligible === true) {
-      badge.className = 'badge badge-green'
-      badge.textContent = '✅ Eligible'
-    } else if (data.eligible === null) {
-      badge.className = 'badge badge-yellow'
-      badge.textContent = '⚠️ Unknown'
+    const badge = document.getElementById('eligible-badge');
+    if (result.alreadyClaimed) {
+      badge.className = 'badge badge-red';
+      badge.textContent = '❌ Already Claimed';
+    } else if (result.eligible === true) {
+      badge.className = 'badge badge-green';
+      badge.textContent = '✅ Eligible';
+    } else if (result.eligible === null) {
+      badge.className = 'badge badge-yellow';
+      badge.textContent = '⚠️ Unknown';
     } else {
-      badge.className = 'badge badge-red'
-      badge.textContent = '❌ Not Eligible'
+      badge.className = 'badge badge-red';
+      badge.textContent = '❌ Not Eligible';
     }
 
-    // Sponsor gas
-    document.getElementById('sponsor-balance').textContent = `${data.sponsorBalance} ${data.sponsorGasToken}`
-    document.getElementById('gas-cost').textContent = `~${data.estimatedGasCost} ${data.sponsorGasToken}`
-    const gasBadge = document.getElementById('gas-badge')
-    if (data.sponsorHasGas) {
-      gasBadge.className = 'badge badge-green'
-      gasBadge.textContent = '✅ Sufficient'
+    // Gas info
+    document.getElementById('sponsor-balance').textContent =
+      `${result.sponsorBalance || '?'} ${result.sponsorGasToken || 'ETH'}`;
+    document.getElementById('gas-cost').textContent =
+      `~${result.estimatedGasCost || '?'} ${result.sponsorGasToken || 'ETH'}`;
+    const gasBadge = document.getElementById('gas-badge');
+    if (result.sponsorHasGas) {
+      gasBadge.className = 'badge badge-green';
+      gasBadge.textContent = '✅ Sufficient';
     } else {
-      gasBadge.className = 'badge badge-red'
-      gasBadge.textContent = '❌ Insufficient'
+      gasBadge.className = 'badge badge-red';
+      gasBadge.textContent = '❌ Insufficient';
     }
 
     // Execution info
-    const execInfo = document.getElementById('execution-info')
-    execInfo.textContent = data.executionDescription
-    execInfo.className = `info-box ${data.riskLevel === 'high' ? 'warning' : 'info'}`
+    const execInfo = document.getElementById('execution-info');
+    execInfo.textContent = result.executionDescription || 'Standard claim flow';
+    execInfo.className = `info-box ${result.riskLevel === 'high' ? 'warning' : 'info'}`;
 
     // Contract warnings
-    const warningsDiv = document.getElementById('contract-warnings')
-    warningsDiv.innerHTML = ''
-    if (data.contractWarnings?.length) {
-      data.contractWarnings.forEach(w => {
-        const div = document.createElement('div')
-        div.className = 'info-box warning'
-        div.textContent = w
-        warningsDiv.appendChild(div)
-      })
-    }
-    if (data.eligibilityWarning) {
-      const div = document.createElement('div')
-      div.className = 'info-box warning'
-      div.textContent = data.eligibilityWarning
-      warningsDiv.appendChild(div)
+    const warningsDiv = document.getElementById('contract-warnings');
+    warningsDiv.innerHTML = '';
+    if (result.contractWarnings?.length) {
+      result.contractWarnings.forEach(w => {
+        const div = document.createElement('div');
+        div.className = 'info-box warning';
+        div.textContent = w;
+        warningsDiv.appendChild(div);
+      });
     }
 
     // Enable/disable claim button
-    const claimBtn = document.getElementById('claimBtn')
-    if (data.alreadyClaimed || data.eligible === false) {
-      claimBtn.disabled = true
-      claimBtn.textContent = '❌ Cannot Claim'
-    } else if (!data.sponsorHasGas) {
-      claimBtn.disabled = true
-      claimBtn.textContent = '❌ Insufficient Gas'
+    const claimBtn = document.getElementById('claimBtn');
+    if (result.alreadyClaimed || result.eligible === false) {
+      claimBtn.disabled = true;
+      claimBtn.textContent = '❌ Cannot Claim';
+    } else if (!result.sponsorHasGas) {
+      claimBtn.disabled = true;
+      claimBtn.textContent = '❌ Insufficient Gas';
     } else {
-      claimBtn.disabled = false
-      claimBtn.textContent = '🚀 Rescue Funds'
+      claimBtn.disabled = false;
+      claimBtn.textContent = '🚀 Rescue Funds';
     }
 
-    // Store preview data for claim
-    window._previewData = {
+    // Store preview data
+    previewData = {
       contractAddress,
-      chainId,
-      safeWallet,
+      chainId: chainIdNum,
+      safeWallet: safeRecipient,
       walletAddress: hackedAddress,
-      privateKey,
-      sponsorKey,
-      claimableRaw: data.claimableRaw,
-      tokenAddress: data.tokenAddress,
+      claimableRaw: result.claimableRaw,
+      tokenAddress: result.tokenAddress,
+      tokenAmount: tokenAmount || undefined,
       claimData: claimData || undefined,
       merkleProof: merkleProof || undefined,
-    }
+    };
 
   } catch (err) {
-    document.getElementById('preview-loading').className = 'hidden'
-    document.getElementById('preview-error').className = ''
-    document.getElementById('error-message').textContent = `Network error: ${err.message}`
+    document.getElementById('preview-loading').className = 'hidden';
+    document.getElementById('preview-error').className = '';
+    document.getElementById('error-message').textContent = `Error: ${err.message}`;
   }
 }
 
-// ── Execute Claim ─────────────────────────────────────────────────────
-async function executeClaim() {
-  const pd = window._previewData
-  if (!pd) {
-    alert('No preview data — please preview first')
-    return
+// ── Cancel Preview ────────────────────────────────────────────────────
+function cancelPreview() {
+  document.getElementById('preview-results').className = 'hidden';
+  document.getElementById('rescue-result').className = 'hidden';
+  previewData = null;
+}
+
+// ── Execute Rescue ────────────────────────────────────────────────────
+async function executeRescue() {
+  if (!previewData) {
+    alert('No preview data');
+    return;
   }
 
-  showSection('result-section')
-  setStep(3)
-  document.getElementById('result-loading').className = ''
-  document.getElementById('result-success').className = 'hidden'
-  document.getElementById('result-error').className = 'hidden'
+  document.getElementById('rescue-result').className = '';
+  document.getElementById('result-loading').className = '';
+  document.getElementById('result-success').className = 'hidden';
+  document.getElementById('result-error').className = 'hidden';
 
   try {
-    const response = await fetch(`${API_BASE}/api/airdrop/claim`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        action: 'claim',
-        contractAddress: pd.contractAddress,
-        chainId: pd.chainId,
-        safeWallet: pd.safeWallet,
-        walletAddress: pd.walletAddress,
-        privateKey: pd.privateKey,
-        sponsorPrivateKey: pd.sponsorKey,
-        claimableRaw: pd.claimableRaw,
-        tokenAddress: pd.tokenAddress,
-        claimData: pd.claimData,
-        merkleProof: pd.merkleProof,
-      }),
-    })
+    const result = await sendMessage({
+      type: 'EXECUTE_RESCUE',
+      params: previewData,
+    });
 
-    const data = await response.json()
-    document.getElementById('result-loading').className = 'hidden'
+    document.getElementById('result-loading').className = 'hidden';
 
-    if (!response.ok || data.error) {
-      document.getElementById('result-error').className = ''
-      document.getElementById('result-error-msg').textContent = data.error || 'Claim failed'
-      return
+    if (result.error) {
+      document.getElementById('result-error').className = '';
+      document.getElementById('result-error-msg').textContent = result.error;
+      return;
     }
 
-    // Success!
-    document.getElementById('result-success').className = ''
-    document.getElementById('fund-tx').textContent = data.fundTxHash || data.bundleHash || '—'
-    document.getElementById('claim-tx').textContent = data.claimTxHash || '—'
-    document.getElementById('block-num').textContent = data.blockNumber || '—'
-    document.getElementById('exec-method').textContent = data.executionMethod || '—'
+    document.getElementById('result-success').className = '';
+    document.getElementById('result-tx').textContent =
+      result.claimTxHash || result.bundleHash || '—';
+    document.getElementById('result-block').textContent =
+      result.blockNumber || '—';
+    document.getElementById('result-method').textContent =
+      result.executionMethod || '—';
 
+    loadHistory();
   } catch (err) {
-    document.getElementById('result-loading').className = 'hidden'
-    document.getElementById('result-error').className = ''
-    document.getElementById('result-error-msg').textContent = `Network error: ${err.message}`
+    document.getElementById('result-loading').className = 'hidden';
+    document.getElementById('result-error').className = '';
+    document.getElementById('result-error-msg').textContent = err.message;
   }
 }
 
-// ── Helper ────────────────────────────────────────────────────────────
-function hexToBytes(hex) {
-  const bytes = []
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes.push(parseInt(hex.substr(i, 2), 16))
+// ── Reset Rescue ──────────────────────────────────────────────────────
+function resetRescue() {
+  document.getElementById('contractAddress').value = '';
+  document.getElementById('tokenAmount').value = '';
+  document.getElementById('claimData').value = '';
+  document.getElementById('merkleProof').value = '';
+  document.getElementById('preview-results').className = 'hidden';
+  document.getElementById('rescue-result').className = 'hidden';
+  previewData = null;
+}
+
+// ── Rescue Tokens ─────────────────────────────────────────────────────
+async function rescueTokens() {
+  const tokenAddress = document.getElementById('rescueTokenAddress').value.trim();
+  if (!tokenAddress || !tokenAddress.startsWith('0x')) {
+    alert('Enter a valid token contract address');
+    return;
   }
-  return new Uint8Array(bytes)
+
+  const status = await sendMessage({ type: 'GET_STATUS' });
+  if (!status.hasCompromised || !status.hasSponsor) {
+    alert('Import both compromised and sponsor wallets first');
+    return;
+  }
+  if (!status.safeRecipient) {
+    alert('Set a safe recipient address first');
+    return;
+  }
+
+  if (!confirm(`Rescue ERC-20 tokens from compromised wallet to ${status.safeRecipient}?`)) {
+    return;
+  }
+
+  const result = await sendMessage({
+    type: 'RESCUE_TOKENS',
+    params: { tokenAddress },
+  });
+
+  if (result.error) {
+    alert(`Error: ${result.error}`);
+  } else {
+    alert(`✅ Tokens rescued! TX: ${result.txHash || 'Check history'}`);
+    loadHistory();
+  }
+}
+
+// ── Rescue Native ─────────────────────────────────────────────────────
+async function rescueNative() {
+  const status = await sendMessage({ type: 'GET_STATUS' });
+  if (!status.hasCompromised || !status.hasSponsor) {
+    alert('Import both compromised and sponsor wallets first');
+    return;
+  }
+  if (!status.safeRecipient) {
+    alert('Set a safe recipient address first');
+    return;
+  }
+
+  if (!confirm(`Rescue native ${status.chainSymbol} from compromised wallet to ${status.safeRecipient}?`)) {
+    return;
+  }
+
+  const result = await sendMessage({ type: 'RESCUE_NATIVE' });
+
+  if (result.error) {
+    alert(`Error: ${result.error}`);
+  } else {
+    alert(`✅ Native tokens rescued! TX: ${result.txHash || 'Check history'}`);
+    loadHistory();
+  }
+}
+
+// ── Refresh Balances ──────────────────────────────────────────────────
+async function refreshBalances() {
+  document.getElementById('balances-loading').className = 'loading';
+  document.getElementById('balances-content').className = 'hidden';
+
+  try {
+    const balances = await sendMessage({ type: 'GET_BALANCES' });
+    const status = await sendMessage({ type: 'GET_STATUS' });
+    const content = document.getElementById('balances-content');
+    content.innerHTML = '';
+
+    if (balances.compromised) {
+      const ethValue = parseInt(balances.compromised, 16) / 1e18;
+      content.innerHTML += `
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚠️ Compromised</span>
+            <span class="card-value">${ethValue.toFixed(6)} ${status.chainSymbol}</span>
+          </div>
+        </div>`;
+    }
+
+    if (balances.sponsor) {
+      const ethValue = parseInt(balances.sponsor, 16) / 1e18;
+      content.innerHTML += `
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⛽ Sponsor</span>
+            <span class="card-value">${ethValue.toFixed(6)} ${status.chainSymbol}</span>
+          </div>
+        </div>`;
+    }
+
+    if (!balances.compromised && !balances.sponsor) {
+      content.innerHTML = '<div class="info-box info">Import wallets to see balances</div>';
+    }
+
+    document.getElementById('balances-loading').className = 'hidden';
+    content.className = '';
+  } catch (err) {
+    document.getElementById('balances-loading').className = 'hidden';
+    document.getElementById('balances-content').className = '';
+    document.getElementById('balances-content').innerHTML =
+      `<div class="info-box danger">Error: ${err.message}</div>`;
+  }
+}
+
+// ── Load History ──────────────────────────────────────────────────────
+async function loadHistory() {
+  const history = await sendMessage({ type: 'GET_TRANSACTION_HISTORY' });
+  const content = document.getElementById('history-content');
+
+  if (!history || history.length === 0) {
+    content.innerHTML = '<div class="info-box info">No transactions yet</div>';
+    return;
+  }
+
+  content.innerHTML = history.map(tx => `
+    <div class="history-item">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="color:rgba(255,255,255,0.6);">${tx.type === 'rescue' ? '🛡️ Rescue' : '🪙 Token'}</span>
+        <span class="history-time">${new Date(tx.timestamp).toLocaleString()}</span>
+      </div>
+      <div class="history-hash">${tx.txHash || 'Pending'}</div>
+      <div style="color:rgba(255,255,255,0.3);margin-top:2px;">${tx.status || 'success'}</div>
+    </div>
+  `).join('');
+}
+
+// ── Message Helper ────────────────────────────────────────────────────
+function sendMessage(message) {
+  return new Promise((resolve) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      resolve(response || {});
+    });
+  });
 }

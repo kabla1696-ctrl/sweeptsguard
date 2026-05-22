@@ -1,22 +1,21 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SweepGuard Rescue</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SweepGuard Wallet</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      width: 400px;
-      min-height: 520px;
+      width: 420px;
+      min-height: 540px;
       background: #0a0a12;
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      overflow-x: hidden;
     }
     .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      display: flex; align-items: center; justify-content: space-between;
       padding: 14px 18px;
       border-bottom: 1px solid rgba(34,197,94,0.15);
       background: linear-gradient(135deg, rgba(34,197,94,0.06), rgba(6,182,212,0.06));
@@ -26,11 +25,12 @@
     .header h1 {
       font-size: 15px;
       background: linear-gradient(135deg, #22c55e, #06b6d4);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
       font-weight: 700;
     }
     .version { font-size: 9px; color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.05); padding: 2px 6px; border-radius: 4px; }
+    .lock-btn { background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 16px; }
+    .lock-btn:hover { color: #22c55e; }
     .content { padding: 14px; }
     .section-title {
       font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.4);
@@ -51,9 +51,8 @@
       font-family: 'SF Mono', Monaco, monospace; outline: none;
       transition: border-color 0.2s;
     }
-    input:focus, select:focus, textarea:focus { border-color: rgba(34,197,94,0.4); }
+    input:focus, select:focus { border-color: rgba(34,197,94,0.4); }
     input::placeholder { color: rgba(255,255,255,0.15); }
-    textarea { resize: vertical; min-height: 50px; }
     select {
       appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.3)' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
@@ -74,6 +73,7 @@
       border: 1px solid rgba(255,255,255,0.1); color: rgba(255,255,255,0.6);
     }
     .btn-secondary:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .btn-danger { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); color: #ef4444; }
     .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent); margin: 14px 0; }
     .card {
       background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
@@ -113,200 +113,308 @@
       background: none; border: none; color: rgba(255,255,255,0.3); cursor: pointer; font-size: 14px;
     }
     .input-wrap { position: relative; }
-    .chain-coming {
-      font-size: 9px; color: rgba(255,255,255,0.2); margin-left: 4px;
-    }
-    .contract-status {
+    .chain-status {
       display: flex; align-items: center; gap: 6px; padding: 8px 10px;
       background: rgba(34,197,94,0.06); border: 1px solid rgba(34,197,94,0.15);
       border-radius: 8px; margin-top: 8px; font-size: 10px; color: rgba(255,255,255,0.5);
     }
-    .contract-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
-    .contract-status .dot-off { background: rgba(255,255,255,0.15); }
+    .chain-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; }
+    .chain-status .dot-off { background: rgba(255,255,255,0.15); }
+    .wallet-card {
+      display: flex; align-items: center; gap: 10px; padding: 10px;
+      background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 8px; margin-bottom: 8px;
+    }
+    .wallet-icon { font-size: 20px; }
+    .wallet-info { flex: 1; }
+    .wallet-label { font-size: 10px; color: rgba(255,255,255,0.4); }
+    .wallet-addr { font-size: 11px; font-family: monospace; color: rgba(255,255,255,0.7); }
+    .wallet-status { font-size: 10px; }
+    .tab-bar { display: flex; border-bottom: 1px solid rgba(255,255,255,0.06); margin-bottom: 14px; }
+    .tab {
+      flex: 1; padding: 8px; text-align: center; font-size: 11px; font-weight: 600;
+      color: rgba(255,255,255,0.3); cursor: pointer; border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab.active { color: #22c55e; border-bottom-color: #22c55e; }
+    .tab:hover { color: rgba(255,255,255,0.6); }
+    .token-list { max-height: 200px; overflow-y: auto; }
+    .token-item {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .token-item:hover { background: rgba(255,255,255,0.02); }
+    .history-item {
+      padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.03);
+      font-size: 10px;
+    }
+    .history-hash { font-family: monospace; color: #22c55e; word-break: break-all; }
+    .history-time { color: rgba(255,255,255,0.3); }
   </style>
 </head>
 <body>
   <div class="header">
     <div class="header-left">
       <span class="logo">🛡️</span>
-      <h1>SweepGuard Rescue</h1>
+      <h1>SweepGuard Wallet</h1>
     </div>
-    <span class="version">v2.0</span>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <span class="version">v2.1</span>
+      <button class="lock-btn" id="lockBtn" onclick="lockWallet()" title="Lock">🔒</button>
+    </div>
   </div>
 
-  <div class="content">
-    <div class="step-indicator">
-      <div class="step active" id="step1"></div>
-      <div class="step" id="step2"></div>
-      <div class="step" id="step3"></div>
+  <!-- ── Password Setup Screen ─────────────────────────────────────── -->
+  <div id="password-screen" class="content hidden">
+    <div class="section-title"><span class="icon">🔐</span> Set Password</div>
+    <div class="info-box warning">
+      ⚠️ This password encrypts all wallet keys locally. If you forget it, you'll need to re-import wallets.
+    </div>
+    <label>New Password <span class="required">*</span></label>
+    <div class="input-wrap">
+      <input type="password" id="newPassword" placeholder="Enter a strong password" autocomplete="off">
+      <button class="eye-toggle" onclick="toggleVisibility('newPassword', this)">👁️</button>
+    </div>
+    <label>Confirm Password <span class="required">*</span></label>
+    <div class="input-wrap">
+      <input type="password" id="confirmPassword" placeholder="Confirm password" autocomplete="off">
+      <button class="eye-toggle" onclick="toggleVisibility('confirmPassword', this)">👁️</button>
+    </div>
+    <div style="margin-top:14px;">
+      <button class="btn btn-primary" onclick="setPassword()">🔐 Set Password & Continue</button>
+    </div>
+  </div>
+
+  <!-- ── Unlock Screen ─────────────────────────────────────────────── -->
+  <div id="unlock-screen" class="content hidden">
+    <div class="section-title"><span class="icon">🔒</span> Unlock</div>
+    <label>Password</label>
+    <div class="input-wrap">
+      <input type="password" id="unlockPassword" placeholder="Enter your password" autocomplete="off">
+      <button class="eye-toggle" onclick="toggleVisibility('unlockPassword', this)">👁️</button>
+    </div>
+    <div style="margin-top:14px;">
+      <button class="btn btn-primary" onclick="unlockWallet()">🔓 Unlock</button>
+    </div>
+    <div id="unlock-error" class="hidden" style="margin-top:8px;">
+      <div class="info-box danger" id="unlock-error-msg"></div>
+    </div>
+  </div>
+
+  <!-- ── Main Screen ───────────────────────────────────────────────── -->
+  <div id="main-screen" class="hidden">
+    <div class="tab-bar">
+      <div class="tab active" onclick="switchTab('rescue')" id="tab-rescue">🛡️ Rescue</div>
+      <div class="tab" onclick="switchTab('tokens')" id="tab-tokens">💰 Tokens</div>
+      <div class="tab" onclick="switchTab('history')" id="tab-history">📋 History</div>
     </div>
 
-    <!-- Step 1: Setup -->
-    <div id="setup-section">
-      <div class="section-title"><span class="icon">🔑</span> Wallet Setup</div>
+    <!-- ── Rescue Tab ────────────────────────────────────────────── -->
+    <div id="rescue-tab" class="content">
+      <div class="section-title"><span class="icon">🔑</span> Wallets</div>
 
-      <label>Hacked Wallet Private Key <span class="required">*</span></label>
-      <div class="input-wrap">
-        <input type="password" id="privateKey" placeholder="0x..." autocomplete="off">
-        <button class="eye-toggle" onclick="toggleVisibility('privateKey', this)">👁️</button>
+      <div class="wallet-card" id="compromised-wallet-card">
+        <span class="wallet-icon">⚠️</span>
+        <div class="wallet-info">
+          <div class="wallet-label">Compromised Wallet</div>
+          <div class="wallet-addr" id="compromised-addr">Not imported</div>
+        </div>
+        <span class="wallet-status" id="compromised-status">❌</span>
       </div>
 
-      <label>Safe Wallet Address <span class="required">*</span></label>
-      <input type="text" id="safeWallet" placeholder="0x... (where rescued funds go)">
+      <div class="wallet-card" id="sponsor-wallet-card">
+        <span class="wallet-icon">⛽</span>
+        <div class="wallet-info">
+          <div class="wallet-label">Sponsor Wallet (Gas)</div>
+          <div class="wallet-addr" id="sponsor-addr">Not imported</div>
+        </div>
+        <span class="wallet-status" id="sponsor-status">❌</span>
+      </div>
 
-      <label>Sponsor Wallet Private Key <span class="required">*</span></label>
-      <div class="input-wrap">
-        <input type="password" id="sponsorKey" placeholder="0x... (pays gas fees)" autocomplete="off">
-        <button class="eye-toggle" onclick="toggleVisibility('sponsorKey', this)">👁️</button>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button class="btn btn-secondary" onclick="showImportModal('compromised')" style="flex:1;font-size:11px;">
+          ⚠️ Import Compromised
+        </button>
+        <button class="btn btn-secondary" onclick="showImportModal('sponsor')" style="flex:1;font-size:11px;">
+          ⛽ Import Sponsor
+        </button>
       </div>
 
       <div class="divider"></div>
 
-      <div class="section-title"><span class="icon">🎯</span> Airdrop Contract</div>
+      <div class="section-title"><span class="icon">🎯</span> Rescue Settings</div>
 
-      <label>Chain <span class="required">*</span></label>
-      <select id="chainSelect">
-        <option value="8453">✅ Base — Active</option>
-        <option value="1" disabled>Ethereum — Coming Soon</option>
-        <option value="42161" disabled>Arbitrum — Coming Soon</option>
-        <option value="10" disabled>Optimism — Coming Soon</option>
-        <option value="137" disabled>Polygon — Coming Soon</option>
-        <option value="56" disabled>BNB Chain — Coming Soon</option>
-        <option value="43114" disabled>Avalanche — Coming Soon</option>
-        <option value="324" disabled>zkSync — Coming Soon</option>
-        <option value="59144" disabled>Linea — Coming Soon</option>
-        <option value="534352" disabled>Scroll — Coming Soon</option>
-        <option value="81457" disabled>Blast — Coming Soon</option>
-        <option value="7777777" disabled>Zora — Coming Soon</option>
-        <option value="5000" disabled>Mantle — Coming Soon</option>
-        <option value="34443" disabled>Mode — Coming Soon</option>
-        <option value="250" disabled>Fantom — Coming Soon</option>
-        <option value="25" disabled>Cronos — Coming Soon</option>
+      <label>Safe Recipient Address <span class="required">*</span></label>
+      <input type="text" id="safeRecipient" placeholder="0x... (where rescued funds go)">
+
+      <label>Network <span class="required">*</span></label>
+      <select id="chainSelect" onchange="onChainChange()">
+        <!-- Populated dynamically -->
       </select>
 
-      <div class="contract-status">
+      <div class="chain-status" id="chain-status">
         <span class="dot"></span>
-        SweepGuardRescuer deployed on Base: 0xDB67...400F
+        <span id="chain-status-text">Loading...</span>
       </div>
 
-      <label>Airdrop Contract Address <span class="required">*</span></label>
-      <input type="text" id="contractAddress" placeholder="0x... (the airdrop contract)">
+      <div class="divider"></div>
 
-      <label>Hacked Wallet Address <span class="required">*</span></label>
-      <input type="text" id="hackedAddress" placeholder="0x... (the compromised wallet)">
+      <div class="section-title"><span class="icon">🚀</span> Quick Rescue</div>
+
+      <label>Airdrop Contract Address</label>
+      <input type="text" id="contractAddress" placeholder="0x... (airdrop contract)">
+
+      <label>Token Amount (optional)</label>
+      <input type="text" id="tokenAmount" placeholder="Auto-detect if empty">
 
       <label>Claim Data (optional)</label>
-      <textarea id="claimData" placeholder="0x... (auto-detect if empty)"></textarea>
+      <input type="text" id="claimData" placeholder="0x...">
 
       <label>Merkle Proof (optional)</label>
-      <textarea id="merkleProof" placeholder='["0x...", "0x..."]'></textarea>
+      <input type="text" id="merkleProof" placeholder='["0x...", ...]'>
 
-      <div style="margin-top:14px;">
-        <button class="btn btn-primary" id="previewBtn" onclick="previewClaim()">
+      <div style="margin-top:14px;display:flex;gap:8px;">
+        <button class="btn btn-primary" id="previewBtn" onclick="previewRescue()" style="flex:2;">
           🔍 Preview Claim
         </button>
       </div>
+
+      <!-- Preview Results -->
+      <div id="preview-results" class="hidden" style="margin-top:12px;">
+        <div class="section-title"><span class="icon">📊</span> Claim Preview</div>
+        <div id="preview-loading" class="hidden">
+          <div class="loading"><div class="spinner"></div>Analyzing...</div>
+        </div>
+        <div id="preview-content" class="hidden">
+          <div id="contract-warnings"></div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title" id="token-name">Token</span>
+              <span class="badge badge-green" id="eligible-badge">✅ Eligible</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Claimable</span>
+              <span class="card-value" id="claimable-amount">—</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Platform Fee (20%)</span>
+              <span class="result-value" id="fee-amount">—</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">You Receive (80%)</span>
+              <span class="result-value" style="color:#22c55e" id="safe-amount">—</span>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">⛽ Sponsor Gas</span>
+              <span class="badge" id="gas-badge">—</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Sponsor Balance</span>
+              <span class="result-value" id="sponsor-balance">—</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Estimated Gas</span>
+              <span class="result-value" id="gas-cost">—</span>
+            </div>
+          </div>
+          <div id="execution-info" class="info-box info"></div>
+          <div style="display:flex;gap:8px;margin-top:12px;">
+            <button class="btn btn-secondary" onclick="cancelPreview()" style="flex:1;">← Cancel</button>
+            <button class="btn btn-primary" id="claimBtn" onclick="executeRescue()" style="flex:2;">
+              🚀 Rescue Funds
+            </button>
+          </div>
+        </div>
+        <div id="preview-error" class="hidden">
+          <div class="info-box danger" id="error-message"></div>
+          <button class="btn btn-secondary" onclick="cancelPreview()" style="margin-top:10px;">← Cancel</button>
+        </div>
+      </div>
+
+      <!-- Rescue Result -->
+      <div id="rescue-result" class="hidden" style="margin-top:12px;">
+        <div id="result-loading" class="hidden">
+          <div class="loading"><div class="spinner"></div>Executing rescue...</div>
+        </div>
+        <div id="result-success" class="hidden">
+          <div class="info-box success">🎉 Funds rescued successfully!</div>
+          <div class="card">
+            <div class="result-item">
+              <span class="result-label">TX Hash</span>
+              <span class="result-value" id="result-tx" style="font-size:10px;word-break:break-all;">—</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Block</span>
+              <span class="result-value" id="result-block">—</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Method</span>
+              <span class="result-value" id="result-method">—</span>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="resetRescue()" style="margin-top:12px;">🔄 New Rescue</button>
+        </div>
+        <div id="result-error" class="hidden">
+          <div class="info-box danger" id="result-error-msg"></div>
+          <button class="btn btn-secondary" onclick="cancelPreview()" style="margin-top:10px;">← Back</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title"><span class="icon">🪙</span> Direct Token Rescue</div>
+      <label>Token Contract Address</label>
+      <input type="text" id="rescueTokenAddress" placeholder="0x... (ERC-20 token)">
+      <div style="margin-top:8px;">
+        <button class="btn btn-primary" onclick="rescueTokens()">🪙 Rescue Tokens to Safe Wallet</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title"><span class="icon">💎</span> Native Token Rescue</div>
+      <div class="info-box info">
+        Rescue native tokens (ETH, BNB, etc.) from the compromised wallet to your safe wallet.
+      </div>
+      <button class="btn btn-primary" onclick="rescueNative()">💎 Rescue Native Tokens</button>
     </div>
 
-    <!-- Step 2: Preview -->
-    <div id="preview-section" class="hidden">
-      <div class="section-title"><span class="icon">📊</span> Claim Preview</div>
-
-      <div id="preview-loading" class="hidden">
-        <div class="loading"><div class="spinner"></div>Analyzing airdrop contract...</div>
-      </div>
-
-      <div id="preview-content" class="hidden">
-        <div id="contract-warnings"></div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title" id="token-name">Token</span>
-            <span class="badge badge-green" id="eligible-badge">✅ Eligible</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Claimable</span>
-            <span class="card-value" id="claimable-amount">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Platform Fee (20%)</span>
-            <span class="result-value" id="fee-amount">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">You Receive (80%)</span>
-            <span class="result-value" style="color:#22c55e" id="safe-amount">—</span>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="card-header">
-            <span class="card-title">⛽ Sponsor Gas</span>
-            <span class="badge" id="gas-badge">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Sponsor Balance</span>
-            <span class="result-value" id="sponsor-balance">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Estimated Gas</span>
-            <span class="result-value" id="gas-cost">—</span>
-          </div>
-        </div>
-
-        <div id="execution-info" class="info-box info"></div>
-
-        <div style="display:flex;gap:8px;margin-top:12px;">
-          <button class="btn btn-secondary" onclick="goBack()" style="flex:1;">← Back</button>
-          <button class="btn btn-primary" id="claimBtn" onclick="executeClaim()" style="flex:2;">
-            🚀 Rescue Funds
-          </button>
-        </div>
-      </div>
-
-      <div id="preview-error" class="hidden">
-        <div class="info-box danger" id="error-message"></div>
-        <button class="btn btn-secondary" onclick="goBack()" style="margin-top:10px;">← Back</button>
-      </div>
+    <!-- ── Tokens Tab ────────────────────────────────────────────── -->
+    <div id="tokens-tab" class="content hidden">
+      <div class="section-title"><span class="icon">💰</span> Balances</div>
+      <div id="balances-loading" class="loading"><div class="spinner"></div>Loading balances...</div>
+      <div id="balances-content" class="hidden"></div>
+      <button class="btn btn-secondary" onclick="refreshBalances()" style="margin-top:10px;">🔄 Refresh</button>
     </div>
 
-    <!-- Step 3: Result -->
-    <div id="result-section" class="hidden">
-      <div class="section-title"><span class="icon">✅</span> Result</div>
+    <!-- ── History Tab ───────────────────────────────────────────── -->
+    <div id="history-tab" class="content hidden">
+      <div class="section-title"><span class="icon">📋</span> Transaction History</div>
+      <div id="history-content"></div>
+    </div>
+  </div>
 
-      <div id="result-loading" class="hidden">
-        <div class="loading"><div class="spinner"></div>Executing rescue transaction...</div>
+  <!-- ── Import Modal ──────────────────────────────────────────────── -->
+  <div id="import-modal" class="hidden" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:100;display:flex;align-items:center;justify-content:center;">
+    <div style="width:380px;background:#0a0a12;border:1px solid rgba(34,197,94,0.2);border-radius:12px;padding:20px;">
+      <div class="section-title"><span class="icon" id="import-icon">🔑</span> <span id="import-title">Import Wallet</span></div>
+      <label>Private Key <span class="required">*</span></label>
+      <div class="input-wrap">
+        <input type="password" id="importPrivateKey" placeholder="0x..." autocomplete="off">
+        <button class="eye-toggle" onclick="toggleVisibility('importPrivateKey', this)">👁️</button>
       </div>
-
-      <div id="result-success" class="hidden">
-        <div class="info-box success">🎉 Funds rescued successfully!</div>
-        <div class="card">
-          <div class="result-item">
-            <span class="result-label">Fund TX</span>
-            <span class="result-value" id="fund-tx" style="font-size:10px;word-break:break-all;">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Claim TX</span>
-            <span class="result-value" id="claim-tx" style="font-size:10px;word-break:break-all;">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Block</span>
-            <span class="result-value" id="block-num">—</span>
-          </div>
-          <div class="result-item">
-            <span class="result-label">Method</span>
-            <span class="result-value" id="exec-method">—</span>
-          </div>
-        </div>
-        <button class="btn btn-primary" onclick="resetAll()" style="margin-top:12px;">🔄 New Rescue</button>
+      <div class="info-box warning" style="margin-top:8px;">
+        ⚠️ Never share your private key. It's encrypted locally and never sent to any server.
       </div>
-
-      <div id="result-error" class="hidden">
-        <div class="info-box danger" id="result-error-msg"></div>
-        <button class="btn btn-secondary" onclick="goBack()" style="margin-top:10px;">← Back</button>
+      <div style="display:flex;gap:8px;margin-top:14px;">
+        <button class="btn btn-secondary" onclick="closeImportModal()" style="flex:1;">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmImport()" style="flex:2;" id="import-confirm-btn">Import</button>
       </div>
     </div>
   </div>
 
+  <!-- ── Footer ───────────────────────────────────────────────────── -->
   <div class="footer">
     <a href="https://sweeptsguard.vercel.app" target="_blank">sweeptsguard.vercel.app</a>
   </div>

@@ -1,58 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>SweepGuard Warning</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SweepGuard Wallet — Warning</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background: #030305;
+      min-height: 100vh;
+      background: #0a0a12;
       color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      padding: 20px;
+      display: flex; align-items: center; justify-content: center;
     }
     .container {
-      max-width: 500px;
-      text-align: center;
+      max-width: 480px; width: 90%;
+      background: rgba(239,68,68,0.05);
+      border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 16px; padding: 32px; text-align: center;
     }
-    .icon { font-size: 72px; margin-bottom: 24px; }
-    h1 {
-      font-size: 32px;
-      color: #ef4444;
-      margin-bottom: 12px;
+    .icon { font-size: 48px; margin-bottom: 16px; }
+    h1 { font-size: 22px; color: #ef4444; font-weight: 700; margin-bottom: 12px; }
+    p { color: rgba(255,255,255,0.6); font-size: 14px; line-height: 1.6; margin-bottom: 16px; }
+    .features { text-align: left; margin: 20px 0; }
+    .feature {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px; margin-bottom: 8px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px; font-size: 13px;
     }
-    p {
-      color: rgba(255,255,255,0.5);
-      font-size: 16px;
-      line-height: 1.6;
-      margin-bottom: 32px;
-    }
+    .feature-icon { font-size: 18px; }
     .btn {
-      display: inline-block;
-      padding: 14px 32px;
+      display: inline-block; padding: 14px 32px;
       background: linear-gradient(135deg, #22c55e, #06b6d4);
-      color: #000;
-      border: none;
-      border-radius: 12px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      text-decoration: none;
+      color: #000; font-size: 15px; font-weight: 700;
+      border: none; border-radius: 12px; cursor: pointer;
+      transition: all 0.2s; text-decoration: none;
     }
-    .btn:hover { transform: translateY(-2px); }
+    .btn:hover { box-shadow: 0 4px 20px rgba(34,197,94,0.3); }
+    .footer { margin-top: 20px; color: rgba(255,255,255,0.2); font-size: 11px; }
   </style>
 </head>
 <body>
   <div class="container">
-    <div class="icon">⚠️</div>
-    <h1>Dangerous Site Detected</h1>
-    <p>SweepGuard has identified this website as potentially malicious. Do not connect your wallet or sign any transactions on this page.</p>
-    <a href="https://sweeptsguard.vercel.app" class="btn">🛡️ Go to SweepGuard</a>
+    <div class="icon">🛡️</div>
+    <h1>SweepGuard Wallet</h1>
+    <p>Rescue assets from compromised wallets and claim airdrops safely using EIP-7702 delegation.</p>
+
+    <div class="features">
+      <div class="feature">
+        <span class="feature-icon">🔑</span>
+        <span>Import compromised wallet + sponsor wallet (gas)</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🎯</span>
+        <span>Claim airdrops and send to safe wallet in one transaction</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🪙</span>
+        <span>Rescue ERC-20 tokens from compromised wallets</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">💎</span>
+        <span>Recover native gas tokens (ETH, BNB, etc.)</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">⛽</span>
+        <span>Sponsor wallet covers all gas fees</span>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🔒</span>
+        <span>PBKDF2 + AES-GCM encryption, auto-lock after 15 min</span>
+      </div>
+    </div>
+
+    <a href="https://sweeptsguard.vercel.app/extension" class="btn">
+      🚀 Learn More
+    </a>
+
+    <div class="footer">
+      <p>20% platform fee applies. Use at your own risk.</p>
+      <p>Only use for wallets you own or are authorized to recover.</p>
+    </div>
   </div>
 </body>
 </html>

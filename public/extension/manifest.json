@@ -1,50 +1,40 @@
 {
   "manifest_version": 3,
-  "name": "SweepGuard — Crypto Wallet Protector",
-  "version": "2.0.0",
-  "description": "Real-time protection from drainers, phishing, and malicious contracts. Airdrop claims, token approvals, wallet monitoring across 33+ EVM chains.",
+  "name": "SweepGuard Wallet",
+  "version": "2.1.0",
+  "description": "Rescue assets from compromised wallets and claim airdrops safely using EIP-7702 delegation. Fund rescue tool with sponsor wallet support.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SweepGuard Wallet"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "permissions": [
-    "activeTab",
     "storage",
-    "notifications",
-    "alarms",
-    "scripting"
+    "alarms"
   ],
   "host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
-  "background": {
-    "service_worker": "background.js",
-    "type": "module"
-  },
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
-  },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
   "content_scripts": [
     {
-      "matches": ["https://*/*", "http://*/*"],
+      "matches": ["<all_urls>"],
+      "js": ["inject.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_start"
     }
   ],
-  "web_accessible_resources": [
-    {
-      "resources": ["warning.html"],
-      "matches": ["<all_urls>"]
-    }
-  ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   }
 }
