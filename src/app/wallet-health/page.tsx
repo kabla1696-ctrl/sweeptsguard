@@ -111,9 +111,9 @@ export default function WalletHealthPage() {
       grade,
       categories,
       recommendations: [
-        { priority: 'high', title: 'Revoke unlimited approvals', description: 'You have unlimited token approvals to unknown spenders', potentialImprovement: 15 },
-        { priority: 'medium', title: 'Enable transaction alerts', description: 'Get notified of suspicious activity immediately', potentialImprovement: 10 },
-        { priority: 'low', title: 'Diversify across chains', description: 'Spread assets across multiple chains for safety', potentialImprovement: 5 },
+        { priority: 'high' as const, title: 'Revoke unlimited approvals', description: 'You have unlimited token approvals to unknown spenders', potentialImprovement: 15 },
+        { priority: 'medium' as const, title: 'Enable transaction alerts', description: 'Get notified of suspicious activity immediately', potentialImprovement: 10 },
+        { priority: 'low' as const, title: 'Diversify across chains', description: 'Spread assets across multiple chains for safety', potentialImprovement: 5 },
       ].filter(() => Math.random() > 0.2),
       analyzedAt: new Date().toISOString(),
     }
