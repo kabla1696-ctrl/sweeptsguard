@@ -2,304 +2,183 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { isValidAddress, isValidTxHash } from '@/lib/validation'
-
-interface FreezeTemplate {
-  exchange: string
-  subject: string
-  body: string
-}
+import { ethers } from 'ethers'
 
 const EXCHANGES = [
-  { name: 'Binance', icon: '🔶', color: '#f3ba2f' },
-  { name: 'Coinbase', icon: '🔵', color: '#0052ff' },
-  { name: 'OKX', icon: '⚫', color: '#ffffff' },
-  { name: 'Bybit', icon: '🟡', color: '#f7a600' },
+  { id: 'binance', name: 'Binance', email: 'security@binance.com', url: 'https://www.binance.com/en/support' },
+  { id: 'coinbase', name: 'Coinbase', email: 'support@coinbase.com', url: 'https://help.coinbase.com' },
+  { id: 'kraken', name: 'Kraken', email: 'support@kraken.com', url: 'https://support.kraken.com' },
+  { id: 'kucoin', name: 'KuCoin', email: 'support@kucoin.com', url: 'https://www.kucoin.com/support' },
+  { id: 'bybit', name: 'Bybit', email: 'support@bybit.com', url: 'https://www.bybit.com/en/help' },
+  { id: 'okx', name: 'OKX', email: 'support@okx.com', url: 'https://www.okx.com/support' },
 ]
-
-const STATUS_STEPS = [
-  { label: 'Generate Template', icon: '📝' },
-  { label: 'Send to Exchange', icon: '📧' },
-  { label: 'Under Review', icon: '⏳' },
-  { label: 'Frozen / Resolved', icon: '✅' },
-]
-
-function generateTemplate(exchange: string, walletAddress: string, txHash: string, amount: string, asset: string): FreezeTemplate {
-  const subject = `URGENT: Freeze Request - Compromised Wallet ${walletAddress.slice(0, 10)}...`
-  const date = new Date().toISOString().split('T')[0]
-
-  const templates: Record<string, string> = {
-    Binance: `Dear Binance Security Team,
-
-I am writing to request an urgent freeze on funds that were stolen from my compromised wallet and deposited to your exchange.
-
-Details:
-- Compromised Wallet: ${walletAddress}
-- Transaction Hash: ${txHash}
-- Amount: ${amount} ${asset}
-- Date: ${date}
-
-I have reported this incident to law enforcement and request that you freeze the receiving account pending investigation.
-
-Please contact me at your earliest convenience.
-
-Best regards,
-[Your Name]
-[Your Email]
-[Your Phone]`,
-
-    Coinbase: `Dear Coinbase Security Team,
-
-I am reporting stolen funds that were deposited from my compromised wallet to a Coinbase account.
-
-Details:
-- Source Wallet (Compromised): ${walletAddress}
-- Transaction Hash: ${txHash}
-- Amount: ${amount} ${asset}
-- Date: ${date}
-
-Please freeze the receiving account and preserve all records for law enforcement investigation.
-
-Thank you for your prompt attention.
-
-Best regards,
-[Your Name]
-[Your Email]`,
-
-    OKX: `Dear OKX Security Team,
-
-URGENT: Request to freeze stolen funds deposited from my compromised wallet.
-
-Wallet Address: ${walletAddress}
-Transaction: ${txHash}
-Amount: ${amount} ${asset}
-Date: ${date}
-
-Please freeze the destination account immediately. I am filing a police report and will provide case number upon request.
-
-Regards,
-[Your Name]`,
-
-    Bybit: `Dear Bybit Security Team,
-
-I am requesting an immediate freeze on stolen funds deposited to your platform.
-
-Compromised Wallet: ${walletAddress}
-TX Hash: ${txHash}
-Amount: ${amount} ${asset}
-Date: ${date}
-
-These funds were stolen from my wallet. Please freeze the receiving account pending investigation.
-
-Best regards,
-[Your Name]`
-  }
-
-  return { exchange, subject, body: templates[exchange] || templates.Binance }
-}
 
 export default function FreezePage() {
+  const [step, setStep] = useState(1)
+  const [exchange, setExchange] = useState('')
   const [walletAddress, setWalletAddress] = useState('')
+  const [drainerAddress, setDrainerAddress] = useState('')
   const [txHash, setTxHash] = useState('')
   const [amount, setAmount] = useState('')
-  const [asset, setAsset] = useState('ETH')
-  const [selectedExchange, setSelectedExchange] = useState('Binance')
-  const [template, setTemplate] = useState<FreezeTemplate | null>(null)
-  const [copied, setCopied] = useState<'subject' | 'body' | null>(null)
-  const [validationError, setValidationError] = useState('')
+  const [description, setDescription] = useState('')
+  const [generated, setGenerated] = useState('')
+  const [error, setError] = useState('')
 
-  const handleGenerate = () => {
-    setValidationError('')
-    if (!isValidAddress(walletAddress)) { setValidationError('Invalid wallet address.'); return }
-    if (txHash && !isValidTxHash(txHash)) { setValidationError('Invalid transaction hash.'); return }
-    if (amount && (isNaN(Number(amount)) || Number(amount) < 0)) { setValidationError('Amount must be valid.'); return }
-    setTemplate(generateTemplate(selectedExchange, walletAddress, txHash, amount, asset))
+  const generateRequest = () => {
+    if (!walletAddress || !ethers.isAddress(walletAddress)) {
+      setError('Please enter a valid wallet address')
+      return
+    }
+    if (!exchange) {
+      setError('Please select an exchange')
+      return
+    }
+
+    const ex = EXCHANGES.find(e => e.id === exchange)
+    if (!ex) return
+
+    const template = `URGENT: Freeze Request — Stolen Funds
+
+To: ${ex.email}
+Subject: URGENT — Freeze stolen funds deposit
+
+Dear ${ex.name} Security Team,
+
+I am writing to report stolen cryptocurrency that was deposited to your platform. Please freeze the following account immediately:
+
+STOLEN FUNDS DETAILS:
+• Victim Wallet: ${walletAddress}
+• Drainer/Receiver: ${drainerAddress || 'Unknown'}
+• Transaction Hash: ${txHash || 'Pending investigation'}
+• Amount: ${amount || 'Under investigation'}
+• Date: ${new Date().toISOString().split('T')[0]}
+
+${description ? `INCIDENT DESCRIPTION:\n${description}\n` : ''}
+REQUEST:
+Please freeze all funds associated with the drainer address and preserve all transaction records for law enforcement.
+
+I have filed a police report and can provide additional documentation upon request.
+
+Best regards,
+[Your name]
+[Your contact information]`
+
+    setGenerated(template)
+    setStep(3)
   }
 
-  const handleCopy = async (text: string, type: 'subject' | 'body') => {
-    try { await navigator.clipboard.writeText(text); setCopied(type); setTimeout(() => setCopied(null), 2000) } catch {}
-  }
-
-  const handleDownload = () => {
-    if (!template) return
-    const blob = new Blob([`Subject: ${template.subject}\n\n${template.body}`], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `freeze-request-${selectedExchange.toLowerCase()}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(generated)
+    alert('Copied to clipboard!')
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#050507] via-[#0a0a0f] to-[#050507] text-white">
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-[#00e5ff]/3 rounded-full blur-[128px]" />
-        <div className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-[#00ff87]/3 rounded-full blur-[128px]" />
+    <main className="min-h-screen bg-[#030305] text-white">
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-blue-500/[0.04] rounded-full blur-[120px]" />
       </div>
 
-      <div className="relative max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-16">
-        {/* Header */}
-        <div className="mb-10 animate-[fade-in_0.6s_ease-out]">
-          <h1 className="text-3xl sm:text-4xl font-bold mb-2 bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-            🧊 Freeze Request
-          </h1>
-          <p className="text-gray-400 text-sm sm:text-base">Generate freeze request templates for major exchanges</p>
-        </div>
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+        <Link href="/" className="flex items-center gap-2">
+          <span className="text-2xl">🛡️</span>
+          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
+        </Link>
+      </nav>
 
-        {/* Status Steps */}
-        <div className="flex items-center gap-2 mb-10 overflow-x-auto pb-2 animate-[fade-in_0.6s_ease-out_0.1s_both]">
-          {STATUS_STEPS.map((step, i) => (
-            <div key={i} className="flex items-center gap-2 shrink-0">
-              <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border text-xs font-medium ${
-                template && i === 0
-                  ? 'bg-[#00ff87]/10 border-[#00ff87]/20 text-[#00ff87]'
-                  : 'bg-white/5 border-white/10 text-gray-500'
-              }`}>
-                <span>{step.icon}</span>
-                <span>{step.label}</span>
-              </div>
-              {i < STATUS_STEPS.length - 1 && <div className="w-6 h-px bg-white/10" />}
+      <div className="relative z-10 max-w-3xl mx-auto px-6 py-12">
+        <h1 className="text-3xl font-bold mb-2">🧊 Freeze Request</h1>
+        <p className="text-white/40 mb-8">Generate an exchange freeze request for stolen funds</p>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-4 mb-8">
+          {[1, 2, 3].map(s => (
+            <div key={s} className={`flex items-center gap-2 ${step >= s ? 'text-blue-400' : 'text-white/20'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${step >= s ? 'bg-blue-600' : 'bg-white/[0.05]'}`}>{s}</div>
+              <span className="text-sm">{s === 1 ? 'Exchange' : s === 2 ? 'Details' : 'Generated'}</span>
             </div>
           ))}
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-8">
-          {/* Form */}
-          <div className="space-y-5 animate-[fade-in_0.6s_ease-out_0.2s_both]">
-            {/* Exchange selector */}
+        {step === 1 && (
+          <div className="space-y-3">
+            <h3 className="font-semibold mb-4">Select Exchange</h3>
+            {EXCHANGES.map(ex => (
+              <button key={ex.id} onClick={() => { setExchange(ex.id); setStep(2) }}
+                className={`w-full p-4 rounded-xl border text-left transition-all ${
+                  exchange === ex.id ? 'bg-blue-500/[0.06] border-blue-500/20' : 'bg-white/[0.02] border-white/[0.06] hover:border-white/[0.12]'
+                }`}>
+                <div className="font-semibold">{ex.name}</div>
+                <div className="text-xs text-white/40">{ex.email}</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <button onClick={() => setStep(1)} className="text-sm text-white/40 hover:text-white">← Back</button>
+            <h3 className="font-semibold">Incident Details</h3>
+
             <div>
-              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-3 block">Select Exchange</label>
-              <div className="grid grid-cols-2 gap-2">
-                {EXCHANGES.map(ex => (
-                  <button
-                    key={ex.name}
-                    onClick={() => setSelectedExchange(ex.name)}
-                    aria-label={`Select ${ex.name}`}
-                    aria-pressed={selectedExchange === ex.name}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-200 border ${
-                      selectedExchange === ex.name
-                        ? 'bg-white/10 border-[#00ff87]/30 text-white shadow-[0_0_15px_rgba(0,255,135,0.1)]'
-                        : 'bg-white/5 border-white/10 text-gray-500 hover:text-white hover:border-white/20'
-                    }`}
-                  >
-                    <span className="text-xl">{ex.icon}</span>
-                    {ex.name}
-                  </button>
-                ))}
+              <label className="text-sm text-white/40 mb-1 block">Your Wallet Address *</label>
+              <input value={walletAddress} onChange={e => setWalletAddress(e.target.value)}
+                placeholder="0x..." className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 text-sm font-mono" />
+            </div>
+
+            <div>
+              <label className="text-sm text-white/40 mb-1 block">Drainer Address</label>
+              <input value={drainerAddress} onChange={e => setDrainerAddress(e.target.value)}
+                placeholder="0x..." className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 text-sm font-mono" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-white/40 mb-1 block">Transaction Hash</label>
+                <input value={txHash} onChange={e => setTxHash(e.target.value)}
+                  placeholder="0x..." className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 text-sm font-mono" />
+              </div>
+              <div>
+                <label className="text-sm text-white/40 mb-1 block">Amount Stolen</label>
+                <input value={amount} onChange={e => setAmount(e.target.value)}
+                  placeholder="e.g., 5.2 ETH" className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 text-sm" />
               </div>
             </div>
 
-            {/* Form fields */}
-            <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-6 space-y-4">
-              <div>
-                <label htmlFor="compromised-wallet-freeze" className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Compromised Wallet</label>
-                <input
-                  id="compromised-wallet-freeze"
-                  type="text"
-                  value={walletAddress}
-                  onChange={e => setWalletAddress(e.target.value)}
-                  placeholder="0x..."
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00ff87]/40 focus:shadow-[0_0_15px_rgba(0,255,135,0.08)] text-sm font-mono transition-all"
-                />
-              </div>
-              <div>
-                <label htmlFor="tx-hash-freeze" className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Transaction Hash</label>
-                <input
-                  id="tx-hash-freeze"
-                  type="text"
-                  value={txHash}
-                  onChange={e => setTxHash(e.target.value)}
-                  placeholder="0x..."
-                  className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-[#00e5ff]/40 focus:shadow-[0_0_15px_rgba(0,229,255,0.08)] text-sm font-mono transition-all"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="amount-freeze" className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Amount</label>
-                  <input
-                    id="amount-freeze"
-                    type="text"
-                    value={amount}
-                    onChange={e => setAmount(e.target.value)}
-                    placeholder="1.5"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 text-sm transition-all"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="asset-freeze" className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Asset</label>
-                  <input
-                    id="asset-freeze"
-                    type="text"
-                    value={asset}
-                    onChange={e => setAsset(e.target.value)}
-                    placeholder="ETH"
-                    className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder:text-gray-600 focus:outline-none focus:border-white/30 text-sm transition-all"
-                  />
-                </div>
-              </div>
-              {validationError && <p className="text-[#ff3b3b] text-sm">{validationError}</p>}
+            <div>
+              <label className="text-sm text-white/40 mb-1 block">Description</label>
+              <textarea value={description} onChange={e => setDescription(e.target.value)}
+                placeholder="Describe what happened..." rows={4}
+                className="w-full px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 text-sm resize-none" />
             </div>
 
-            <button
-              onClick={handleGenerate}
-              disabled={!walletAddress}
-              className="w-full px-6 py-4 bg-gradient-to-r from-[#00ff87] to-[#00e5ff] text-black font-semibold rounded-xl text-sm disabled:opacity-40 hover:shadow-[0_0_30px_rgba(0,255,135,0.3)] transition-all duration-300 active:scale-95"
-            >
-              📧 Generate Freeze Request
+            {error && <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">{error}</div>}
+
+            <button onClick={generateRequest}
+              className="w-full py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold">
+              Generate Freeze Request
             </button>
           </div>
+        )}
 
-          {/* Preview */}
-          <div className="animate-[fade-in_0.6s_ease-out_0.3s_both]">
-            {template ? (
-              <div className="space-y-4">
-                {/* Subject */}
-                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">Subject</span>
-                    <button
-                      onClick={() => handleCopy(template.subject, 'subject')}
-                      className="text-xs text-[#00ff87] hover:text-[#00ff87]/80 transition-colors"
-                    >
-                      {copied === 'subject' ? '✅ Copied!' : '📋 Copy'}
-                    </button>
-                  </div>
-                  <p className="text-sm font-mono text-white/80">{template.subject}</p>
-                </div>
-
-                {/* Body */}
-                <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-[10px] text-gray-500 uppercase tracking-wider">Body</span>
-                    <button
-                      onClick={() => handleCopy(template.body, 'body')}
-                      className="text-xs text-[#00ff87] hover:text-[#00ff87]/80 transition-colors"
-                    >
-                      {copied === 'body' ? '✅ Copied!' : '📋 Copy'}
-                    </button>
-                  </div>
-                  <pre className="text-sm whitespace-pre-wrap text-gray-400 font-mono leading-relaxed">{template.body}</pre>
-                </div>
-
-                {/* Download */}
-                <button
-                  onClick={handleDownload}
-                  className="w-full px-6 py-3 bg-white/5 border border-white/10 rounded-xl text-sm text-gray-300 hover:text-white hover:bg-white/10 hover:border-white/20 transition-all flex items-center justify-center gap-2"
-                >
-                  📥 Download as Text
-                </button>
-              </div>
-            ) : (
-              <div className="h-full flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-5xl mb-4 opacity-20">📧</div>
-                  <p className="text-gray-600 text-sm">Fill in the details to generate a template</p>
-                </div>
-              </div>
-            )}
+        {step === 3 && generated && (
+          <div className="space-y-4">
+            <button onClick={() => setStep(2)} className="text-sm text-white/40 hover:text-white">← Back</button>
+            <h3 className="font-semibold">Generated Freeze Request</h3>
+            <div className="p-5 bg-white/[0.03] border border-white/[0.06] rounded-2xl">
+              <pre className="text-sm text-white/70 whitespace-pre-wrap font-mono">{generated}</pre>
+            </div>
+            <div className="flex gap-3">
+              <button onClick={copyToClipboard}
+                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold">
+                📋 Copy to Clipboard
+              </button>
+              <button onClick={() => { setStep(1); setGenerated(''); setWalletAddress(''); setDrainerAddress(''); setTxHash(''); setAmount(''); setDescription('') }}
+                className="px-6 py-3 bg-white/[0.05] border border-white/[0.1] rounded-xl">
+                New Request
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </main>
   )
