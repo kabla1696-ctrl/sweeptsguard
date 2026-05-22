@@ -159,9 +159,15 @@ function DashboardContent() {
   }, [address, pollStatus])
 
   return (
-    <main className="min-h-screen bg-[#0a0a0f] text-white">
+    <main className="min-h-screen bg-[#030305] text-white">
+      {/* Background effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-green-500/[0.04] rounded-full blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-cyan-500/[0.03] rounded-full blur-[100px]" />
+      </div>
+
       {/* Nav */}
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
@@ -169,22 +175,24 @@ function DashboardContent() {
           </span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
-          <Link href="/wallets" className="text-sm text-white/50 hover:text-white transition-colors">Wallets</Link>
-          <Link href="/tracker" className="text-sm text-white/50 hover:text-white transition-colors">Tracker</Link>
-          <Link href="/history" className="text-sm text-white/50 hover:text-white transition-colors">History</Link>
-          <Link href="/batch" className="text-sm text-white/50 hover:text-white transition-colors">⚡ Batch</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-green-400 transition-colors">Scan</Link>
+          <Link href="/wallets" className="text-sm text-white/50 hover:text-green-400 transition-colors">Wallets</Link>
+          <Link href="/tracker" className="text-sm text-white/50 hover:text-green-400 transition-colors">Tracker</Link>
+          <Link href="/history" className="text-sm text-white/50 hover:text-green-400 transition-colors">History</Link>
+          <Link href="/batch" className="text-sm text-white/50 hover:text-green-400 transition-colors">⚡ Batch</Link>
         </div>
       </nav>
 
-      <div className="max-w-4xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">Protection Dashboard</h1>
-        <p className="text-white/40 mb-8">Set up auto-sweep monitoring for your compromised wallet</p>
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
+        <h1 className="text-4xl md:text-5xl font-black mb-2">
+          Protection <span className="bg-gradient-to-r from-green-400 to-cyan-400 bg-clip-text text-transparent">Dashboard</span>
+        </h1>
+        <p className="text-gray-500 text-lg mb-8">Set up auto-sweep monitoring for your compromised wallet</p>
 
         {/* Quick Start Guide */}
         {!monitoring && (
-          <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-2xl mb-8">
-            <h3 className="text-blue-400 font-semibold mb-3">📖 How It Works</h3>
+          <div className="p-5 bg-blue-500/[0.06] border border-blue-500/15 rounded-2xl mb-8 backdrop-blur-sm">
+            <h3 className="text-blue-400 font-semibold mb-3 flex items-center gap-2">📖 How It Works</h3>
             <ol className="space-y-2 text-white/60 text-sm">
               <li><span className="text-blue-400 font-bold mr-2">1.</span> Enter your <span className="text-white font-medium">compromised wallet</span> address — the wallet whose keys may have been exposed</li>
               <li><span className="text-blue-400 font-bold mr-2">2.</span> Set a <span className="text-white font-medium">safe wallet</span> — a different wallet you control where funds will be swept to</li>
@@ -196,8 +204,9 @@ function DashboardContent() {
 
         {/* Status Bar */}
         {monitoring && (
-          <div className="p-5 bg-green-500/10 border border-green-500/20 rounded-2xl mb-8">
-            <div className="flex items-center gap-3">
+          <div className="relative p-5 bg-green-500/[0.06] border border-green-500/15 rounded-2xl mb-8 overflow-hidden">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-green-500/10 rounded-full blur-[60px]" />
+            <div className="relative flex items-center gap-3">
               <span className="w-3 h-3 rounded-full bg-green-400 animate-pulse" />
               <span className="text-green-400 font-semibold">Active Protection</span>
             </div>
@@ -208,7 +217,7 @@ function DashboardContent() {
         )}
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-8">
+        <div className="flex gap-2 mb-8 bg-white/[0.02] p-1.5 rounded-xl border border-white/[0.05]">
           {(['setup', 'alerts', 'sweeps', 'notifications'] as const).map((tab) => (
             <button
               key={tab}
@@ -216,10 +225,10 @@ function DashboardContent() {
               aria-selected={activeTab === tab}
               aria-label={`${tab.charAt(0).toUpperCase() + tab.slice(1)} tab`}
               onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab
-                  ? 'bg-green-600 text-white'
-                  : 'bg-white/[0.05] text-white/50 hover:text-white'
+                  ? 'bg-green-600 text-white shadow-lg shadow-green-500/20'
+                  : 'text-white/40 hover:text-white hover:bg-white/[0.04]'
               }`}
             >
               {tab === 'setup' ? '⚙️ Setup' : tab === 'alerts' ? '🚨 Alerts' : tab === 'sweeps' ? '⚡ Sweeps' : '🔔 Notifications'}
