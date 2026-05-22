@@ -179,7 +179,8 @@ export class HoneyTokenEngine {
     const contractAddress = await contract.getAddress()
 
     // Mint tokens to the target wallet
-    const mintTx = await contract.mint(this.config.walletAddress, mintAmount)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mintTx = await (contract as any).mint(this.config.walletAddress, mintAmount)
     await mintTx.wait()
 
     const id = `honey-${chainId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

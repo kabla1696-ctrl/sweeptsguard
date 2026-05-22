@@ -107,7 +107,7 @@ export class PanicButtonEngine {
     return {
       ...feeData,
       maxPriorityFeePerGas: basePriority * BigInt(this.config.priorityFeeMultiplier),
-    }
+    } as ethers.FeeData & { maxPriorityFeePerGas: bigint }
   }
 
   // Step 1: Revoke all ERC-20 approvals
