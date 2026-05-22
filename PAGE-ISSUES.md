@@ -177,6 +177,10 @@ Uses a custom regex-based markdown renderer. Handles `params` as `Promise<{ sect
 
 `npx tsc --noEmit` passes with zero errors.
 
+### 13b. Next.js Build — Succeeds ✅
+
+`npx next build` completes successfully. All 64 pages compile and render without errors.
+
 ---
 
 ### 14. All Lib Imports Resolve ✅
@@ -346,6 +350,40 @@ const RPC_URLS: Record<number, string> = {
 ```
 
 These public RPCs have strict rate limits and may fail under load. The app should prefer env-configured RPCs from `.env.local`.
+
+---
+
+### 21. Solana Page — Uses POST but API Also Accepts POST
+
+**File:** `src/app/solana/page.tsx` + `src/app/api/solana/scan/route.ts`
+
+The Solana scan page sends `POST` to `/api/solana/scan`, and the API route only exports `POST`. This is correct. No issue.
+
+---
+
+### 22. `extractTokenIdsFromLogs` — Incorrect Topic Index for ERC-721
+
+**File:** `src/lib/nftRescue.ts`, line ~350
+
+```typescript
+const to = '0x' + log.topics[2].slice(26)
+```
+
+For ERC-721 Transfer events: `Transfer(address indexed from, address indexed to, uint256 indexed tokenId)`
+- topics[0] = event signature
+- topics[1] = from
+- topics[2] = to  ✅
+- topics[3] = tokenId
+
+This is correct. No issue here.
+
+---
+
+### 23. ERC-1155 TransferSingle — Token ID Extraction Order
+
+**File:** `src/lib/nftRescue.ts`, line ~380
+
+The code correctly handles ERC-1155 TransferSingle by decoding `data` as `[uint256, uint256]` where `decoded[0]` is the token ID and `decoded[1]` is the value. This matches the ERC-1155 spec. ✅
 
 ---
 

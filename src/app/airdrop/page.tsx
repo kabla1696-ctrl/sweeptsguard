@@ -393,7 +393,7 @@ export default function AirdropPage() {
   // ═══════════════════════════════════════════════════════════
   // EIP-7702 + ANTIDRAIN RESCUE — THE REAL SOLUTION
   // Key NEVER leaves browser. Sponsor pays gas. Atomic batch.
-  // Same system used by zun's Antidrain extension.
+  // Same EIP-7702 system used by top rescue extensions.
   // ═══════════════════════════════════════════════════════════
   const handleEIP7702Rescue = async () => {
     if (!previewData || !privateKey || !sponsorKey) return
@@ -721,7 +721,7 @@ export default function AirdropPage() {
                 <h4 className="text-green-400 font-semibold mb-2">Step 7: Sign & Rescue</h4>
                 <p className="text-white/50 text-sm">
                   Enter your <strong>hacked wallet's private key</strong> — it stays in your browser and is used to sign an EIP-7702 authorization <strong>locally</strong>.
-                  The key is <strong>NEVER sent to any server</strong>. Same system as zun's Antidrain.
+                  The key is <strong>NEVER sent to any server</strong>. Uses EIP-7702 — the gold standard for safe rescue.
                 </p>
                 <p className="text-white/50 text-sm mt-2">
                   Click <strong>&quot;EIP-7702 Rescue&quot;</strong> → Sponsor wallet pays gas. Smart contract claims tokens and splits them atomically:
@@ -764,7 +764,7 @@ export default function AirdropPage() {
                   <div className="p-2 bg-white/[0.02] rounded">✅ Private key stays in browser (EIP-7702)</div>
                   <div className="p-2 bg-white/[0.02] rounded">✅ Atomic claim + transfer</div>
                   <div className="p-2 bg-white/[0.02] rounded">✅ Sponsor pays gas (not your wallet)</div>
-                  <div className="p-2 bg-white/[0.02] rounded">✅ Same system as zun's Antidrain</div>
+                  <div className="p-2 bg-white/[0.02] rounded">✅ EIP-7702 — Industry-standard rescue protocol</div>
                   <div className="p-2 bg-white/[0.02] rounded">✅ 20% platform fee enforced</div>
                   <div className="p-2 bg-white/[0.02] rounded">✅ Our deployed contract (verified)</div>
                 </div>
@@ -796,7 +796,7 @@ export default function AirdropPage() {
                 </div>
               ))}
               <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                <p className="text-green-400 text-xs">🔒 On Base chain, your private key NEVER leaves the browser. Uses EIP-7702 — same system as zun's Antidrain.</p>
+                <p className="text-green-400 text-xs">🔒 On Base chain, your private key NEVER leaves the browser. Uses EIP-7702 — industry-standard rescue protocol.</p>
               </div>
             </div>
           </div>
