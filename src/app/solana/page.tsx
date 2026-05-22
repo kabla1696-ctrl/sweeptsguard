@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import Link from 'next/link'
 
+// ── Types ──────────────────────────────────────────────────
 interface SolanaTokenBalance {
   mint: string
   symbol: string
@@ -53,104 +54,96 @@ interface RecoveryResult {
   explorerUrl?: string
   compromisedAddress?: string
   safeAddress?: string
+  platformFee?: string
 }
 
-type Tab = 'scan' | 'recover'
+type Step = 'input' | 'scanning' | 'result' | 'recover' | 'recovering' | 'done'
 
 function SolanaContent() {
-  const [tab, setTab] = useState<Tab>('scan')
+  const [step, setStep] = useState<Step>('input')
   const [address, setAddress] = useState('')
-  const [scanning, setScanning] = useState(false)
   const [scanResult, setScanResult] = useState<SolanaScanResult | null>(null)
-  const [error, setError] = useState('')
   const [hackDetection, setHackDetection] = useState<SolanaHackDetection | null>(null)
+  const [error, setError] = useState('')
 
   // Recovery state
   const [privateKey, setPrivateKey] = useState('')
   const [safeAddress, setSafeAddress] = useState('')
   const [showKey, setShowKey] = useState(false)
-  const [recovering, setRecovering] = useState(false)
   const [recoveryResult, setRecoveryResult] = useState<RecoveryResult | null>(null)
-  const [showConfirmRecover, setShowConfirmRecover] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [showGuide, setShowGuide] = useState(true)
 
   // ── Scan ──────────────────────────────────────────────────
-  const scanWallet = useCallback(async (addr: string) => {
-    if (!addr) {
-      setError('Please enter a Solana address')
+  const handleScan = useCallback(async () => {
+    if (!address.trim()) {
+      setError('Please enter a Solana wallet address')
       return
     }
 
-    setScanning(true)
+    setStep('scanning')
     setError('')
     setScanResult(null)
+    setHackDetection(null)
 
     try {
       const res = await fetch('/api/solana/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: addr }),
+        body: JSON.stringify({ address: address.trim() }),
       })
       const data = await res.json()
 
       if (data.error) {
         setError(data.error)
+        setStep('input')
       } else {
         setScanResult(data)
         setHackDetection(data.hackDetection || null)
+        setStep('result')
       }
     } catch {
-      setError('Failed to scan Solana wallet. Please try again.')
-    } finally {
-      setScanning(false)
+      setError('Failed to scan. Please try again.')
+      setStep('input')
     }
-  }, [])
-
-  const handleScanSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    scanWallet(address)
-  }
+  }, [address])
 
   // ── Recover ───────────────────────────────────────────────
-  const executeRecovery = async () => {
+  const handleRecover = useCallback(async () => {
     if (!privateKey || !safeAddress) {
-      setError('Private key and safe address are required')
+      setError('Private key and safe wallet address are required')
       return
     }
 
-    if (!showConfirmRecover) {
-      setShowConfirmRecover(true)
+    if (!showConfirm) {
+      setShowConfirm(true)
       return
     }
-    setShowConfirmRecover(false)
+    setShowConfirm(false)
 
-    setRecovering(true)
+    setStep('recovering')
     setError('')
-    setRecoveryResult(null)
 
     try {
       const res = await fetch('/api/solana/recover', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ safeAddress, privateKey }),
+        body: JSON.stringify({ safeAddress: safeAddress.trim(), privateKey }),
       })
       const data = await res.json()
 
       if (data.error && !data.success) {
         setError(data.error)
+        setStep('recover')
       } else {
         setRecoveryResult(data)
+        setStep('done')
       }
     } catch {
-      setError('Recovery request failed. Please try again.')
-    } finally {
-      setRecovering(false)
+      setError('Recovery failed. Please try again.')
+      setStep('recover')
     }
-  }
-
-  const handleRecoverSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    executeRecovery()
-  }
+  }, [privateKey, safeAddress, showConfirm])
 
   // Security: clear keys on unmount
   useEffect(() => {
@@ -160,420 +153,589 @@ function SolanaContent() {
   }, [])
 
   const reset = () => {
+    setStep('input')
+    setAddress('')
+    setScanResult(null)
+    setHackDetection(null)
     setPrivateKey('')
     setSafeAddress('')
     setShowKey(false)
-    setShowConfirmRecover(false)
-    setRecovering(false)
+    setShowConfirm(false)
     setRecoveryResult(null)
     setError('')
   }
 
+  const goToRecover = () => {
+    setStep('recover')
+    setError('')
+  }
+
+  // ── Risk Badge ────────────────────────────────────────────
+  const RiskBadge = ({ level }: { level: string }) => {
+    const styles: Record<string, string> = {
+      critical: 'bg-red-500/20 text-red-400 border-red-500/30',
+      high: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+      medium: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+      low: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+      clean: 'bg-green-500/20 text-green-400 border-green-500/30',
+    }
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-bold border ${styles[level] || styles.clean}`}>
+        {level.toUpperCase()}
+      </span>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-[#0a0a0f] text-white">
-      {/* Nav */}
+      {/* ── Navigation ──────────────────────────────────────── */}
       <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
-          <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">
+          <span className="text-xl font-bold bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent">
             SweepGuard
           </span>
         </Link>
         <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">EVM Scan</Link>
-          <Link href="/solana" className="text-sm text-purple-400/70 hover:text-purple-400 transition-colors font-semibold">◎ Solana</Link>
-          <Link href="/recover" className="text-sm text-white/50 hover:text-white transition-colors">Recover</Link>
+          <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">
+            EVM Scan
+          </Link>
+          <Link href="/solana" className="text-sm text-purple-400 font-semibold">
+            ◎ Solana
+          </Link>
+          <Link href="/recover" className="text-sm text-white/50 hover:text-white transition-colors">
+            Recover
+          </Link>
         </div>
       </nav>
 
       <div className="max-w-2xl mx-auto px-6 py-12">
-        {/* Header */}
+
+        {/* ── GUIDE SECTION ──────────────────────────────────── */}
+        {showGuide && step === 'input' && (
+          <div className="mb-8 p-6 bg-gradient-to-br from-purple-500/10 to-violet-500/10 border border-purple-500/20 rounded-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-purple-400">📖 How It Works</h2>
+              <button
+                onClick={() => setShowGuide(false)}
+                className="text-white/30 hover:text-white/60 text-sm"
+              >
+                Hide ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Step 1 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 font-bold text-sm">
+                  1
+                </div>
+                <div>
+                  <p className="text-white/80 text-sm font-semibold">Enter Your Solana Wallet Address</p>
+                  <p className="text-white/40 text-xs mt-1">
+                    Paste the wallet address you want to scan. This is the public address — no private key needed for scanning.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 font-bold text-sm">
+                  2
+                </div>
+                <div>
+                  <p className="text-white/80 text-sm font-semibold">Check for Hack / Drain</p>
+                  <p className="text-white/40 text-xs mt-1">
+                    We analyze your last 50 transactions for suspicious activity — drain patterns, unknown transfers, known drainer programs.
+                  </p>
+                </div>
+              </div>
+
+              {/* Step 3 */}
+              <div className="flex gap-3">
+                <div className="flex-shrink-0 w-8 h-8 bg-purple-500/20 rounded-full flex items-center justify-center text-purple-400 font-bold text-sm">
+                  3
+                </div>
+                <div>
+                  <p className="text-white/80 text-sm font-semibold">Recover If Compromised</p>
+                  <p className="text-white/40 text-xs mt-1">
+                    If your wallet is hacked, enter your private key to recover all SOL + SPL tokens to a safe wallet. Platform fee: 20% of recovered funds.
+                  </p>
+                </div>
+              </div>
+
+              {/* Security Note */}
+              <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                <p className="text-green-400 text-xs">
+                  🔒 <strong>Security:</strong> Your private key is NEVER stored. It is used only for signing recovery transactions and cleared immediately after.
+                </p>
+              </div>
+
+              {/* Phantom Alternative */}
+              <div className="p-3 bg-violet-500/10 border border-violet-500/20 rounded-lg">
+                <p className="text-violet-400 text-xs">
+                  👻 <strong>Prefer Phantom?</strong> You can also use the{' '}
+                  <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="underline hover:text-violet-300">
+                    Phantom wallet extension
+                  </a>{' '}
+                  to sign recovery transactions without exposing your private key.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── HEADER ──────────────────────────────────────────── */}
         <div className="flex items-center gap-3 mb-2">
-          <span className="text-3xl">◎</span>
-          <h1 className="text-3xl font-bold">Solana Scanner</h1>
-        </div>
-        <p className="text-white/40 mb-8">Scan Solana wallets for SOL balance + SPL tokens. Recover compromised wallets.</p>
-
-        {/* Tab Selector */}
-        <div className="flex gap-2 mb-8">
-          <button
-            onClick={() => { setTab('scan'); setError('') }}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              tab === 'scan'
-                ? 'bg-purple-500/20 border border-purple-500/40 text-purple-400'
-                : 'bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]'
-            }`}
-          >
-            🔍 Scan Wallet
-          </button>
-          <button
-            onClick={() => { setTab('recover'); setError('') }}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-              tab === 'recover'
-                ? 'bg-red-500/20 border border-red-500/40 text-red-400'
-                : 'bg-white/[0.03] border border-white/[0.05] text-white/50 hover:bg-white/[0.06]'
-            }`}
-          >
-            💰 Recover Funds
-          </button>
-        </div>
-
-        {/* ── SCAN TAB ──────────────────────────────────────── */}
-        {tab === 'scan' && (
+          <span className="text-4xl">◎</span>
           <div>
-            {/* Scan Form */}
-            <form onSubmit={handleScanSubmit} className="flex gap-2 mb-8">
+            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-violet-400 bg-clip-text text-transparent">
+              Solana Rescue
+            </h1>
+            <p className="text-white/40 text-sm">Scan, detect hacks, and recover SOL + SPL tokens</p>
+          </div>
+        </div>
+
+        <div className="my-6 border-t border-white/[0.05]" />
+
+        {/* ── ERROR ──────────────────────────────────────────── */}
+        {error && (
+          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
+            ❌ {error}
+          </div>
+        )}
+
+        {/* ── STEP: INPUT ────────────────────────────────────── */}
+        {step === 'input' && (
+          <div>
+            <label className="block text-white/60 text-sm mb-2">Solana Wallet Address</label>
+            <div className="flex gap-2">
               <input
                 type="text"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
-                placeholder="Enter Solana address (base58...)"
-                aria-label="Solana wallet address to scan"
-                className="flex-1 px-4 py-3 bg-white/[0.03] border border-purple-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500/40 text-sm font-mono"
+                placeholder="e.g. 7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+                className="flex-1 px-4 py-3 bg-white/[0.03] border border-purple-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-purple-500/50 text-sm font-mono"
+                onKeyDown={(e) => e.key === 'Enter' && handleScan()}
               />
               <button
-                type="submit"
-                disabled={scanning}
-                aria-label="Scan Solana wallet"
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-semibold text-sm disabled:opacity-50 hover:brightness-110 transition-all"
+                onClick={handleScan}
+                disabled={!address.trim()}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-semibold text-sm disabled:opacity-30 hover:brightness-110 transition-all"
               >
-                {scanning ? 'Scanning...' : 'Scan'}
+                🔍 Scan
               </button>
-            </form>
+            </div>
+            <p className="text-white/20 text-xs mt-2">Enter the public address of any Solana wallet to scan</p>
+          </div>
+        )}
 
-            {/* Error */}
-            {error && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
-                {error}
-              </div>
-            )}
+        {/* ── STEP: SCANNING ─────────────────────────────────── */}
+        {step === 'scanning' && (
+          <div className="text-center py-16">
+            <svg className="animate-spin h-10 w-10 text-purple-400 mx-auto mb-4" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <p className="text-purple-400 font-semibold">Scanning Solana wallet...</p>
+            <p className="text-white/30 text-sm mt-2">Checking SOL balance, SPL tokens, and recent transactions</p>
+          </div>
+        )}
 
-            {/* Loading */}
-            {scanning && (
-              <div className="text-center py-12">
-                <div className="inline-flex items-center gap-3 text-purple-400">
-                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Scanning Solana wallet...
+        {/* ── STEP: RESULT ───────────────────────────────────── */}
+        {step === 'result' && scanResult && (
+          <div className="space-y-6">
+            {/* SOL Balance Card */}
+            <div className="p-6 bg-gradient-to-br from-purple-500/10 to-violet-500/10 border border-purple-500/20 rounded-2xl">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-white/40 text-xs uppercase tracking-wider">SOL Balance</p>
+                  <p className="text-4xl font-bold text-purple-400 mt-2">
+                    ◎ {parseFloat(scanResult.solBalanceFormatted).toFixed(6)}
+                  </p>
                 </div>
+                <span className="text-6xl opacity-30">◎</span>
               </div>
-            )}
+              <div className="mt-4 flex items-center justify-between text-xs text-white/30">
+                <span>{scanResult.solBalance} lamports</span>
+                <a
+                  href={`https://solscan.io/account/${scanResult.address}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-purple-400/50 hover:text-purple-400 transition-colors"
+                >
+                  View on Solscan →
+                </a>
+              </div>
+            </div>
 
-            {/* Scan Results */}
-            {scanResult && (
-              <div className="space-y-6">
-                {/* SOL Balance */}
-                <div className="p-5 bg-gradient-to-br from-purple-500/10 to-violet-500/10 border border-purple-500/20 rounded-2xl">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-white/40 text-xs uppercase tracking-wider">SOL Balance</p>
-                      <p className="text-3xl font-bold text-purple-400 mt-1">
-                        ◎ {parseFloat(scanResult.solBalanceFormatted).toFixed(6)}
-                      </p>
+            {/* Hack Detection */}
+            {hackDetection && (
+              <div className={`p-6 border-2 rounded-2xl ${
+                hackDetection.riskLevel === 'critical'
+                  ? 'bg-red-500/5 border-red-500/30'
+                  : hackDetection.riskLevel === 'high'
+                    ? 'bg-orange-500/5 border-orange-500/30'
+                    : hackDetection.riskLevel === 'medium'
+                      ? 'bg-yellow-500/5 border-yellow-500/30'
+                      : hackDetection.riskLevel === 'low'
+                        ? 'bg-blue-500/5 border-blue-500/30'
+                        : 'bg-green-500/5 border-green-500/30'
+              }`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="text-3xl">
+                    {hackDetection.isCompromised ? '🚨' : hackDetection.riskLevel === 'clean' ? '✅' : '⚠️'}
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className={`font-bold text-lg ${
+                        hackDetection.riskLevel === 'critical' ? 'text-red-400'
+                          : hackDetection.riskLevel === 'high' ? 'text-orange-400'
+                          : hackDetection.riskLevel === 'clean' ? 'text-green-400'
+                          : 'text-yellow-400'
+                      }`}>
+                        {hackDetection.isCompromised ? 'WALLET COMPROMISED!' : hackDetection.riskLevel === 'clean' ? 'Wallet Clean' : 'Suspicious Activity'}
+                      </h3>
+                      <RiskBadge level={hackDetection.riskLevel} />
                     </div>
-                    <span className="text-5xl">◎</span>
-                  </div>
-                  <div className="mt-4 flex items-center justify-between text-xs text-white/30">
-                    <span>Raw: {scanResult.solBalance} lamports</span>
-                    <a
-                      href={`https://solscan.io/account/${scanResult.address}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-purple-400/50 hover:text-purple-400 transition-colors"
-                    >
-                      View on Solscan →
-                    </a>
                   </div>
                 </div>
 
-                {/* Hack Detection Alert */}
-                {hackDetection && hackDetection.riskLevel !== 'clean' && (
-                  <div className={`p-5 border rounded-2xl ${
-                    hackDetection.riskLevel === 'critical'
-                      ? 'bg-red-500/10 border-red-500/30'
-                      : hackDetection.riskLevel === 'high'
-                        ? 'bg-orange-500/10 border-orange-500/30'
-                        : 'bg-yellow-500/10 border-yellow-500/30'
-                  }`}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-2xl">{hackDetection.isCompromised ? '🚨' : '⚠️'}</span>
-                      <div>
-                        <h3 className={`font-bold ${
-                          hackDetection.riskLevel === 'critical' ? 'text-red-400'
-                            : hackDetection.riskLevel === 'high' ? 'text-orange-400'
-                            : 'text-yellow-400'
-                        }`}>
-                          {hackDetection.isCompromised ? 'WALLET COMPROMISED!' : 'Suspicious Activity Detected'}
-                        </h3>
-                        <p className="text-white/60 text-sm">Risk Level: {hackDetection.riskLevel.toUpperCase()}</p>
-                      </div>
+                <p className="text-white/70 text-sm mb-4">{hackDetection.summary}</p>
+
+                {/* Drain Stats */}
+                {hackDetection.recentDrainTxs > 0 && (
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="p-3 bg-red-500/10 rounded-lg text-center">
+                      <p className="text-red-400 text-2xl font-bold">{hackDetection.recentDrainTxs}</p>
+                      <p className="text-white/40 text-xs">Drain TXs</p>
                     </div>
-                    <p className="text-white/80 text-sm mb-3">{hackDetection.summary}</p>
-                    {hackDetection.recentDrainTxs > 0 && (
-                      <div className="text-sm text-white/50 space-y-1">
-                        <p>• {hackDetection.recentDrainTxs} drain transactions detected</p>
-                        <p>• {hackDetection.totalDrainedSOL} SOL drained</p>
-                        <p>• {hackDetection.drainedTokens.length} tokens drained</p>
-                      </div>
-                    )}
-                    {hackDetection.isCompromised && (
-                      <div className="mt-4">
-                        <button
-                          onClick={() => setTab('recover')}
-                          className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg font-medium transition-colors"
-                        >
-                          🚨 Recover Funds Now
-                        </button>
-                      </div>
-                    )}
+                    <div className="p-3 bg-red-500/10 rounded-lg text-center">
+                      <p className="text-red-400 text-2xl font-bold">{parseFloat(hackDetection.totalDrainedSOL).toFixed(4)}</p>
+                      <p className="text-white/40 text-xs">SOL Drained</p>
+                    </div>
+                    <div className="p-3 bg-red-500/10 rounded-lg text-center">
+                      <p className="text-red-400 text-2xl font-bold">{hackDetection.drainedTokens.length}</p>
+                      <p className="text-white/40 text-xs">Tokens Drained</p>
+                    </div>
                   </div>
                 )}
 
-                {/* SPL Tokens */}
-                <div>
-                  <h2 className="text-lg font-semibold mb-4">
-                    SPL Tokens ({scanResult.totalTokens})
-                  </h2>
-                  {scanResult.tokens.length === 0 ? (
-                    <div className="text-center py-8 text-white/30 bg-white/[0.02] border border-white/[0.05] rounded-xl">
-                      No SPL tokens found
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {scanResult.tokens.map((token, i) => (
-                        <div
-                          key={i}
-                          className="flex justify-between items-center p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl"
-                        >
-                          <div>
-                            <span className="font-medium text-purple-300">{token.symbol}</span>
-                            <p className="text-white/20 text-xs font-mono mt-1">
-                              Mint: {token.mint.slice(0, 8)}...{token.mint.slice(-6)}
-                            </p>
+                {/* Alerts List */}
+                {hackDetection.alerts.length > 0 && (
+                  <details className="mt-3">
+                    <summary className="text-white/40 text-xs cursor-pointer hover:text-white/60">
+                      View {hackDetection.alerts.length} alerts ▸
+                    </summary>
+                    <div className="mt-2 space-y-2 max-h-48 overflow-y-auto">
+                      {hackDetection.alerts.slice(0, 10).map((alert, i) => (
+                        <div key={i} className="p-2 bg-white/[0.02] rounded-lg text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${
+                              alert.severity === 'critical' ? 'bg-red-400'
+                                : alert.severity === 'high' ? 'bg-orange-400'
+                                : 'bg-yellow-400'
+                            }`} />
+                            <span className="text-white/60">{alert.description}</span>
                           </div>
-                          <div className="text-right">
-                            <div className="font-mono text-sm">{parseFloat(token.balanceFormatted).toFixed(6)}</div>
-                            <p className="text-white/20 text-xs">{token.decimals} decimals</p>
-                          </div>
+                          {alert.txSignature && (
+                            <a
+                              href={`https://solscan.io/tx/${alert.txSignature}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-purple-400/50 hover:text-purple-400 font-mono mt-1 block"
+                            >
+                              TX: {alert.txSignature.slice(0, 20)}...
+                            </a>
+                          )}
                         </div>
                       ))}
                     </div>
-                  )}
-                </div>
-
-                {/* Last Activity */}
-                {scanResult.lastActivity && (
-                  <div className="text-center text-white/30 text-sm">
-                    Last activity: {new Date(scanResult.lastActivity).toLocaleString()}
-                  </div>
+                  </details>
                 )}
 
-                {/* Recovery CTA */}
-                <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl">
-                  <h3 className="font-bold text-red-400 mb-3">🚨 Compromised Wallet?</h3>
-                  <p className="text-white/50 text-sm mb-4">
-                    If this wallet is compromised, recover funds immediately to your safe wallet.
-                  </p>
+                {/* Recover Button */}
+                {hackDetection.isCompromised && (
                   <button
-                    onClick={() => setTab('recover')}
-                    className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-semibold text-sm hover:brightness-110 transition-all"
+                    onClick={goToRecover}
+                    className="w-full mt-4 py-3 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-bold text-sm hover:brightness-110 transition-all"
                   >
-                    💰 Recover Funds →
+                    🚨 Recover My Funds Now
                   </button>
-                </div>
+                )}
               </div>
             )}
+
+            {/* SPL Tokens */}
+            <div>
+              <h2 className="text-lg font-semibold mb-4">
+                SPL Tokens ({scanResult.totalTokens})
+              </h2>
+              {scanResult.tokens.length === 0 ? (
+                <div className="text-center py-8 text-white/30 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                  No SPL tokens found
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {scanResult.tokens.map((token, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between p-3 bg-white/[0.02] border border-white/[0.05] rounded-xl hover:bg-white/[0.04] transition-colors"
+                    >
+                      <div>
+                        <p className="text-white/80 text-sm font-semibold font-mono">
+                          {token.mint.slice(0, 6)}...{token.mint.slice(-4)}
+                        </p>
+                        <p className="text-white/30 text-xs">Decimals: {token.decimals}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-purple-400 font-bold">{token.balanceFormatted}</p>
+                        <a
+                          href={`https://solscan.io/token/${token.mint}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-white/20 text-xs hover:text-purple-400"
+                        >
+                          Explorer →
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={goToRecover}
+                className="flex-1 py-3 bg-red-500/20 border border-red-500/30 rounded-xl text-red-400 font-semibold text-sm hover:bg-red-500/30 transition-all"
+              >
+                💰 Recover Funds
+              </button>
+              <button
+                onClick={reset}
+                className="flex-1 py-3 bg-white/[0.05] border border-white/[0.05] rounded-xl text-white/60 font-semibold text-sm hover:bg-white/[0.08] transition-all"
+              >
+                🔍 Scan Another
+              </button>
+            </div>
           </div>
         )}
 
-        {/* ── RECOVER TAB ───────────────────────────────────── */}
-        {tab === 'recover' && (
+        {/* ── STEP: RECOVER ──────────────────────────────────── */}
+        {step === 'recover' && (
           <div>
-            {/* How It Works */}
-            <div className="p-5 bg-blue-500/10 border border-blue-500/20 rounded-xl mb-8">
-              <h3 className="text-blue-400 font-semibold mb-3">🧠 How Solana Recovery Works</h3>
-              <ol className="text-white/50 text-sm space-y-2 list-decimal list-inside">
-                <li>Enter the <strong className="text-white/70">private key</strong> of the compromised Solana wallet</li>
-                <li>Enter your <strong className="text-white/70">safe wallet</strong> address (where funds will be sent)</li>
-                <li>We sweep <strong className="text-white/70">SOL balance + all SPL tokens</strong> to your safe wallet</li>
-                <li>Phantom wallet integration available for browser-based signing</li>
-              </ol>
-              <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/10 rounded-lg">
-                <p className="text-yellow-400/70 text-xs">
-                  ⚠️ Solana uses <strong>ed25519</strong> keys (not secp256k1). Addresses are <strong>base58</strong> encoded.
-                  Private keys can be base58, JSON byte array, or hex format.
-                </p>
-              </div>
+            {/* Back button */}
+            <button
+              onClick={() => { setStep('result'); setError('') }}
+              className="text-white/40 hover:text-white/60 text-sm mb-4"
+            >
+              ← Back to scan results
+            </button>
+
+            <div className="p-6 bg-red-500/5 border border-red-500/20 rounded-2xl mb-6">
+              <h2 className="text-xl font-bold text-red-400 mb-2">💰 Recover SOL + SPL Tokens</h2>
+              <p className="text-white/50 text-sm">
+                Transfer all recoverable funds from your compromised wallet to a safe wallet.
+              </p>
             </div>
 
-            {/* Confirmation Modal */}
-            {showConfirmRecover && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-                <div className="max-w-md mx-4 p-6 bg-[#1a1a2e] border border-yellow-500/30 rounded-2xl">
-                  <h3 className="text-yellow-400 font-bold text-lg mb-3">⚠️ Security Confirmation</h3>
-                  <p className="text-white/60 text-sm mb-4">
-                    Your Solana private key will be used to sign recovery transactions. This transfers all SOL and SPL tokens from the compromised wallet to your safe wallet.
-                  </p>
-                  <div className="p-3 bg-green-500/10 border border-green-500/20 rounded-lg mb-4">
-                    <p className="text-green-400 text-xs">✅ Key is NEVER stored on server</p>
-                    <p className="text-green-400 text-xs">✅ Used only for this recovery operation</p>
-                    <p className="text-green-400 text-xs">✅ Transmitted over HTTPS only</p>
-                  </div>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => { setShowConfirmRecover(false); executeRecovery() }}
-                      className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold hover:brightness-110 transition-all"
-                    >
-                      ✅ Yes, Recover
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmRecover(false)}
-                      className="flex-1 py-3 bg-white/[0.05] border border-white/10 rounded-xl text-sm hover:bg-white/[0.08]"
-                    >
-                      ❌ Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* Warning */}
+            <div className="p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl mb-6">
+              <p className="text-yellow-400 text-sm font-semibold">⚠️ Important:</p>
+              <ul className="text-yellow-400/70 text-xs mt-2 space-y-1 list-disc list-inside">
+                <li>Use the <strong>private key</strong> of your compromised wallet</li>
+                <li>Safe wallet must be a DIFFERENT wallet you control</li>
+                <li>Platform fee: 20% of recovered funds</li>
+                <li>Private key is NEVER stored — cleared immediately after signing</li>
+              </ul>
+            </div>
 
-            {/* Recovery Form */}
-            <form onSubmit={handleRecoverSubmit} className="space-y-4 mb-8">
-              <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  🔴 Compromised Wallet Private Key
-                </label>
-                <div className="relative">
-                  <input
-                    type={showKey ? 'text' : 'password'}
-                    value={privateKey}
-                    onChange={(e) => setPrivateKey(e.target.value)}
-                    placeholder="Base58, JSON array, or hex private key..."
-                    className="w-full px-4 py-3 pr-20 bg-red-500/5 border border-red-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/40 text-sm font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKey(!showKey)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 text-xs"
-                  >
-                    {showKey ? 'Hide' : 'Show'}
-                  </button>
-                </div>
-                <p className="text-red-400/50 text-xs mt-1">Used only for signing recovery transactions — never stored</p>
-              </div>
+            {/* Safe Wallet Address */}
+            <div className="mb-4">
+              <label className="block text-white/60 text-sm mb-2">Safe Wallet Address (where to send funds)</label>
+              <input
+                type="text"
+                value={safeAddress}
+                onChange={(e) => setSafeAddress(e.target.value)}
+                placeholder="e.g. 8xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"
+                className="w-full px-4 py-3 bg-white/[0.03] border border-green-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/50 text-sm font-mono"
+              />
+            </div>
 
-              <div>
-                <label className="text-xs text-white/30 uppercase tracking-wider mb-2 block">
-                  🟢 Safe Wallet Address
-                </label>
+            {/* Private Key */}
+            <div className="mb-6">
+              <label className="block text-white/60 text-sm mb-2">Compromised Wallet Private Key</label>
+              <div className="relative">
                 <input
-                  type="text"
-                  value={safeAddress}
-                  onChange={(e) => setSafeAddress(e.target.value)}
-                  placeholder="Your safe Solana address (base58...)"
-                  className="w-full px-4 py-3 bg-green-500/5 border border-green-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm font-mono"
+                  type={showKey ? 'text' : 'password'}
+                  value={privateKey}
+                  onChange={(e) => setPrivateKey(e.target.value)}
+                  placeholder="Enter your Solana private key (base58, hex, or JSON array)"
+                  className="w-full px-4 py-3 pr-12 bg-white/[0.03] border border-red-500/20 rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-red-500/50 text-sm font-mono"
                 />
-              </div>
-
-              <button
-                type="submit"
-                disabled={recovering || !privateKey || !safeAddress}
-                className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-semibold text-lg disabled:opacity-30 hover:brightness-110 transition-all"
-              >
-                {recovering ? '⏳ Recovering...' : '💰 Recover All Funds'}
-              </button>
-            </form>
-
-            {/* Error */}
-            {error && (
-              <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">
-                {error}
-              </div>
-            )}
-
-            {/* Recovery Results */}
-            {recoveryResult && (
-              <div className="space-y-4">
-                {recoveryResult.success ? (
-                  <div className="p-6 bg-green-500/10 border border-green-500/20 rounded-xl">
-                    <h3 className="text-green-400 font-bold text-lg mb-2">✅ Recovery Successful!</h3>
-
-                    {recoveryResult.solRecovered && parseFloat(recoveryResult.solRecovered) > 0 && (
-                      <div className="p-3 bg-purple-500/10 rounded-lg mb-3">
-                        <p className="text-purple-400 text-xs font-semibold">SOL Recovered:</p>
-                        <p className="text-purple-400 text-lg font-mono">◎ {recoveryResult.solRecovered}</p>
-                      </div>
-                    )}
-
-                    {recoveryResult.tokensRecovered && recoveryResult.tokensRecovered.length > 0 && (
-                      <div className="p-3 bg-blue-500/10 rounded-lg mb-3">
-                        <p className="text-blue-400 text-xs font-semibold">
-                          SPL Tokens Recovered: {recoveryResult.tokensRecovered.length}
-                        </p>
-                        {recoveryResult.tokensRecovered.map((mint, i) => (
-                          <p key={i} className="text-blue-300/70 text-xs font-mono mt-1">
-                            📎 {mint}
-                          </p>
-                        ))}
-                      </div>
-                    )}
-
-                    {recoveryResult.txSignatures && recoveryResult.txSignatures.length > 0 && (
-                      <div className="p-3 bg-green-500/10 rounded-lg mb-3">
-                        <p className="text-green-400 text-xs font-semibold mb-2">Transaction Signatures:</p>
-                        {recoveryResult.txSignatures.map((sig, i) => (
-                          <a
-                            key={i}
-                            href={`https://solscan.io/tx/${sig}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block text-green-400/70 text-xs font-mono hover:text-green-400 mt-1"
-                          >
-                            📎 {sig.slice(0, 40)}...
-                          </a>
-                        ))}
-                      </div>
-                    )}
-
-                    <p className="text-green-400/50 text-xs">
-                      ✅ Verify your safe wallet balance on Solscan to confirm recovery.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="p-6 bg-red-500/10 border border-red-500/20 rounded-xl">
-                    <h3 className="text-red-400 font-bold text-lg mb-2">❌ Recovery Failed</h3>
-                    <p className="text-white/60 text-sm">{recoveryResult.error}</p>
-                  </div>
-                )}
-
                 <button
-                  onClick={reset}
-                  className="w-full py-3 bg-white/[0.05] rounded-xl text-sm hover:bg-white/[0.08]"
+                  type="button"
+                  onClick={() => setShowKey(!showKey)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
                 >
-                  Start New Recovery
+                  {showKey ? '🙈' : '👁️'}
                 </button>
               </div>
+              <p className="text-white/20 text-xs mt-1">Supported: base58, hex (0x...), JSON array [1,2,...,64]</p>
+            </div>
+
+            {/* Confirm Dialog */}
+            {showConfirm && (
+              <div className="p-4 bg-red-500/10 border-2 border-red-500/30 rounded-xl mb-4">
+                <p className="text-red-400 font-bold text-sm mb-2">⚠️ Confirm Recovery</p>
+                <p className="text-white/60 text-xs mb-3">
+                  This will transfer ALL SOL and SPL tokens from your compromised wallet to:
+                </p>
+                <p className="text-green-400 font-mono text-xs bg-green-500/10 p-2 rounded-lg mb-3 break-all">
+                  {safeAddress}
+                </p>
+                <p className="text-white/40 text-xs">Platform fee: 20% of recovered SOL</p>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={handleRecover}
+                    className="flex-1 py-2 bg-red-600 rounded-lg text-white font-semibold text-sm"
+                  >
+                    Yes, Recover Now
+                  </button>
+                  <button
+                    onClick={() => setShowConfirm(false)}
+                    className="flex-1 py-2 bg-white/[0.05] rounded-lg text-white/60 text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
             )}
 
-            {/* Phantom Wallet Info */}
-            <div className="mt-8 p-5 bg-purple-500/5 border border-purple-500/10 rounded-xl">
-              <h3 className="text-purple-400 font-semibold mb-3">👻 Phantom Wallet Integration</h3>
-              <p className="text-white/40 text-sm mb-3">
-                For browser-based recovery without exposing private keys, use the Phantom wallet extension.
-              </p>
-              <ol className="text-white/30 text-sm space-y-1 list-decimal list-inside">
-                <li>Install <a href="https://phantom.app" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:underline">Phantom wallet</a></li>
-                <li>Import your compromised wallet into Phantom</li>
-                <li>Use the browser extension to sign recovery transactions</li>
-                <li>Private key stays in Phantom — never touches the server</li>
-              </ol>
-            </div>
+            {/* Recover Button */}
+            {!showConfirm && (
+              <button
+                onClick={handleRecover}
+                disabled={!privateKey || !safeAddress}
+                className="w-full py-3 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl font-bold text-sm disabled:opacity-30 hover:brightness-110 transition-all"
+              >
+                🚨 Recover All Funds
+              </button>
+            )}
           </div>
         )}
+
+        {/* ── STEP: RECOVERING ───────────────────────────────── */}
+        {step === 'recovering' && (
+          <div className="text-center py-16">
+            <svg className="animate-spin h-10 w-10 text-red-400 mx-auto mb-4" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            <p className="text-red-400 font-semibold text-lg">Recovering funds...</p>
+            <p className="text-white/30 text-sm mt-2">Signing and submitting Solana transactions</p>
+            <p className="text-white/20 text-xs mt-4">This may take 10-30 seconds</p>
+          </div>
+        )}
+
+        {/* ── STEP: DONE ─────────────────────────────────────── */}
+        {step === 'done' && recoveryResult && (
+          <div className="space-y-6">
+            {recoveryResult.success ? (
+              <>
+                <div className="p-6 bg-green-500/10 border-2 border-green-500/30 rounded-2xl text-center">
+                  <span className="text-5xl">✅</span>
+                  <h2 className="text-2xl font-bold text-green-400 mt-4">Recovery Successful!</h2>
+                  <p className="text-white/50 text-sm mt-2">Your funds have been transferred to your safe wallet</p>
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl text-center">
+                    <p className="text-green-400 text-2xl font-bold">
+                      ◎ {parseFloat(recoveryResult.solRecovered || '0').toFixed(6)}
+                    </p>
+                    <p className="text-white/40 text-xs mt-1">SOL Recovered</p>
+                  </div>
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl text-center">
+                    <p className="text-blue-400 text-2xl font-bold">
+                      {recoveryResult.tokensRecovered?.length || 0}
+                    </p>
+                    <p className="text-white/40 text-xs mt-1">Tokens Recovered</p>
+                  </div>
+                </div>
+
+                {/* Platform Fee */}
+                {recoveryResult.platformFee && parseFloat(recoveryResult.platformFee) > 0 && (
+                  <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-xl">
+                    <p className="text-purple-400 text-xs text-center">
+                      Platform fee (20%): ◎ {parseFloat(recoveryResult.platformFee).toFixed(6)} — sent to SweepGuard
+                    </p>
+                  </div>
+                )}
+
+                {/* TX Signatures */}
+                {recoveryResult.txSignatures && recoveryResult.txSignatures.length > 0 && (
+                  <div className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                    <p className="text-white/60 text-xs font-semibold mb-2">Transaction Signatures:</p>
+                    {recoveryResult.txSignatures.map((sig, i) => (
+                      <a
+                        key={i}
+                        href={`https://solscan.io/tx/${sig}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block text-purple-400 text-xs font-mono hover:text-purple-300 mt-1 break-all"
+                      >
+                        📎 {sig}
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                <div className="p-3 bg-green-500/5 rounded-xl">
+                  <p className="text-green-400/70 text-xs text-center">
+                    ✅ Verify your safe wallet on{' '}
+                    <a href={`https://solscan.io/account/${safeAddress}`} target="_blank" rel="noopener noreferrer" className="underline">
+                      Solscan
+                    </a>
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div className="p-6 bg-red-500/10 border-2 border-red-500/30 rounded-2xl text-center">
+                <span className="text-5xl">❌</span>
+                <h2 className="text-2xl font-bold text-red-400 mt-4">Recovery Failed</h2>
+                <p className="text-white/50 text-sm mt-2">{recoveryResult.error}</p>
+              </div>
+            )}
+
+            <button
+              onClick={reset}
+              className="w-full py-3 bg-gradient-to-r from-purple-600 to-violet-600 rounded-xl font-semibold text-sm hover:brightness-110 transition-all"
+            >
+              🔍 Scan Another Wallet
+            </button>
+          </div>
+        )}
+
+        {/* ── FOOTER INFO ────────────────────────────────────── */}
+        <div className="mt-12 pt-6 border-t border-white/[0.05]">
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div className="p-3 bg-white/[0.02] rounded-xl">
+              <p className="text-white/30 text-xs">Supported Chains</p>
+              <p className="text-purple-400 font-bold mt-1">Solana Mainnet</p>
+            </div>
+            <div className="p-3 bg-white/[0.02] rounded-xl">
+              <p className="text-white/30 text-xs">Platform Fee</p>
+              <p className="text-purple-400 font-bold mt-1">20% of recovered</p>
+            </div>
+          </div>
+          <p className="text-white/20 text-xs text-center mt-4">
+            Powered by SweepGuard — Solana wallet protection
+          </p>
+        </div>
       </div>
     </main>
   )
