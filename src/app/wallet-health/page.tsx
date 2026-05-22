@@ -50,83 +50,30 @@ export default function WalletHealthPage() {
   const [loading, setLoading] = useState(false)
   const [report, setReport] = useState<HealthReport | null>(null)
   const [animatedScore, setAnimatedScore] = useState(0)
+  const [error, setError] = useState('')
 
   const analyzeWallet = useCallback(async (addr: string) => {
     setLoading(true)
+    setError('')
     setReport(null)
     setAnimatedScore(0)
 
-    await new Promise(r => setTimeout(r, 1500))
+    try {
+      const res = await fetch(`/api/wallet-health?address=${addr}`)
+      const data = await res.json()
+      if (!res.ok || data.error) throw new Error(data.error || 'Health check failed')
+      setReport(data)
 
-    const categories: HealthCategory[] = [
-      {
-        id: 'approvals', name: 'Token Approvals', icon: '🔓', score: Math.round(40 + Math.random() * 50), maxScore: 100, weight: 0.3,
-        details: 'Analysis of active token approvals',
-        subItems: [
-          { label: 'Unlimited approvals', value: `${Math.floor(Math.random() * 5)}`, status: Math.random() > 0.5 ? 'danger' : 'warning', impact: -15 },
-          { label: 'Known safe spenders', value: `${Math.floor(Math.random() * 8) + 2}`, status: 'good', impact: 5 },
-          { label: 'Unknown spenders', value: `${Math.floor(Math.random() * 3)}`, status: 'warning', impact: -8 },
-        ],
-      },
-      {
-        id: 'drainer', name: 'Drainer Exposure', icon: '🕷️', score: Math.round(60 + Math.random() * 35), maxScore: 100, weight: 0.25,
-        details: 'Exposure to known drainer contracts',
-        subItems: [
-          { label: 'Interacted with drainers', value: `${Math.floor(Math.random() * 2)}`, status: Math.random() > 0.7 ? 'danger' : 'good', impact: -20 },
-          { label: 'Phishing attempts blocked', value: `${Math.floor(Math.random() * 5)}`, status: 'info', impact: 0 },
-        ],
-      },
-      {
-        id: 'diversity', name: 'Token Diversity', icon: '🎨', score: Math.round(50 + Math.random() * 40), maxScore: 100, weight: 0.15,
-        details: 'Portfolio diversification analysis',
-        subItems: [
-          { label: 'Unique tokens', value: `${Math.floor(Math.random() * 20) + 5}`, status: 'good', impact: 5 },
-          { label: 'Stablecoin ratio', value: `${Math.floor(Math.random() * 40) + 10}%`, status: 'info', impact: 0 },
-        ],
-      },
-      {
-        id: 'age', name: 'Wallet Age', icon: '⏰', score: Math.round(30 + Math.random() * 60), maxScore: 100, weight: 0.15,
-        details: 'Account age and activity patterns',
-        subItems: [
-          { label: 'Account age', value: `${Math.floor(Math.random() * 36) + 1} months`, status: 'good', impact: 10 },
-          { label: 'First transaction', value: '2023', status: 'info', impact: 0 },
-        ],
-      },
-      {
-        id: 'activity', name: 'Transaction Patterns', icon: '📊', score: Math.round(55 + Math.random() * 35), maxScore: 100, weight: 0.15,
-        details: 'Behavioral analysis of transactions',
-        subItems: [
-          { label: 'Suspicious patterns', value: `${Math.floor(Math.random() * 3)}`, status: Math.random() > 0.6 ? 'warning' : 'good', impact: -5 },
-          { label: 'Regular activity', value: 'Yes', status: 'good', impact: 5 },
-        ],
-      },
-    ]
-
-    const overallScore = Math.round(categories.reduce((s, c) => s + (c.score / c.maxScore) * c.weight * 100, 0))
-    const grade: HealthGrade = overallScore >= 90 ? 'A' : overallScore >= 75 ? 'B' : overallScore >= 60 ? 'C' : overallScore >= 40 ? 'D' : 'F'
-
-    const report: HealthReport = {
-      address: addr,
-      overallScore,
-      grade,
-      categories,
-      recommendations: [
-        { priority: 'high' as const, title: 'Revoke unlimited approvals', description: 'You have unlimited token approvals to unknown spenders', potentialImprovement: 15 },
-        { priority: 'medium' as const, title: 'Enable transaction alerts', description: 'Get notified of suspicious activity immediately', potentialImprovement: 10 },
-        { priority: 'low' as const, title: 'Diversify across chains', description: 'Spread assets across multiple chains for safety', potentialImprovement: 5 },
-      ].filter(() => Math.random() > 0.2),
-      analyzedAt: new Date().toISOString(),
+      // Animate score
+      for (let i = 0; i <= data.overallScore; i++) {
+        await new Promise(r => setTimeout(r, 20))
+        setAnimatedScore(i)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error')
+    } finally {
+      setLoading(false)
     }
-
-    setReport(report)
-
-    // Animate score
-    for (let i = 0; i <= report.overallScore; i++) {
-      await new Promise(r => setTimeout(r, 20))
-      setAnimatedScore(i)
-    }
-
-    setLoading(false)
   }, [])
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -154,7 +101,7 @@ export default function WalletHealthPage() {
         </div>
       </nav>
 
-      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12 relative z-10">
+      <div className="relative z-10 max-w-5xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#00ff87]/10 border border-[#00ff87]/20 text-[#00ff87] text-xs font-medium mb-6">
@@ -188,6 +135,12 @@ export default function WalletHealthPage() {
             </div>
           </div>
         </form>
+
+        {error && (
+          <div className="mb-8 p-4 bg-[#ff3b3b]/10 border border-[#ff3b3b]/20 rounded-2xl text-[#ff3b3b] text-sm">
+            ❌ {error}
+          </div>
+        )}
 
         {/* Loading */}
         {loading && (
@@ -280,7 +233,7 @@ export default function WalletHealthPage() {
                   {report.recommendations.map((rec, i) => {
                     const style = PRIORITY_STYLES[rec.priority]
                     return (
-                      <div key={i} className={`p-4 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl hover:border-white/[0.12] transition-all`}>
+                      <div key={i} className="p-4 bg-white/[0.03] backdrop-blur-xl border border-white/[0.06] rounded-2xl hover:border-white/[0.12] transition-all">
                         <div className="flex items-start justify-between">
                           <div className="flex items-start gap-3">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${style.bg} ${style.text} border ${style.border} uppercase`}>{rec.priority}</span>
@@ -304,6 +257,13 @@ export default function WalletHealthPage() {
                 📤 Share Health Report
               </button>
             </div>
+          </div>
+        )}
+
+        {!loading && !report && !error && (
+          <div className="text-center py-16">
+            <span className="text-6xl block mb-4">🏥</span>
+            <p className="text-white/30 text-sm">Enter a wallet address to get a comprehensive health assessment</p>
           </div>
         )}
       </div>

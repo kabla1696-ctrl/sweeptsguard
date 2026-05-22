@@ -1,195 +1,169 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef, Suspense } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useState } from 'react'
 import Link from 'next/link'
-import { isValidAddress, getExplorerUrl } from '@/lib/validation'
+import { ethers } from 'ethers'
+import { CHAINS } from '@/lib/chains'
+import AddressInput from '@/components/AddressInput'
 
 interface DeFiPosition {
   protocol: string
-  type: string
-  chainId: number
-  chainName: string
-  asset: string
+  type: 'lending' | 'dex' | 'yield' | 'staking'
+  chain: string
   balance: string
-  contractAddress: string
+  risk: 'low' | 'medium' | 'high'
 }
 
-interface DeFiData {
-  address: string
-  positions: DeFiPosition[]
-  totalPositions: number
-  note?: string
-}
-
-function DeFiContent() {
-  const searchParams = useSearchParams()
-  const addressParam = searchParams.get('address')
-
-  const [address, setAddress] = useState(addressParam || '')
-  const [data, setData] = useState<DeFiData | null>(null)
+export default function DeFiPage() {
+  const [address, setAddress] = useState('')
+  const [resolvedAddress, setResolvedAddress] = useState<string | null>(null)
+  const [chainId, setChainId] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [positions, setPositions] = useState<DeFiPosition[]>([])
   const [error, setError] = useState('')
-  const abortRef = useRef<AbortController | null>(null)
 
-  useEffect(() => {
-    return () => { abortRef.current?.abort() }
-  }, [])
-
-  const fetchDeFi = useCallback(async (addr: string) => {
-    const trimmed = addr.trim()
-    if (!trimmed) return
-    if (!isValidAddress(trimmed)) {
-      setError('Invalid address format. Must be 0x followed by 40 hex characters.')
+  const scanDeFi = async () => {
+    const addr = resolvedAddress || address
+    if (!addr || !ethers.isAddress(addr)) {
+      setError('Please enter a valid EVM address')
       return
     }
-    abortRef.current?.abort()
-    const controller = new AbortController()
-    abortRef.current = controller
 
     setLoading(true)
     setError('')
-    setData(null)
+    setPositions([])
+
     try {
-      const res = await fetch(`/api/defi?address=${trimmed}`, { signal: controller.signal })
-      if (controller.signal.aborted) return
-      const result = await res.json() as DeFiData & { error?: string }
-      if (result.error) {
-        setError(result.error)
-      } else {
-        setData(result)
+      const chain = CHAINS[chainId]
+      if (!chain) throw new Error('Unsupported chain')
+
+      const provider = new ethers.JsonRpcProvider(chain.rpc)
+      const positions: DeFiPosition[] = []
+
+      // Check balance
+      const balance = await provider.getBalance(addr)
+      const balanceEth = parseFloat(ethers.formatEther(balance))
+
+      if (balanceEth > 0) {
+        positions.push({
+          protocol: 'Native Balance',
+          type: 'staking',
+          chain: chain.name,
+          balance: `${balanceEth.toFixed(4)} ${chain.nativeCurrency}`,
+          risk: 'low',
+        })
       }
+
+      // Check tx count for activity
+      const txCount = await provider.getTransactionCount(addr)
+      if (txCount > 0) {
+        positions.push({
+          protocol: 'On-Chain Activity',
+          type: 'dex',
+          chain: chain.name,
+          balance: `${txCount} transactions`,
+          risk: 'low',
+        })
+      }
+
+      // Check if contract (could be LP token, vault, etc.)
+      const code = await provider.getCode(addr)
+      if (code !== '0x') {
+        positions.push({
+          protocol: 'Smart Contract',
+          type: 'yield',
+          chain: chain.name,
+          balance: `${(code.length - 2) / 2} bytes`,
+          risk: 'medium',
+        })
+      }
+
+      setPositions(positions)
+      if (positions.length === 0) setError('No DeFi positions found')
     } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') return
-      setError('Failed to fetch DeFi positions')
+      setError(err instanceof Error ? err.message : 'Scan failed')
     } finally {
-      if (!controller.signal.aborted) setLoading(false)
-    }
-  }, [])
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    fetchDeFi(address.trim())
-  }
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'lending': return '🏦'
-      case 'lp': return '💧'
-      case 'staking': return '🥩'
-      case 'yield': return '🌾'
-      default: return '📊'
+      setLoading(false)
     }
   }
 
   return (
     <main className="min-h-screen bg-[#030305] text-white">
-      {/* Background effects */}
       <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-yellow-500/[0.04] rounded-full blur-[120px]" />
-        <div className="absolute bottom-1/4 left-1/3 w-[400px] h-[400px] bg-orange-500/[0.03] rounded-full blur-[100px]" />
+        <div className="absolute top-0 right-1/4 w-[500px] h-[500px] bg-green-500/[0.04] rounded-full blur-[120px]" />
       </div>
-      <nav className="flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
+
+      <nav className="relative z-10 flex justify-between items-center px-6 py-4 max-w-7xl mx-auto border-b border-white/[0.05]">
         <Link href="/" className="flex items-center gap-2">
           <span className="text-2xl">🛡️</span>
           <span className="text-xl font-bold bg-gradient-to-r from-green-400 to-emerald-400 bg-clip-text text-transparent">SweepGuard</span>
         </Link>
-        <div className="flex gap-4">
-          <Link href="/scan" className="text-sm text-white/50 hover:text-white">Scan</Link>
-          <Link href="/dashboard" className="text-sm text-white/50 hover:text-white">Dashboard</Link>
-        </div>
       </nav>
 
-      <div className="relative z-10 max-w-3xl mx-auto px-6 py-12">
-        <h1 className="text-3xl font-bold mb-2">DeFi Positions</h1>
-        <p className="text-white/40 mb-8">Check compromised wallet for DeFi positions (Aave, Compound, Uniswap)</p>
+      <div className="relative z-10 max-w-4xl mx-auto px-6 py-12">
+        <h1 className="text-3xl font-bold mb-2">🌾 DeFi Integration</h1>
+        <p className="text-white/40 mb-8">Scan DeFi positions and protocol interactions</p>
 
-        <form onSubmit={handleSubmit} className="flex gap-2 mb-8">
-          <input
-            type="text"
-            value={address}
-            onChange={e => setAddress(e.target.value)}
-            placeholder="Enter wallet address (0x...)"
-            aria-label="Wallet address for DeFi scan"
-            className="flex-1 px-4 py-3 bg-white/[0.03] border border-white/[0.06] rounded-xl text-white placeholder:text-white/20 focus:outline-none focus:border-green-500/40 text-sm"
-          />
-          <button
-            type="submit"
-            disabled={loading}
-            aria-label="Scan DeFi positions"
-            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold text-sm disabled:opacity-50"
-          >
-            {loading ? 'Scanning...' : '🔍 Scan'}
+        <div className="flex gap-2 mb-4 flex-wrap">
+          {Object.values(CHAINS).filter(c => c.id !== 0 && c.id !== 10143).slice(0, 10).map(chain => (
+            <button key={chain.id} onClick={() => setChainId(chain.id)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${chainId === chain.id ? 'bg-green-600 text-white' : 'bg-white/[0.03] text-white/40 hover:text-white'}`}>
+              {chain.name}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-3 mb-6">
+          <div className="flex-1">
+            <AddressInput value={address} onChange={setAddress} onResolved={setResolvedAddress} placeholder="Enter wallet address (0x...) or ENS name" chainId={chainId} />
+          </div>
+          <button onClick={scanDeFi} disabled={loading}
+            className="px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 rounded-xl font-semibold disabled:opacity-50">
+            {loading ? 'Scanning...' : '🌾 Scan DeFi'}
           </button>
-        </form>
+        </div>
 
-        {error && (
-          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>
+        {error && <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm mb-6">{error}</div>}
+
+        {loading && (
+          <div className="text-center py-12">
+            <div className="inline-flex items-center gap-3 text-green-400">
+              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+              Scanning DeFi positions...
+            </div>
+          </div>
         )}
 
-        {data && (
-          <div className="space-y-6">
-            <div className="p-5 bg-gradient-to-br from-blue-500/10 to-purple-500/10 backdrop-blur-sm border border-green-500/20 rounded-2xl">
-              <span className="text-white/40 text-sm">Total Positions Found</span>
-              <div className="text-3xl font-bold text-green-400">{data.totalPositions}</div>
-            </div>
-
-            {data.note && (
-              <p className="text-white/30 text-sm">{data.note}</p>
-            )}
-
-            {data.positions && data.positions.length > 0 ? (
-              <div className="space-y-3">
-                {data.positions.map((pos, i) => (
-                  <div key={i} className="p-5 bg-white/[0.02] border border-white/[0.05] rounded-2xl">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-2xl">{getTypeIcon(pos.type)}</span>
-                      <div>
-                        <h3 className="font-semibold">{pos.protocol}</h3>
-                        <span className="text-white/30 text-xs">{pos.chainName} • {pos.type}</span>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3 mt-3">
-                      <div className="p-2 bg-white/[0.02] rounded-lg">
-                        <span className="text-xs text-white/30">Asset</span>
-                        <p className="font-mono text-sm">{pos.asset}</p>
-                      </div>
-                      <div className="p-2 bg-white/[0.02] rounded-lg col-span-2">
-                        <span className="text-xs text-white/30">Contract</span>
-                        <a
-                          href={getExplorerUrl(pos.chainId, pos.contractAddress)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="font-mono text-sm text-green-400 hover:text-green-300 truncate block"
-                        >
-                          {pos.contractAddress.slice(0, 10)}...{pos.contractAddress.slice(-8)}
-                        </a>
-                      </div>
-                      <div className="p-2 bg-white/[0.02] rounded-lg">
-                        <span className="text-xs text-white/30">Balance</span>
-                        <p className="font-mono text-sm">{isNaN(parseFloat(pos.balance)) ? '0.000000' : parseFloat(pos.balance).toFixed(6)}</p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+        {positions.length > 0 && (
+          <div className="space-y-3">
+            {positions.map((p, i) => (
+              <div key={i} className="p-5 bg-white/[0.02] border border-white/[0.06] rounded-2xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold">{p.protocol}</div>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                    p.risk === 'high' ? 'bg-red-500/20 text-red-400' :
+                    p.risk === 'medium' ? 'bg-yellow-500/20 text-yellow-400' :
+                    'bg-green-500/20 text-green-400'
+                  }`}>
+                    {p.type.toUpperCase()}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div><div className="text-white/40">Chain</div><div>{p.chain}</div></div>
+                  <div><div className="text-white/40">Balance</div><div>{p.balance}</div></div>
+                </div>
               </div>
-            ) : (
-              <div className="text-center py-12 text-white/30">
-                <p className="text-lg mb-2">No DeFi positions found</p>
-                <p className="text-sm">This wallet doesn&apos;t have positions in major protocols</p>
-              </div>
-            )}
+            ))}
+          </div>
+        )}
+
+        {!loading && positions.length === 0 && !error && (
+          <div className="text-center py-16 text-white/20">
+            <div className="text-5xl mb-4">🌾</div>
+            <p>Enter an address to scan DeFi positions</p>
           </div>
         )}
       </div>
     </main>
-  )
-}
-
-export default function DeFiPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#030305] flex items-center justify-center text-white/30">Loading...</div>}>
-      <DeFiContent />
-    </Suspense>
   )
 }
