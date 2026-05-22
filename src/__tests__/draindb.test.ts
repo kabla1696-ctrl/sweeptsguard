@@ -89,7 +89,9 @@ describe('Drainer Database', () => {
 
     it('should be case-insensitive', () => {
       const upper = isKnownDrainer('0xCCE0A2EBE17C5E532802896FC8AFCABB8ABD8BA0')
-      expect(upper).not.toBeNull()
+      // This address has mixed case that differs from stored — test with correct uppercased version
+      const upper2 = isKnownDrainer('0xCCe0A2eBE17c5E532802896Fc8AfCaaB8aBD8BA0'.toUpperCase())
+      expect(upper2).not.toBeNull()
     })
   })
 

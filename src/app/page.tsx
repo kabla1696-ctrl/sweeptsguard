@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { initReferralTracking } from '@/lib/referral'
 
 export default function Home() {
   const [walletAddress, setWalletAddress] = useState('')
@@ -19,6 +20,10 @@ export default function Home() {
     // Listen for install availability
     const handler = () => setCanInstall(true)
     window.addEventListener('pwa-installable', handler)
+
+    // Capture referral code from URL
+    initReferralTracking()
+
     return () => window.removeEventListener('pwa-installable', handler)
   }, [])
 
@@ -78,6 +83,8 @@ export default function Home() {
           <Link href="/defi" className="text-sm text-white/50 hover:text-white transition-colors">DeFi</Link>
           <Link href="/audit" className="text-sm text-white/50 hover:text-white transition-colors">Audit</Link>
           <Link href="/reputation" className="text-sm text-white/50 hover:text-white transition-colors">Reputation</Link>
+          <Link href="/landing" className="text-sm text-white/50 hover:text-white transition-colors">Landing</Link>
+          <Link href="/referral" className="text-sm text-white/50 hover:text-white transition-colors">Referral</Link>
           <Link href="/scam-check" className="text-sm text-white/50 hover:text-white transition-colors">Scam Check</Link>
         </div>
         {/* Mobile hamburger */}
@@ -114,6 +121,8 @@ export default function Home() {
             <Link href="/defi" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">DeFi</Link>
             <Link href="/audit" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Audit</Link>
             <Link href="/reputation" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Reputation</Link>
+            <Link href="/landing" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Landing</Link>
+            <Link href="/referral" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Referral</Link>
             <Link href="/scam-check" onClick={() => setMobileMenuOpen(false)} className="text-sm text-white/70 hover:text-white py-2">Scam Check</Link>
           </div>
         </div>
@@ -299,6 +308,10 @@ export default function Home() {
             <a href="/scan" className="text-green-400/30 hover:text-green-400/50">Scan</a>
             <span className="mx-2">•</span>
             <a href="/dashboard" className="text-green-400/30 hover:text-green-400/50">Dashboard</a>
+            <span className="mx-2">•</span>
+            <a href="/landing" className="text-green-400/30 hover:text-green-400/50">Landing</a>
+            <span className="mx-2">•</span>
+            <a href="/referral" className="text-green-400/30 hover:text-green-400/50">Referral</a>
           </p>
         </footer>
       </div>

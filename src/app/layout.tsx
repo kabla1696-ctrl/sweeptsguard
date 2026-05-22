@@ -2,9 +2,21 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SweepGuard — Crypto Wallet Protection",
-  description: "Rescue tokens, NFTs, and airdrops from compromised wallets. Auto-sweep incoming funds before hackers can drain them.",
-  keywords: ["wallet protection", "drainer", "EIP-7702", "auto-sweep", "crypto security", "EVM", "PWA", "Solana", "SPL tokens"],
+  title: "SweepGuard — Recover Hacked Wallets | Multi-Chain Crypto Recovery",
+  description: "Recover stolen crypto from hacked wallets. Flashbots private TX, EIP-7702 delegation, 33+ chains. Zero fund loss guarantee.",
+  keywords: ["crypto recovery", "hacked wallet", "flashbots", "EIP-7702", "drainer", "sweep", "wallet protection", "auto-sweep", "crypto security", "EVM", "PWA", "Solana", "SPL tokens"],
+  openGraph: {
+    title: "SweepGuard — Multi-Chain Wallet Recovery",
+    description: "Recover stolen crypto from compromised wallets across 33+ chains",
+    url: "https://sweeptsguard.vercel.app",
+    siteName: "SweepGuard",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "SweepGuard — Recover Hacked Wallets",
+    description: "Flashbots private TX, EIP-7702, 33+ chains. Zero fund loss guarantee.",
+  },
   manifest: "/manifest.json",
   other: {
     "apple-mobile-web-app-capable": "yes",
