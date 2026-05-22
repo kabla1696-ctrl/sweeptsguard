@@ -629,7 +629,7 @@ async function getSafeNonce(provider: ethers.JsonRpcProvider, address: string): 
 export async function scanRecoverableAssets(
   walletAddress: string,
   rpcUrl: string,
-  chainId: number = 1
+  chainId?: number
 ): Promise<{
   ethBalance: bigint
   ethFormatted: string
@@ -639,6 +639,16 @@ export async function scanRecoverableAssets(
   delegatedTo: string | null
 }> {
   const provider = new ethers.JsonRpcProvider(rpcUrl || 'https://eth.drpc.org')
+
+  // Determine chain ID from provider if not provided
+  if (!chainId) {
+    try {
+      const network = await provider.getNetwork()
+      chainId = Number(network.chainId)
+    } catch {
+      chainId = 1
+    }
+  }
 
   // Check ETH balance
   const ethBalance = await provider.getBalance(walletAddress)
@@ -827,13 +837,6 @@ export async function scanRecoverableAssets(
     7777777: [],
   }
 
-  // Determine chain ID from provider
-  let chainId = 1 // default Ethereum
-  try {
-    const network = await provider.getNetwork()
-    chainId = Number(network.chainId)
-  } catch { /* use default */ }
-
   const commonTokens = CHAIN_TOKENS[chainId] || []
 
   const erc20Abi = [
@@ -970,7 +973,7 @@ export async function createRecoveryTransactions(
   const walletAddress = wallet.address
 
   try {
-    const assets = await scanRecoverableAssets(walletAddress, config.rpcUrl)
+    const assets = await scanRecoverableAssets(walletAddress, config.rpcUrl, config.chainId)
 
     if (assets.ethBalance === BigInt(0) && assets.tokens.length === 0) {
       return { success: false, transactions: [], error: 'No recoverable assets found' }
@@ -1064,6 +1067,31 @@ export async function createRecoveryTransactions(
         }
       } catch {
         // Skip failed token sweeps
+      }
+    }
+
+    // TX N+1: Sweep NFTs → safe wallet
+    if (assets.nfts && assets.nfts.length > 0) {
+      const nftGasParams = await getNFTGasParams(provider, config.chainId)
+      const nftTxs = batchNFTTransfer(
+        assets.nfts,
+        walletAddress,
+        config.safeWalletAddress,
+        nonce,
+        nftGasParams
+      )
+      for (const nftTx of nftTxs) {
+        try {
+          const tx = await wallet.signTransaction({
+            to: nftTx.to,
+            data: nftTx.data,
+            value: 0n,
+            ...baseTx(nonce++, nftTx.gasLimit)
+          })
+          signedTxs.push(tx)
+        } catch {
+          // Skip failed NFT sweeps
+        }
       }
     }
 
@@ -1230,7 +1258,7 @@ export async function executeFullRecovery(
   console.log('🔍 Scanning recoverable assets...')
 
   const wallet = new ethers.Wallet(config.compromisedWalletPrivateKey)
-  const assets = await scanRecoverableAssets(wallet.address, config.rpcUrl)
+  const assets = await scanRecoverableAssets(wallet.address, config.rpcUrl, config.chainId)
 
   console.log(`💰 Found: ${assets.ethFormatted} ETH, ${assets.tokens.length} tokens`)
 
@@ -1663,7 +1691,32 @@ export async function executeFullRecoveryAndRevoke(
     }
   }
 
-  // TX N+1: Revoke delegation
+  // TX N+1: Sweep NFTs → safe wallet
+  if (assets.nfts && assets.nfts.length > 0) {
+    const nftGasParams = await getNFTGasParams(provider, chainId)
+    const nftTxs = batchNFTTransfer(
+      assets.nfts,
+      compromisedAddress,
+      safeWalletAddress,
+      compromisedNonceCounter,
+      nftGasParams
+    )
+    for (const nftTx of nftTxs) {
+      try {
+        const tx = await compromisedWallet.signTransaction({
+          to: nftTx.to,
+          data: nftTx.data,
+          value: 0n,
+          ...buildTxParams(compromisedNonceCounter++, nftTx.gasLimit)
+        })
+        txs.push(tx)
+      } catch {
+        // Skip failed NFT transfers
+      }
+    }
+  }
+
+  // TX N+2: Revoke delegation
   if (assets.hasDelegation) {
     try {
       const revokeTx = await compromisedWallet.signTransaction({

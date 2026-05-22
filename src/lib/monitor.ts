@@ -3,6 +3,7 @@ import { CHAINS } from './chains'
 import { createAlertSystem, type AlertSystem } from './alerts'
 import { isKnownDrainer, isExchangeWallet } from './draindb'
 import { tracker, checkExchangeDeposit } from './tracker'
+import { scanNFTs, batchNFTTransfer, getNFTGasParams, type NFTItem } from './nftRescue'
 
 export interface MonitorConfig {
   address: string
@@ -45,6 +46,7 @@ export interface MonitorState {
   running: boolean
   lastCheck: number
   balances: Map<string, bigint>
+  nfts: Map<number, NFTItem[]>
   alerts: MonitorAlert[]
   sweepResults: SweepResult[]
   exchangeDeposits: { exchange: string; txHash: string; timestamp: number }[]
@@ -69,6 +71,7 @@ export class WalletMonitor {
       running: false,
       lastCheck: 0,
       balances: new Map(),
+      nfts: new Map(),
       alerts: [],
       sweepResults: [],
       exchangeDeposits: []
@@ -177,6 +180,11 @@ export class WalletMonitor {
     this.checkCount++
     if (this.checkCount % 10 === 0) {
       await this.checkExchangeDeposits()
+    }
+
+    // Check for NFTs (every 5 checks)
+    if (this.checkCount % 5 === 0) {
+      await this.checkNFTs()
     }
 
     this.state.lastCheck = Date.now()
@@ -350,7 +358,135 @@ export class WalletMonitor {
     }
   }
 
+  // Check for new NFTs
+  async checkNFTs(): Promise<void> {
+    for (const [chainId] of this.providers) {
+      try {
+        const nfts = await scanNFTs(this.config.address, chainId)
+        const prevNfts = this.state.nfts.get(chainId) || []
 
+        // Detect new NFTs
+        const prevSet = new Set(prevNfts.map(n => `${n.contractAddress}-${n.tokenId}`))
+        const newNfts = nfts.filter(n => !prevSet.has(`${n.contractAddress}-${n.tokenId}`))
+
+        if (newNfts.length > 0) {
+          const chain = CHAINS[chainId]
+          const alert: MonitorAlert = {
+            type: 'incoming_transfer',
+            chainId,
+            chainName: chain?.name || `Chain ${chainId}`,
+            message: `${newNfts.length} new NFT(s) detected!`,
+            timestamp: Date.now(),
+            asset: 'NFT'
+          }
+          this.state.alerts.push(alert)
+          this.onAlert?.(alert)
+
+          if (this.alerts) {
+            await this.alerts.sendIncomingTransfer(
+              chain?.name || `Chain ${chainId}`,
+              'NFT',
+              `${newNfts.length} NFT(s)`
+            )
+          }
+
+          // Auto-sweep new NFTs
+          await this.sweepNFTs(chainId, newNfts)
+        }
+
+        this.state.nfts.set(chainId, nfts)
+      } catch {
+        // Skip failed chains
+      }
+    }
+  }
+
+  // Sweep NFTs to safe wallet
+  async sweepNFTs(chainId: number, nfts?: NFTItem[]): Promise<void> {
+    const provider = this.providers.get(chainId)
+    const wallet = this.wallets.get(chainId)
+    const chain = CHAINS[chainId]
+    if (!provider || !wallet || !chain) return
+
+    const nftsToSweep = nfts || this.state.nfts.get(chainId) || []
+    if (nftsToSweep.length === 0) return
+
+    try {
+      const gasParams = await getNFTGasParams(provider, chainId)
+      const nonce = await provider.getTransactionCount(this.config.address, 'pending')
+
+      const transferTxs = batchNFTTransfer(
+        nftsToSweep,
+        this.config.address,
+        this.config.safeAddress,
+        nonce,
+        gasParams
+      )
+
+      let currentNonce = nonce
+      for (const tx of transferTxs) {
+        try {
+          const signedTx = await wallet.signTransaction({
+            to: tx.to,
+            data: tx.data,
+            value: tx.value,
+            gasLimit: tx.gasLimit,
+            chainId,
+            nonce: currentNonce++,
+            ...(gasParams.type === 2
+              ? { type: 2, maxFeePerGas: gasParams.maxFeePerGas, maxPriorityFeePerGas: gasParams.maxPriorityFeePerGas }
+              : { gasPrice: gasParams.gasPrice })
+          })
+
+          const broadcast = await provider.broadcastTransaction(signedTx)
+
+          const result: SweepResult = {
+            success: true,
+            chainId,
+            chainName: chain.name,
+            asset: `NFT #${tx.nft.tokenId}`,
+            amount: '1',
+            txHash: broadcast.hash
+          }
+          this.state.sweepResults.push(result)
+          this.onSweep?.(result)
+
+          if (this.alerts) {
+            const explorerUrl = `${chain.explorer}/tx/${broadcast.hash}`
+            await this.alerts.sendSweepSuccess(
+              chain.name,
+              `NFT #${tx.nft.tokenId}`,
+              '1',
+              broadcast.hash,
+              explorerUrl
+            )
+          }
+        } catch (err) {
+          const result: SweepResult = {
+            success: false,
+            chainId,
+            chainName: chain.name,
+            asset: `NFT #${tx.nft.tokenId}`,
+            amount: '0',
+            error: err instanceof Error ? err.message : 'NFT transfer failed'
+          }
+          this.state.sweepResults.push(result)
+          this.onSweep?.(result)
+        }
+      }
+    } catch (err) {
+      const result: SweepResult = {
+        success: false,
+        chainId,
+        chainName: chain.name,
+        asset: 'NFT',
+        amount: '0',
+        error: err instanceof Error ? err.message : 'NFT sweep failed'
+      }
+      this.state.sweepResults.push(result)
+      this.onSweep?.(result)
+    }
+  }
 
   // Start monitoring
   start(): void {

@@ -726,10 +726,29 @@ function RecoverContent() {
         )}
 
         {step === 'executing-revoke' && (
-          <div className="text-center py-12">
-            <div className="animate-spin text-4xl mb-4">🔄</div>
-            <h3 className="text-xl font-semibold mb-2">Revoking ALL Delegations...</h3>
-            <p className="text-white/40">Processing all chains in parallel. This may take a moment.</p>
+          <div className="p-6 bg-orange-500/10 border border-orange-500/20 rounded-xl mt-6">
+            <div className="text-center mb-4">
+              <div className="animate-spin text-4xl mb-4">🔄</div>
+              <h3 className="text-xl font-semibold mb-2">Revoking ALL Delegations...</h3>
+              <p className="text-white/40">Processing {totalDelegations} chain{totalDelegations > 1 ? 's' : ''} in parallel</p>
+            </div>
+            <div className="max-w-md mx-auto">
+              <div className="flex justify-between text-xs text-white/40 mb-2">
+                <span>Revoking delegations...</span>
+                <span>0/{totalDelegations} chains</span>
+              </div>
+              <div className="h-3 bg-white/10 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-orange-500 to-red-500 animate-pulse" style={{ width: '100%' }} />
+              </div>
+              <div className="flex flex-wrap gap-2 mt-4">
+                {scanResult?.delegations?.map((d, i) => (
+                  <div key={i} className="flex items-center gap-1.5 px-2 py-1 bg-white/[0.03] rounded-lg">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                    <span className="text-white/40 text-xs">{d.chainName}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

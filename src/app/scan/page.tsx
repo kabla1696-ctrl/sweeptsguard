@@ -26,6 +26,19 @@ interface ScanResult {
     chainId: number
     chainName: string
   }[]
+  nfts?: {
+    contractAddress: string
+    tokenId: string
+    tokenType: 'ERC-721' | 'ERC-1155'
+    name: string
+    symbol: string
+    collection: string
+    tokenURI?: string
+    image?: string
+    amount?: string
+    chainId: number
+    chainName: string
+  }[]
   chains: number[]
   totalChainsScanned?: number
   failedChains?: number[]
@@ -79,6 +92,16 @@ function ScanContent() {
         setError(data.error)
       } else {
         setResult(data)
+
+        // Fetch NFTs in background
+        fetch(`/api/nft?address=${addr}`)
+          .then(r => r.json())
+          .then(nftData => {
+            if (nftData.nfts) {
+              setResult(prev => prev ? { ...prev, nfts: nftData.nfts } : prev)
+            }
+          })
+          .catch(() => {})
       }
     } catch (err: unknown) {
       if (controller.signal.aborted) return
@@ -218,6 +241,48 @@ function ScanContent() {
                 </div>
               )}
             </div>
+
+            {/* NFTs */}
+            {result.nfts && result.nfts.length > 0 && (
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-lg font-semibold">
+                    🖼️ NFTs Found ({result.nfts.length})
+                  </h2>
+                  <Link
+                    href={`/nft?address=${result.address}`}
+                    className="text-green-400 text-sm hover:underline"
+                  >
+                    Full NFT Rescue →
+                  </Link>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {result.nfts.map((nft, i) => (
+                    <div key={i} className="bg-white/[0.02] border border-white/[0.05] rounded-xl overflow-hidden">
+                      <div className="aspect-square bg-white/[0.03] flex items-center justify-center">
+                        {nft.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={nft.image} alt={nft.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-3xl opacity-30">🖼️</span>
+                        )}
+                      </div>
+                      <div className="p-2">
+                        <p className="text-xs font-medium truncate">{nft.name}</p>
+                        <p className="text-white/30 text-[10px] truncate">{nft.collection}</p>
+                        <span className={`text-[10px] px-1 py-0.5 rounded mt-1 inline-block ${
+                          nft.tokenType === 'ERC-721'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : 'bg-purple-500/20 text-purple-400'
+                        }`}>
+                          {nft.tokenType}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             
             {/* Private Key Compromise Warning */}

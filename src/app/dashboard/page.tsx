@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getExplorerUrl } from '@/lib/validation'
+import {
+  requestNotificationPermission,
+  getNotificationPermission,
+  getPreferences,
+  savePreferences,
+  startNotificationPolling,
+  sendNotification,
+  NotificationTemplates,
+  type NotificationPreferences,
+} from '@/lib/notifications'
 
 interface MonitorStatus {
   running: boolean
@@ -27,12 +37,15 @@ function DashboardContent() {
   const [monitoring, setMonitoring] = useState(false)
   const [status, setStatus] = useState<MonitorStatus | null>(null)
   const [showPrivateKey, setShowPrivateKey] = useState(false)
-  const [activeTab, setActiveTab] = useState<'setup' | 'alerts' | 'sweeps'>('setup')
+  const [activeTab, setActiveTab] = useState<'setup' | 'alerts' | 'sweeps' | 'notifications'>('setup')
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default')
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(getPreferences())
   const [setupError, setSetupError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
   // Cleanup: abort in-flight fetches and clear keys on unmount
   useEffect(() => {
+    setNotifPermission(getNotificationPermission())
     return () => {
       abortRef.current?.abort()
       setPrivateKey('')
@@ -90,11 +103,17 @@ function DashboardContent() {
       if (data.success) {
         setMonitoring(true)
         pollStatus()
+
+        // Start notification polling if permission granted
+        if (notifPermission === 'granted') {
+          startNotificationPolling(address, safeAddress)
+          sendNotification(NotificationTemplates.newFunds('monitoring', 'active', 'Protection'))
+        }
       }
     } catch (err) {
       setSetupError('Failed to start monitoring. Please try again.')
     }
-  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl, pollStatus])
+  }, [address, safeAddress, privateKey, telegramBotToken, telegramChatId, discordWebhookUrl, slackWebhookUrl, pollStatus, notifPermission])
 
   const stopMonitoring = useCallback(async () => {
     try {
@@ -110,6 +129,19 @@ function DashboardContent() {
       // Stop monitoring failed - UI state already updated
     }
   }, [address])
+
+  const enableNotifications = async () => {
+    const result = await requestNotificationPermission()
+    setNotifPermission(result)
+    if (result === 'granted' && monitoring) {
+      startNotificationPolling(address, safeAddress)
+    }
+  }
+
+  const updateNotifPrefs = (prefs: NotificationPreferences) => {
+    setNotifPrefs(prefs)
+    savePreferences(prefs)
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -134,6 +166,7 @@ function DashboardContent() {
         </Link>
         <div className="flex gap-4">
           <Link href="/scan" className="text-sm text-white/50 hover:text-white transition-colors">Scan</Link>
+          <Link href="/batch" className="text-sm text-white/50 hover:text-white transition-colors">⚡ Batch</Link>
         </div>
       </nav>
 
@@ -156,7 +189,7 @@ function DashboardContent() {
 
         {/* Tabs */}
         <div className="flex gap-2 mb-8">
-          {(['setup', 'alerts', 'sweeps'] as const).map((tab) => (
+          {(['setup', 'alerts', 'sweeps', 'notifications'] as const).map((tab) => (
             <button
               key={tab}
               role="tab"
@@ -169,7 +202,7 @@ function DashboardContent() {
                   : 'bg-white/[0.05] text-white/50 hover:text-white'
               }`}
             >
-              {tab === 'setup' ? '⚙️ Setup' : tab === 'alerts' ? '🚨 Alerts' : '⚡ Sweeps'}
+              {tab === 'setup' ? '⚙️ Setup' : tab === 'alerts' ? '🚨 Alerts' : tab === 'sweeps' ? '⚡ Sweeps' : '🔔 Notifications'}
               {tab === 'alerts' && status?.alerts && status.alerts.length > 0 && (
                 <span className="ml-2 px-1.5 py-0.5 bg-red-500 rounded-full text-xs">
                   {status.alerts.length}
@@ -402,6 +435,88 @@ function DashboardContent() {
                 <p className="text-sm">Sweeps will happen automatically when funds are detected</p>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <div className="space-y-6">
+            {/* Permission Status */}
+            <div className="p-5 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+              <h3 className="text-lg font-semibold mb-4">🔔 Browser Notifications</h3>
+              {notifPermission === 'granted' ? (
+                <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl">
+                  <p className="text-green-400 font-medium">✅ Notifications enabled</p>
+                  <p className="text-white/40 text-sm mt-1">You'll receive browser alerts for fund deposits, drainer activity, and recovery events.</p>
+                </div>
+              ) : notifPermission === 'denied' ? (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                  <p className="text-red-400 font-medium">❌ Notifications blocked</p>
+                  <p className="text-white/40 text-sm mt-1">Please enable notifications in your browser settings to receive alerts.</p>
+                </div>
+              ) : (
+                <div>
+                  <p className="text-white/40 text-sm mb-4">Enable browser notifications to get instant alerts even when the tab is in the background.</p>
+                  <button
+                    onClick={enableNotifications}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 rounded-xl font-semibold hover:from-blue-500 hover:to-cyan-500 transition-all"
+                  >
+                    🔔 Enable Notifications
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Notification Preferences */}
+            {notifPermission === 'granted' && (
+              <div className="p-5 bg-white/[0.02] border border-white/[0.05] rounded-xl">
+                <h3 className="text-sm font-semibold mb-4 text-white/70">⚙️ Notification Preferences</h3>
+                <div className="space-y-3">
+                  {([
+                    { key: 'drainerAlerts' as const, icon: '🚨', label: 'Drainer Activity', desc: 'Alert when known drainer interacts with your wallet' },
+                    { key: 'fundAlerts' as const, icon: '💰', label: 'Fund Deposits', desc: 'Alert when new funds arrive on compromised wallet' },
+                    { key: 'recoveryAlerts' as const, icon: '✅', label: 'Recovery Events', desc: 'Alert when funds are successfully recovered' },
+                    { key: 'sweepAlerts' as const, icon: '⚡', label: 'Sweep Events', desc: 'Alert on auto-sweep success or failure' },
+                    { key: 'nftAlerts' as const, icon: '🖼️', label: 'NFT Receipts', desc: 'Alert when NFTs arrive on compromised wallet' },
+                    { key: 'sound' as const, icon: '🔊', label: 'Sound', desc: 'Play sound with notifications' },
+                  ]).map(({ key, icon, label, desc }) => (
+                    <label key={key} className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg cursor-pointer hover:bg-white/[0.04]">
+                      <div>
+                        <span className="text-sm">{icon} {label}</span>
+                        <p className="text-white/30 text-xs mt-0.5">{desc}</p>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={notifPrefs[key]}
+                          onChange={(e) => updateNotifPrefs({ ...notifPrefs, [key]: e.target.checked })}
+                          className="sr-only"
+                        />
+                        <div className={`w-10 h-6 rounded-full transition-colors ${notifPrefs[key] ? 'bg-green-500' : 'bg-white/10'}`}>
+                          <div className={`w-4 h-4 rounded-full bg-white mt-1 transition-transform ${notifPrefs[key] ? 'translate-x-5' : 'translate-x-1'}`} />
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Quick Links */}
+            <div className="flex gap-3">
+              <Link
+                href="/batch"
+                className="px-4 py-2 bg-white/[0.05] border border-white/[0.1] rounded-lg text-sm hover:bg-white/[0.08] transition-all"
+              >
+                ⚡ Batch Operations
+              </Link>
+              <Link
+                href="/recover"
+                className="px-4 py-2 bg-white/[0.05] border border-white/[0.1] rounded-lg text-sm hover:bg-white/[0.08] transition-all"
+              >
+                💰 Fund Recovery
+              </Link>
+            </div>
           </div>
         )}
       </div>
