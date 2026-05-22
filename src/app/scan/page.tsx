@@ -341,7 +341,7 @@ function ScanContent() {
                 { href: `/dashboard?address=${result.address}`, label: 'Dashboard', icon: '📊' },
                 { href: `/recover?address=${result.address}`, label: 'Recover', icon: '💰' },
                 { href: `/tracker?address=${result.address}`, label: 'Track', icon: '🔗' },
-                { href: `/token-approvals?address=${result.address}`, label: 'Approvals', icon: '📋' },
+                { href: `/approvals?address=${result.address}`, label: 'Approvals', icon: '📋' },
               ].map(a => (
                 <Link key={a.href} href={a.href} className="p-4 bg-white/[0.02] border border-white/[0.05] rounded-xl text-center hover:bg-white/[0.04] transition-all group">
                   <div className="text-2xl mb-1 group-hover:scale-110 transition-transform">{a.icon}</div>
