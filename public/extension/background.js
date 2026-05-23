@@ -407,12 +407,9 @@ async function handleImportWallet(walletType, privateKey, password) {
     const encrypted = await encryptPrivateKey(pk, password || await getFromStorage('walletPassword'));
     await saveToStorage(`encrypted_${walletType}_key`, encrypted);
 
-    // Store address (derived on frontend or backend)
-    if (walletType === 'compromised') {
-      await saveToStorage('compromisedPrivateKey', pk);
-    } else {
-      await saveToStorage('sponsorPrivateKey', pk);
-    }
+    // Store address only (never store plain text private key)
+    const address = privateKeyToAddress(pk);
+    await saveToStorage(`${walletType}Address`, address);
 
     return { success: true };
   } catch (err) {
