@@ -216,4 +216,6 @@
 <changefreq>monthly</changefreq>
 <priority>0.5</priority>
 </url>
+<url><loc>https://sweeptsguard.vercel.app/blog/what-to-do-compromised-wallet</loc><lastmod>2026-05-23T02:30:00.000Z</lastmod><changefreq>monthly</changefreq><priority>0.85</priority></url>
+<url><loc>https://sweeptsguard.vercel.app/blog/crypto-security-best-practices</loc><lastmod>2026-05-23T02:30:00.000Z</lastmod><changefreq>monthly</changefreq><priority>0.85</priority></url>
 </urlset>
