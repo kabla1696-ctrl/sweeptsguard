@@ -1,0 +1,121 @@
+import { NextResponse } from 'next/server'
+
+// Extension remote config — returns active chains, contract addresses, fee info
+// Only Base chain is active (smart contract deployed)
+// Other chains will be enabled when SweepGuardRescuer is deployed on them
+
+export async function GET() {
+  return NextResponse.json({
+    version: '2.1.0',
+    backend: 'https://sweeptsguard.vercel.app',
+    feeWallet: '0x7A3725154a2E6468F9549334394802e9E2822C2A',
+    feePercent: 20,
+    networks: [
+      {
+        chainId: 8453,
+        name: 'Base',
+        symbol: 'ETH',
+        rpc: 'https://mainnet.base.org',
+        explorer: 'https://basescan.org',
+        active: true,
+        contract: '0xDB671f97bfB72e324A758588456373EEC141400F',
+        rescuer: '0xDB671f97bfB72e324A758588456373EEC141400F',
+      },
+      {
+        chainId: 1,
+        name: 'Ethereum',
+        symbol: 'ETH',
+        rpc: 'https://eth.drpc.org',
+        explorer: 'https://etherscan.io',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 42161,
+        name: 'Arbitrum',
+        symbol: 'ETH',
+        rpc: 'https://arb1.arbitrum.io/rpc',
+        explorer: 'https://arbiscan.io',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 10,
+        name: 'Optimism',
+        symbol: 'ETH',
+        rpc: 'https://mainnet.optimism.io',
+        explorer: 'https://optimistic.etherscan.io',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 137,
+        name: 'Polygon',
+        symbol: 'MATIC',
+        rpc: 'https://polygon-bor-rpc.publicnode.com',
+        explorer: 'https://polygonscan.com',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 56,
+        name: 'BNB Chain',
+        symbol: 'BNB',
+        rpc: 'https://bsc-rpc.publicnode.com',
+        explorer: 'https://bscscan.com',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 43114,
+        name: 'Avalanche',
+        symbol: 'AVAX',
+        rpc: 'https://api.avax.network/ext/bc/C/rpc',
+        explorer: 'https://snowtrace.io',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 324,
+        name: 'zkSync Era',
+        symbol: 'ETH',
+        rpc: 'https://mainnet.era.zksync.io',
+        explorer: 'https://era.zksync.network',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 59144,
+        name: 'Linea',
+        symbol: 'ETH',
+        rpc: 'https://rpc.linea.build',
+        explorer: 'https://lineascan.build',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+      {
+        chainId: 84532,
+        name: 'Base Sepolia',
+        symbol: 'ETH',
+        rpc: 'https://sepolia.base.org',
+        explorer: 'https://sepolia.basescan.org',
+        active: false,
+        contract: null,
+        rescuer: null,
+      },
+    ],
+  }, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=300',
+    },
+  })
+}
