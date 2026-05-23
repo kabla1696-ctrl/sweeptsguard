@@ -150,7 +150,7 @@ async function rpcProxy(chainId, method, params) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetch(`${BACKEND_URL}/rpc`, {
+    const response = await fetch(`${BACKEND_URL}/api/extension/rpc`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chainId, method, params }),
